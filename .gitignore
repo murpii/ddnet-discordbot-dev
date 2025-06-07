@@ -9,7 +9,8 @@ constants.py
 find_players.json
 !find_players.json.schema
 
-data/assets/
+data/assets/map_backgrounds/*
+!data/assets/map_backgrounds/.gitkeep
 data/map-testing/
 data/ticket-system/
 !data/ticket-system/*.json.schema
