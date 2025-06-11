@@ -8,6 +8,14 @@ from typing import Iterable
 from constants import Roles
 
 
+
+def has_map(message: discord.Message) -> bool:
+    return any(
+        attachment.filename.endswith(".map")
+        for attachment in message.attachments
+    )
+
+
 async def check_dm_channel(user: discord.Member) -> bool:
     try:
         await user.send()

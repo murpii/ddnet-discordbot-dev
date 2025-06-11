@@ -4,6 +4,7 @@ from typing import List, Optional, Union
 import discord
 
 from constants import Channels, Guilds
+from extensions.moderator.embeds import LogEmbed
 
 
 @dataclass
@@ -29,112 +30,6 @@ class MemberInfo:
 class ModManager:
     def __init__(self, bot):
         self.bot = bot
-
-    @staticmethod
-    async def embed(member_info: MemberInfo) -> Optional[discord.Embed]:
-        if not member_info:
-            return discord.Embed(
-                title="User Info",
-                description="No user information found.",
-                color=discord.Color.red(),
-            )
-
-        # ---------------------------------------------------
-        # Header
-        # ---------------------------------------------------
-
-        embed = discord.Embed(title=":crossed_swords: User Info", color=discord.Color.blurple())
-        embed.set_thumbnail(url=member_info.member.display_avatar.url)
-
-        embed.add_field(
-            name="Name",
-            value=f"{member_info.member.mention}", # (ID: {member_info.member.id})
-            inline=False
-        )
-
-        embed.add_field(
-            name="Created At",
-            value=f"{member_info.member.created_at.strftime('`%Y-%m-%d`')}\n`{member_info.member.created_at.strftime('%H:%M UTC')}`",
-            inline=True,
-        )
-
-        embed.add_field(
-            name="Joined At",
-            value=f"{member_info.member.joined_at.strftime('`%Y-%m-%d`')}\n`{member_info.member.joined_at.strftime('%H:%M UTC')}`"
-            if hasattr(member_info.member, 'joined_at') else "`Unknown`",
-            inline=True
-        )
-
-        # ---------------------------------------------------
-        # Timeouts
-        # ---------------------------------------------------
-
-        if member_info.timeouts:
-            if member_info.timeout_reasons:
-                timeout_reasons = "\n".join(
-                    f"[`{reason_time[1].strftime('%Y-%m-%d %H:%M')}`] {member_info.invoked_by} › {reason_time[0]}"
-                    for reason_time in member_info.timeout_reasons
-                )
-            else:
-                timeout_reasons = "No reasons provided"
-
-            timeout_str = f" Total Timeouts: {member_info.timeouts} "
-
-            embed.add_field(
-                name=f"{timeout_str.center(32, '─')}",
-                value=f"{timeout_reasons}",
-                inline=False
-            )
-        else:
-            embed.add_field(name="Total Timeouts", value="No timeouts found.", inline=False)
-
-        # ---------------------------------------------------
-        # Bans
-        # ---------------------------------------------------
-
-        if member_info.bans:
-            if member_info.ban_reasons:
-                ban_reasons = "\n".join(
-                    f"[`{reason_time[1].strftime('%Y-%m-%d %H:%M')}`] {member_info.invoked_by} › {reason_time[0]}"
-                    for reason_time in member_info.ban_reasons
-                )
-            else:
-                ban_reasons = "No reasons provided"
-
-            ban_str = f" Total Bans: {member_info.bans} "
-
-            embed.add_field(
-                name=f"{ban_str.center(32, '─')}",
-                value=f"{ban_reasons}",
-                inline=False
-            )
-        else:
-            embed.add_field(name="Bans", value="No bans found.", inline=False)
-
-        # ---------------------------------------------------
-        # Kicks
-        # ---------------------------------------------------
-
-        if member_info.kicks:
-            if member_info.kick_reasons:
-                kick_reasons = "\n".join(
-                    f"[`{reason_time[1].strftime('%Y-%m-%d %H:%M')}`] {member_info.invoked_by} › {reason_time[0]}"
-                    for reason_time in member_info.kick_reasons
-                )
-            else:
-                kick_reasons = "No reasons provided"
-
-            kick_str = f" Total Kicks: {member_info.kicks} "
-
-            embed.add_field(
-                name=f"{kick_str.center(32, '─')}",
-                value=f"{kick_reasons}",
-                inline=False
-            )
-        else:
-            embed.add_field(name="Kicks", value="No kicks found.", inline=False)
-
-        return embed
 
     async def fetch_user_info(self, member: Union[discord.User, discord.Member]) -> Optional[MemberInfo]:
         try:
@@ -237,11 +132,4 @@ class ModManager:
             Use ```/info user:{member.mention}``` to see full member history.
             """
 
-            embed = discord.Embed(
-                title=":crossed_swords: Discord Moderation",
-                color=discord.Color.blurple(),
-                timestamp=datetime.now(),
-                description=message
-            )
-            embed.set_thumbnail(url=member.display_avatar.url)
-            await channel.send(embed=embed)
+            await channel.send(embed=LogEmbed(message, member))

@@ -4,6 +4,7 @@ import platform
 import time
 from configparser import ConfigParser
 from typing import Optional
+import traceback
 
 import aiohttp
 from requests_cache import CachedSession
@@ -25,14 +26,14 @@ discord.voice_client.VoiceClient.warn_nacl = False
 log = logging.getLogger()
 
 extensions = [
-    ("extensions._logging.logger", True),
-    ("extensions._logging.errorhandler", True),
+    ("extensions.logutils.logger", True),
+    ("extensions.logutils.errorhandler", True),
     ("extensions.admin", True),
     ("extensions.admin.rename", True),
     ("extensions.assignees", True),
     ("extensions.moderator", True),
     ("extensions.map_testing", True),
-    ("extensions.map_testing.bans", True),
+    # ("extensions.map_testing.bans", True),
     ("extensions.skindb", True),
     ("extensions.player_finder", True),
     ("extensions.ticketsystem", True),
@@ -150,14 +151,14 @@ class DDNet(commands.Bot):
         loading each one that is marked for initialization.
         It also checks the status of the database connection pool and retrieves a session for the bot's operations
         """
-
+        
         for cog, init in extensions:
             if init:
                 try:
                     await self.load_extension(cog)
                     log.info(f"Successfully loaded {cog}")
-                except Exception as e:
-                    log.error(f"Failed to load cog {cog}: {e}")
+                except Exception:
+                    logging.error("Failed to load extension:\n%s", traceback.format_exc())
 
         if self.pool is None:
             await self.close()
@@ -182,7 +183,12 @@ class DDNet(commands.Bot):
         print(f"{prefix} Bot ID {Fore.YELLOW}{str(self.user.id)}")
         print(f"{prefix} Discord.py Version {Fore.YELLOW}{discord.__version__}")
         print(f"{prefix} Python Version {Fore.YELLOW}{str(platform.python_version())}")
-
+        
+        await self.change_presence(
+            status=discord.Status.online,
+            activity=discord.Game(name="DDNet")
+        )
+        
         # on_ready is called multiple times and syncing is heavily rate-limited
         # so a check here should hopefully ensure this only happens once
         if not self.synced:

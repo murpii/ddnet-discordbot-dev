@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 from extensions.ticketsystem import embeds
-from extensions.ticketsystem.lang.ban_appeal_modal import BAN_APPEAL_MODAL, BAN_APPEAL_CLOUDFLARE
+from extensions.ticketsystem.lang.ban_appeal_m import ban_appeal_m, BAN_APPEAL_CLOUDFLARE
 from extensions.ticketsystem.views.inner_buttons import InnerTicketButtons
 from extensions.ticketsystem.utils import create_ticket_channel
 from extensions.ticketsystem.manager import Ticket, TicketCategory, AppealData
@@ -21,7 +21,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         self.ticket_manager = bot.ticket_manager
         self.api_key = self.bot.config.get("DNSBL_API", "KEY")
         self.is_blocked: Optional[str] = None
-        modal = BAN_APPEAL_MODAL.get(language, BAN_APPEAL_MODAL["en"])
+        modal = ban_appeal_m.get(language, ban_appeal_m["en"])
         super().__init__(title=modal["title"], timeout=None)
 
         self.public_ip = discord.ui.TextInput(

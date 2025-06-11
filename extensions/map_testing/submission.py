@@ -9,9 +9,10 @@ from typing import Optional
 
 import discord
 
+from extensions.map_testing.map_states import MapState
 from utils.misc import run_process_shell, run_process_exec, check_os
 from utils.text import sanitize
-from constants import Channels
+
 
 log = logging.getLogger("mt")
 
@@ -199,7 +200,7 @@ class InitialSubmission(Submission):
         self.thumbnail = None
         self.map_channel = None
 
-    async def validate(self):
+    def validate(self):
         # can't do this in init since we need a reference to the submission even if it's improper
         match = re.search(self._FORMAT_RE, self.message.content, flags=re.IGNORECASE)
         if match is None:
@@ -216,17 +217,6 @@ class InitialSubmission(Submission):
         self.server = match["server"].capitalize()
         if self.server not in self.SERVER_TYPES:
             raise ValueError("The server type of your map submission is not valid")
-
-        try:
-            self.thumbnail = await self.generate_thumbnail()
-        except RuntimeError as exc:
-            mapping: discord.TextChannel = self.bot.get_channel(Channels.MAPPING)
-            log.info(f"{self.name} contains map errors. Unable to render preview. See error above for details.")
-            raise ValueError(
-                f"Your map submission contains errors:"
-                f"\n```{str(exc)}```\n"
-                f"If you're unsure how to fix the displayed error, ask in {mapping.mention}."
-            ) from exc
 
     async def respond(self, error: Exception):
         with contextlib.suppress(discord.Forbidden):
@@ -287,7 +277,7 @@ class InitialSubmission(Submission):
         # - bot.user:   read_messages=True, manage_messages=True
 
         # circular imports
-        from extensions.map_testing.map_channel import MapChannel, MapState
+        from extensions.map_testing.map_channel import MapChannel
 
         debug_output = await self.debug_map()
         state = MapState.WAITING if debug_output else MapState.TESTING

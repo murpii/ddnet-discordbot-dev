@@ -1,4 +1,4 @@
-BAN_APPEAL_MODAL = {
+ban_appeal_m = {
     "en": {
         "title": "Ban Appeal Ticket",
         "ip_label": "Your IP address from https://ipinfo.io/ip",

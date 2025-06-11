@@ -1,5 +1,6 @@
 import traceback
 import logging
+import io
 
 import discord
 from discord import app_commands
@@ -50,7 +51,58 @@ class ErrorHandler(commands.Cog):
         self.bot = bot
         self.error_message = "An error occurred. Please try again later."
         bot.tree.error(self.dispatch_to_app_command_handler)
+    
+    async def report_interaction_error(
+        self, interaction: discord.Interaction, error: Exception, note: str = None
+    ):
+        trace = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+        file = discord.File(io.StringIO(trace), filename="traceback.txt")
 
+        msg = (
+                (f"{note}\n" if note else "")
+                + f"Error: ```py\n{error}```"
+                + f"Initiator: {interaction.user} (ID: {interaction.user.id})\n"
+                + "Full traceback attached."
+        )
+
+        if dbg_channel := self.bot.get_channel(Channels.DBG):
+            await dbg_channel.send(content=msg, file=file)
+
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "An error occurred. I've notified an administrator. Please try again later.",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                "An error occurred. I've notified an administrator. Please try again later.",
+                ephemeral=True
+            )
+    
+    async def report_command_error(self, custom_message: str, error: Exception = None, file: discord.File = None):
+        """Send a formatted traceback of the error to a specific Discord channel."""
+        message = custom_message
+
+        if error is not None:
+            trace = traceback.format_exception(type(error), error, error.__traceback__)
+            formatted_trace = "".join(trace)
+
+            max_length = 1900
+            if len(formatted_trace) > max_length:
+                formatted_trace = formatted_trace[-max_length:]
+            message = f"⚠️ **Unhandled Exception:** `{type(error).__name__}`\n```\n{formatted_trace}\n```"
+
+        try:
+            channel = self.bot.get_channel(Channels.DBG)
+            if channel is None:
+                channel = await self.bot.fetch_channel(Channels.DBG)
+            if file:
+                await channel.send(message, file=file)
+            else:
+                await channel.send(message)
+        except Exception as send_error:
+            log_traceback(send_error)
+    
     async def dispatch_to_app_command_handler(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ):
@@ -85,7 +137,7 @@ class ErrorHandler(commands.Cog):
         error_message = error_dict.get(type(error), self.error_message).format(error=error, ctx=ctx)  # noqa
 
         if isinstance(error, commands.CommandNotFound) and ctx.channel.id == Channels.BOT_CMDS:
-            return
+            return None
 
         if type(error) not in error_dict:
             return log_traceback(error)
@@ -94,6 +146,7 @@ class ErrorHandler(commands.Cog):
             content=error_message,
             ephemeral=True,
         )
+        return None
 
 
 async def setup(bot: commands.Bot) -> None:

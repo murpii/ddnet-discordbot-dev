@@ -1,10 +1,10 @@
 # type: ignore
 import asyncio
 import datetime
-from datetime import datetime
 import logging
 import json
 import ipaddress
+from datetime import datetime
 from typing import Optional
 
 import discord
@@ -14,8 +14,8 @@ from discord.ext import commands
 from extensions.ticketsystem import embeds
 from extensions.ticketsystem.utils import create_ticket_channel
 from extensions.ticketsystem.views import inner_buttons
-from extensions.ticketsystem.views.modals import rename_modal
-from extensions.ticketsystem.views.modals import ban_appeal_modal
+from extensions.ticketsystem.views.modals import rename_m
+from extensions.ticketsystem.views.modals import ban_appeal_m
 from extensions.admin.rename import process_rename
 from extensions.ticketsystem.manager import Ticket, TicketCategory, TicketState
 from extensions.ticketsystem.transcript import TicketTranscript
@@ -55,7 +55,7 @@ class MainMenu(discord.ui.View):
         self.cooldown = commands.CooldownMapping.from_cooldown(1.0, 3.0, lambda i: i.user.id)
 
     async def interaction_check(self, interaction: discord.Interaction):
-        if _ := self.cooldown.update_rate_limit(interaction):
+        if true := self.cooldown.update_rate_limit(interaction):
             await interaction.response.send_message("Hey! Don't spam the buttons.", ephemeral=True)
             return False
 
@@ -71,6 +71,28 @@ class MainMenu(discord.ui.View):
 
         if cid and (category := category_map.get(cid)):
             if channel := self.ticket_manager.check_for_open_ticket(user, category):
+                try:
+                    await interaction.client.fetch_channel(channel.id)
+                except discord.NotFound:
+                    log.warning(f"Initial ticket generation: {channel} no longer exists but still in cache? "
+                              f"This can happen if a ticket channel was removed manually or to some HTTPException.")
+                    await self.ticket_manager.del_ticket(channel)
+                    return True
+                except discord.Forbidden as e:
+                    await self.bot.get_cog("ErrorHandler").report_interaction_error(
+                        interaction,
+                        e,
+                        note=f"Initial ticket generation: Channel: {channel} exists but I can't access it?"
+                    )
+                    return False
+                except discord.HTTPException as e:
+                    await self.bot.get_cog("ErrorHandler").report_interaction_error(
+                        interaction,
+                        e,
+                        note="Unexpected HTTPException during ticket lookup."
+                    )
+                    return False
+
                 await interaction.response.send_message(
                     content=(
                         f"You already have an open ticket: {channel.mention}\n"
@@ -80,7 +102,6 @@ class MainMenu(discord.ui.View):
                     ephemeral=True,
                 )
                 return False
-
         return True
 
     @discord.ui.button(label="Report", style=discord.ButtonStyle.danger, custom_id="MainMenu:report")
@@ -130,7 +151,7 @@ class MainMenu(discord.ui.View):
             )
             return
 
-        await interaction.response.send_modal(rename_modal.RenameModal(self.bot))  # noqa
+        await interaction.response.send_modal(rename_m.RenameModal(self.bot))  # noqa
 
     @discord.ui.button(label="Ban Appeal", style=discord.ButtonStyle.blurple, custom_id="MainMenu:ban-appeal")
     async def t_ban_appeal(self, interaction: discord.Interaction, _: Button):  # noqa
@@ -147,9 +168,9 @@ class MainMenu(discord.ui.View):
         user_locale = str(interaction.locale)
         language = user_locale.split("-")[0]
         await interaction.response.send_modal(
-            ban_appeal_modal.BanAppealModal(
+            ban_appeal_m.BanAppealModal(
                 self.bot, 
-                language="de")
+                language=language)
         )
 
     @discord.ui.button(label="Staff Complaint", style=discord.ButtonStyle.blurple, custom_id="MainMenu:complaint")

@@ -1,0 +1,1 @@
+- Change all occurrences of Union[discord.User, discord.Member] to discord.abc.User

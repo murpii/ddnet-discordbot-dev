@@ -3,19 +3,6 @@ from typing import List, Set
 
 from utils.text import get_embed_from_interaction, extract_ids_from_mentions, user_ids_to_mentions
 
-# CHECKLIST_TASKS = [
-#     "1. Map follows all mapping rules (https://ddnet.org/rules)",
-#     "2. Checked for possible startline skips",
-#     "3. Checked for ways to escape the map",
-#     "4. Weapons and powerups can't be kept longer than they should",
-#     "5. Checked for big team 0 cheats using towers, boats, hammer boost etc.",
-#     "6. Checked for ways to abuse weapons and spec",
-#     "7. Looked for entity bugs",
-#     "8. Took care of testing bot warnings",
-#     "9. No missing or misspelled server settings",
-#     "10. Decoration layers are marked as HD",
-#     "11. Large assets are as optimized as possible",
-# ]
 
 CHECKLIST_TASKS = [
     "1. Map follows all mapping rules (https://ddnet.org/rules)",
@@ -176,8 +163,7 @@ class TaskCheckButton(discord.ui.Button):
         """
         checklist_view = self.view
 
-        existing_embed = get_embed_from_interaction(interaction)
-        if existing_embed:
+        if existing_embed := get_embed_from_interaction(interaction):
             checklist_view.restore_state_from_embed(existing_embed)
 
         task_users = checklist_view.task_completion_users[self.task_index]

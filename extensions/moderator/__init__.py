@@ -9,6 +9,7 @@ from discord.ext import commands
 import datetime
 import logging
 
+from .embeds import NoMemberInfoEmbed, MemberInfoEmbed, TimeoutsEmbed, BansEmbed, KicksEmbed
 from .manager import ModManager
 from utils.text import choice_to_timedelta
 from utils.checks import is_staff
@@ -499,15 +500,25 @@ class Moderation(commands.Cog):
             log.info(f"Slow mode has been disabled automatically in {channel.mention}.")
         else:
             await interaction.response.send_message(content=message, ephemeral=True)
-
-    @commands.hybrid_command(
+    
+    @commands.hybrid_group(
         name="timeout",
         with_app_command=True,
-        description="Timeout a user for a number of minutes, with an optional message.",
-        usage="$timeout <@mention> <minutes> <reason>")
+        description="Toggle a timeout on a user for a number of minutes, with an optional message. "
+    )
     @commands.check(ddnet_only)
     @commands.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     @app_commands.guilds(discord.Object(Guilds.DDNET))
+    @app_commands.checks.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
+    async def timeout_group(self, ctx):
+        pass
+    
+    @timeout_group.command(
+        name="add",
+        with_app_command=True,
+        description="Timeout a user for a number of minutes, with an optional message.",
+        usage="$timeout <@mention> <minutes> <reason>")
+    @commands.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     @app_commands.checks.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     @app_commands.describe(
         member="The member to timeout.",
@@ -527,6 +538,27 @@ class Moderation(commands.Cog):
         await member.timeout(datetime.timedelta(minutes=minutes), reason=reason)
         await ctx.send(f"User {member.mention} has been timed out for {minutes} minutes. Reason: {reason}")
         await self.manager.log_action(ctx.author, member, "timeout", reason)
+
+    @timeout_group.command(
+        name="remove",
+        with_app_command=True,
+        description="Remove timeout from a user.",
+        usage="$timeout remove <@mention>")
+    @commands.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
+    @app_commands.checks.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
+    @app_commands.describe(
+        member="The member to remove timeout from.")
+    async def remove_timeout(self, ctx, member: discord.Member):
+        await ctx.defer(ephemeral=True)
+
+        if not member.timed_out_until or member.timed_out_until <= datetime.datetime.now(datetime.timezone.utc):
+            await ctx.send(f"{member.mention} is not currently timed out.")
+            return
+
+        self.logged_timeout.discard(member.id)
+        await member.timeout(None, reason="Timeout removed by staff")
+        await ctx.send(f"Timeout has been removed for user {member.mention}.")
+        await self.manager.log_action(ctx.author, member, "remove_timeout", "Timeout removed by command")
 
     @commands.hybrid_group(
         name="kick",
@@ -728,8 +760,13 @@ class Moderation(commands.Cog):
     async def info_user(self, ctx, user: discord.User):
         await ctx.defer(ephemeral=True)
         info = await self.manager.fetch_user_info(user)
-        embed = await self.manager.embed(info)
-        await ctx.send(embed=embed)
+
+        if not info:
+            await ctx.send(embed=NoMemberInfoEmbed)
+            return
+        else:
+            await ctx.send(
+                embeds=[MemberInfoEmbed(info), TimeoutsEmbed(info), BansEmbed(info), KicksEmbed(info)])
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User):

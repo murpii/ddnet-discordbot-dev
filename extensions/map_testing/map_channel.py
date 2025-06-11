@@ -1,29 +1,19 @@
 import contextlib
 import discord
 import logging
-import enum
 import json
 import re
 from typing import List, Optional
 
+from extensions.map_testing.map_states import MapState
 from extensions.map_testing.submission import InitialSubmission
 from extensions.map_testing.checklist import ChecklistView
+from extensions.map_testing.views.links import ButtonLinks
+from extensions.map_testing.views.testing_buttons import TestingMenu
 import extensions.map_testing.embeds as embeds
-from constants import Channels, Roles
+from constants import Channels
 from utils.text import human_join, sanitize
 from utils.changelog import ChangelogPaginator
-
-
-class MapState(enum.Enum):
-    TESTING = ""
-    RC = "☑"
-    WAITING = "💤"
-    READY = "✅"
-    DECLINED = "❌"
-    RELEASED = "🆙"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 class MapChannel:
@@ -240,6 +230,11 @@ class MapChannel:
             )
 
         # Initial channel setup message
+        try:
+            thumbnail = await isubm.generate_thumbnail()
+        except Exception as e:
+            thumbnail = None
+            logging.error(f"Failed to generate thumbnail for {self}: {e}")
         init_embeds = [embeds.ISubmEmbed(isubm)]
         init_embeds.append(embeds.ISubmErrors()) if self.state == MapState.WAITING else ()
         thumbnail_embed = embeds.ISubmThumbnail(self.preview_url)
@@ -248,8 +243,6 @@ class MapChannel:
             thumbnail_embed.add_field(name="Thumbnail", value="", inline=False)
             thumbnail_embed.set_image(url=f"attachment://{thumbnail.filename}")
 
-        # Circular import
-        from extensions.map_testing.buttons import ButtonLinks, TestingMenu
         await self._channel.send(
             content=f"Mentions: {isubm.author.mention}",
             embeds=init_embeds,

@@ -12,7 +12,7 @@ from discord.ext import commands, tasks
 from . import embeds
 from .manager import TicketCategory
 from .views import categories, inner_buttons, confirm, subscribe
-from .views.modals import ban_appeal_modal
+from .views.modals import ban_appeal_m
 from .transcript import TicketTranscript
 from extensions.ticketsystem.views.subscribe import SubscribeMenu
 from extensions.ticketsystem.utils import fetch_rank_from_demo
@@ -45,7 +45,7 @@ class TicketSystem(commands.Cog):
 
     async def cog_load(self):
         session = await self.bot.session_manager.get_session(self.__class__.__name__)
-        self.session = categories.MainMenu.session = ban_appeal_modal.BanAppealModal.session = session
+        self.session = categories.MainMenu.session = ban_appeal_m.BanAppealModal.session = session
 
     async def cog_unload(self):
         await self.bot.session_manager.close_session(self.__class__.__name__)

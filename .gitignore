@@ -5,6 +5,7 @@ venv/
 config.ini
 *.log
 constants.py
+constants_ddnet.py
 *.exe
 find_players.json
 !find_players.json.schema
