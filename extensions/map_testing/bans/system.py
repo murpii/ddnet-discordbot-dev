@@ -24,7 +24,17 @@ class TestingBans(commands.Cog):
     async def setup_changelog_paginator(self):
         """Setup the changelog paginator."""
         bans_channel: discord.TextChannel = self.bot.get_channel(Channels.TESTER_BANS)
-        self.changelog = await bans_channel.fetch_message(self.changelog)
+        if bans_channel is None:
+            raise ValueError(f"{self.__cog_name__} ERROR: Bans channel not set up.")
+        
+        try:
+            self.changelog = await bans_channel.fetch_message(self.changelog)
+        except discord.NotFound as e:
+            raise ValueError(
+                f"{self.__cog_name__} ERROR: Ban changelog embed not set up. "
+                f"Use \"$changelog_embed\" to set up the bans changelog message and assign the message ID in constants.py"
+            ) from e
+
         self.changelog_paginator = ChangelogPaginator(
             self.bot,
             changelog=self.changelog,
@@ -55,7 +65,17 @@ class TestingBans(commands.Cog):
 
     async def load_bans_embed(self):
         bans_channel: discord.message = self.bot.get_channel(Channels.TESTER_BANS)
-        self.bans_embed = await bans_channel.fetch_message(self.bans_embed)
+        if bans_channel is None:
+            raise ValueError(f"{self.__cog_name__} ERROR: Bans channel not set up.")
+        
+        try:
+            self.bans_embed = await bans_channel.fetch_message(self.bans_embed)
+        except discord.NotFound as e:
+            raise ValueError(
+                f"{self.__cog_name__} ERROR: Bans embed not set up. "
+                f"Use \"$bans_embed\" to set up the bans embed and assign the message ID in constants.py"
+            ) from e
+
         self.bot.add_view(
             view=BanViews(self.bot, changelog_paginator=self.changelog_paginator, bans_embed=self.bans_embed),
             message_id=Messages.TESTING_BANS_EMBED
@@ -77,36 +97,52 @@ class TestingBans(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self.load_banned_users()
-        await self.extra_bans_embed()
-        await self.setup_changelog_paginator()
-        await self.load_bans_embed()
+        try:
+            await self.load_banned_users()
+            await self.extra_bans_embed()
+            await self.setup_changelog_paginator()
+            await self.load_bans_embed()
+        except Exception as e:
+            log.warning(f"Unloading {self.__cog_name__} cog due to error:\n{e}")
+            await self.bot.unload_extension("extensions.map_testing.bans")
 
     async def ban_or_unban(self, user: Union[discord.User, discord.Member], ban: bool = True):
-        guild = self.bot.get_guild(Guilds.DDNET)
-        testing_role = guild.get_role(Roles.TESTING)
-        member = guild.get_member(user.id) or await guild.fetch_member(user.id)
-
-        if ban and testing_role in member.roles:
-            await member.remove_roles(testing_role)
-
         landing_channels = [Channels.TESTING_INFO, Channels.TESTING_SUBMIT]
-        for channel_id in landing_channels:
-            channel = self.bot.get_channel(channel_id)
+        for ids in landing_channels:
+            channel = self.bot.get_channel(ids)
             try:
-                overwrites = channel.overwrites_for(user)
-                overwrites.view_channel = not ban
-                await channel.set_permissions(user, overwrite=overwrites)
-            except Exception as exc:
-                log.error(f"Failed to {'ban' if ban else 'unban'} user {user} from channel #{channel.name}: {exc}")
+                if ban:
+                    overwrites = channel.overwrites_for(user)
+                    overwrites.view_channel = False
+                    await channel.set_permissions(user, overwrite=overwrites)
+                else:
+                    await channel.set_permissions(user, overwrite=None)
+            except discord.Forbidden as e:
+                log.exception(e)
+                raise PermissionError(
+                    f"Failed to {'ban' if ban else 'unban'} user {user} from channel #{channel.name}: {e}"
+                ) from e
 
         for map_channel in self.bot.map_channels.values():
             try:
-                overwrites = map_channel.overwrites_for(user)
-                overwrites.view_channel = not ban
-                await map_channel.set_permissions(user, overwrite=overwrites)
-            except Exception as exc:
-                log.error(f"Failed to {'ban' if ban else 'unban'} user {user} from channel #{map_channel.name}: {exc}")
+                if ban:
+                    overwrites = map_channel.overwrites_for(user)
+                    overwrites.view_channel = False
+                    await map_channel.set_permissions(user, overwrite=overwrites)
+                else:
+                    await map_channel.set_permissions(user, overwrite=None)
+            except discord.Forbidden as e:
+                log.exception(e)
+                raise PermissionError(
+                    f"Failed to {'ban' if ban else 'unban'} user {user} from channel #{channel.name}: {e}"
+                ) from e
+
+        guild = self.bot.get_guild(Guilds.DDNET)
+        testing_role = guild.get_role(Roles.TESTING)
+        member = guild.get_member(user.id) or await guild.fetch_member(user.id)
+        
+        if ban and testing_role in member.roles:
+            await member.remove_roles(testing_role)
 
 
     @commands.Cog.listener()

@@ -234,12 +234,15 @@ class TicketManager:
         if category in (TicketCategory.RENAME, TicketCategory.BAN_APPEAL):
             messages = [m async for m in channel.history(limit=2, oldest_first=True)]
             if len(messages) < 2 or not messages[1].embeds:
-                raise ValueError(f"Channel {channel.name} is missing expected embed data.")
-            embed = messages[1].embeds[0]
-            if category == TicketCategory.RENAME:
-                profiles = await self.extract_data_from_embed(embed, rename=True)
-            elif category == TicketCategory.BAN_APPEAL:
-                appeal_data = await self.extract_data_from_embed(embed, appeal=True)
+                log.warning(
+                    f"Channel {channel.name} is missing expected embed data. Continuing without extracted data. "
+                    f"This usually happens if the ticket category was changed manually.")
+            else:
+                embed = messages[1].embeds[0]
+                if category == TicketCategory.RENAME:
+                    profiles = await self.extract_data_from_embed(embed, rename=True)
+                elif category == TicketCategory.BAN_APPEAL:
+                    appeal_data = await self.extract_data_from_embed(embed, appeal=True)
 
         async with self.lock:
             ticket = Ticket(

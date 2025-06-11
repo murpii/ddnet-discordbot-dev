@@ -1,5 +1,7 @@
 import discord
 from utils.text import slugify2
+from utils.profile import PlayerProfile
+
 
 class RenameEmbed(discord.Embed):
     def __new__(cls, user):
@@ -8,11 +10,10 @@ class RenameEmbed(discord.Embed):
             name="",
             value=f"Hello {user.mention}, \n\n"
             "To initiate the process of moving your in-game points to a different name, \n"
-            "we require some essential information from you. Kindly provide answers to the "
-            "following questions:",
+            "we require some essential information from you.",
             inline=False)
         embed.add_field(
-            name="",
+            name="Kindly provide answers to the following questions:",
             value="* Have you ever received a rename before? \n"
             "  - If yes, by whom? \n"
             "* To validate the ownership of the points being transferred, "
@@ -27,27 +28,36 @@ class RenameEmbed(discord.Embed):
 
 
 class RenameInfoEmbed(discord.Embed):
-    def __new__(cls, profile_old, profile_new):
-        embed = discord.Embed(title="Provided Infos", colour=2210995)
-        embed.add_field(
-            name="",
-            value=f"**[Current Name](https://ddnet.org/players/{slugify2(profile_old.name)})**\n"
-                  f"```{profile_old.name}```"
-                  f"Points: `{profile_old.points or 0}` \n"
-                  f"Last Finish: `{profile_old.latest_finish or 'None'}` \n"
-                  f"First Finish: `{profile_old.first_finish or 'None'}`",
-            inline=True
-        )
-        embed.add_field(
-            name="",
-            value=f"**[New Name](https://ddnet.org/players/{slugify2(profile_new.name)})**\n"
-                  f"```{profile_new.name}```"
-                  f"Points: `{profile_new.points or 0}`\n"
-                  + (
-                      f"\tLast Finish: `{profile_new.latest_finish or 'None'}`\n"
-                      f"First Finish: `{profile_new.first_finish or 'None'}`\n"
-                      if profile_new.points else ''
-                  ),
-            inline=True
-        )
-        return embed
+    def __new__(cls, profile_old: PlayerProfile = None, profile_new: PlayerProfile = None):
+        if profile_old and profile_new:
+            embed = discord.Embed(title="Provided Infos", colour=2210995)
+            embed.add_field(
+                name="",
+                value=f"**[Current Name](https://ddnet.org/players/{slugify2(profile_old.name)})**\n"
+                      f"```{profile_old.name}```"
+                      f"Points: `{profile_old.points or 0}` \n"
+                      f"Last Finish: `{profile_old.latest_finish or 'None'}` \n"
+                      f"First Finish: `{profile_old.first_finish or 'None'}`",
+                inline=True
+            )
+            embed.add_field(
+                name="",
+                value=f"**[New Name](https://ddnet.org/players/{slugify2(profile_new.name)})**\n"
+                      f"```{profile_new.name}```"
+                      f"Points: `{profile_new.points or 0}`\n"
+                      + (
+                          f"\tLast Finish: `{profile_new.latest_finish or 'None'}`\n"
+                          f"First Finish: `{profile_new.first_finish or 'None'}`\n"
+                          if profile_new.points else ''
+                      ),
+                inline=True
+            )
+            return embed
+        else:
+            return discord.Embed(
+                title="Additional Infos Required:",
+                description="In addition to the required infos above we need to know:\n"
+                            "- Your old name \n"
+                            "- Your desired new name \n",
+                colour=2210995
+            )

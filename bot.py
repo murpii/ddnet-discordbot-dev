@@ -33,7 +33,7 @@ extensions = [
     ("extensions.assignees", True),
     ("extensions.moderator", True),
     ("extensions.map_testing", True),
-    # ("extensions.map_testing.bans", True),
+    ("extensions.map_testing.bans", True),
     ("extensions.skindb", True),
     ("extensions.player_finder", True),
     ("extensions.ticketsystem", True),

@@ -285,32 +285,30 @@ class MapTesting(commands.Cog):
         await self.bot.wait_until_ready()
 
     @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         if channel.guild.id != Guilds.DDNET:
             return
 
-        async for entry in channel.guild.audit_logs(action=discord.AuditLogAction.channel_delete, limit=1):  # type: ignore
-            if channel.id not in self.bot.map_channels:
-                return
-
-            if entry.target.id == channel.id:  # TODO: check if channel is in internal map_testing dict
-                if entry.user == self.bot.user:
-                    log.info("Removed map testing channel named %s with id %s.", channel.name, channel.id)
-                else:
-                    log.info("Channel named %s with id %s was deleted by %s.", channel.name, channel.id, entry.user)
-                break
+        if (map_channel := self.bot.map_channels.pop(channel.id, None)) is None:
+            return
 
         try:
-            map_channel = self.bot.map_channels.pop(channel.id)
-        except KeyError:
+            entry = await anext(
+                channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete),
+                None
+            )
+        except discord.Forbidden:
+            log.warning("Missing permissions to read audit logs.")
             return
+
+        if entry and entry.target.id == channel.id and entry.user != self.bot.user:
+            log.info(
+                "Map testing channel %s (%s) was deleted by %s",
+                channel.name, channel.id, entry.user
+            )
 
         await self.bot.upsert(rm_mapinfo_from_db, map_channel.id, map_channel.id)
-
-        try:
-            await ddnet_delete(self.session, map_channel.filename)
-        except RuntimeError:
-            return
+        await ddnet_delete(self.session, map_channel.filename)
 
     @commands.Cog.listener("on_message")
     async def handle_map_release(self, message: discord.Message):

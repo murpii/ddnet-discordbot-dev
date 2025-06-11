@@ -1,7 +1,6 @@
 import contextlib
 import json
 import logging
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Union, Optional
 
@@ -9,7 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from . import embeds
+from extensions.ticketsystem import embeds
 from .manager import TicketCategory
 from .views import categories, inner_buttons, confirm, subscribe
 from .views.modals import ban_appeal_m
@@ -217,58 +216,41 @@ class TicketSystem(commands.Cog):
             category (app_commands.Choice[str]): The new category to assign to the ticket.
         """
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
+        if ticket.category == TicketCategory(category.value):
+            await interaction.response.send_message(
+                f"This ticket is already a **{category.name}** ticket.", ephemeral=True
+            )
+            return
+
         await self.ticket_manager.change_ticket(ticket, category=category.value)
 
         embed_map = {
             "report": embeds.ReportEmbed,
-            "rename": embeds.RenameEmbed,
-            "ban-appeal": embeds.BanAppealEmbed,
+            "rename": [embeds.RenameEmbed, embeds.RenameInfoEmbed],
+            "ban-appeal": [embeds.BanAppealEmbed, embeds.BanAppealInfoEmbed],
             "complaint": embeds.ComplaintEmbed,
             "admin-mail": embeds.AdminMailEmbed,
         }
-        embed = embed_map.get(category.value)(ticket.creator)
 
-        # Required because rename and ban appeal tickets normally are created with a custom Modal
-        if category.value == "rename":
-            embed = embed.to_dict()
-            for i, field in enumerate(embed["fields"]):
-                if i == 1:
-                    field["value"] = (
-                        f"- Your old name \n"
-                        f"- Your new name \n"
-                        f"{field['value']}"
-                    )
-            embed = discord.Embed.from_dict(embed)
-
-        if category.value == "ban-appeal":
-            embed.add_field(
-                name="",
-                value=
-                f"In order to begin your ban appeal, we will need a few important pieces of information from you. \n\n"
-                f"**Please provide us with:** \n"
-                f"1. Your public IPv4 Address from https://ipinfo.io/ip. \n"
-                f"2. Your in-game player name. \n"
-                f"3. The reason you've been banned for.",
-                inline=False
-            )
+        embed_entry = embed_map.get(category.value)
+        if isinstance(embed_entry, list):
+            em = [cls(ticket.creator) for cls in embed_entry]
+        else:
+            em = [embed_entry(ticket.creator)]
 
         messages = []
         async for message in ticket.channel.history(limit=3, oldest_first=True):
             messages.append(message)
 
         close = inner_buttons.InnerTicketButtons(interaction.client)
-        if category.value != "report":
-            close.remove_item(close.t_moderator_check)  # noqa
-        close.remove_item(close.t_process_rename)  # noqa
+        close.update_buttons(ticket)
 
         first_msg = messages[0]
-        await first_msg.edit(embed=embed, view=close)  # noqa
+        await first_msg.edit(embeds=em, view=close)
 
-        # TODO: Transfer provided infos (Rename, Ban appeal) to new Ticket
-        # Include field.name in provided info embed and then extract the content
         for message in messages[1:]:
             if message.author.bot:
-                await message.delete()  # noqa
+                await message.delete()
 
         # Alternative, but takes longer for some reason
         # pins = await ticket.channel.pins()
@@ -279,7 +261,10 @@ class TicketSystem(commands.Cog):
             name=f"{category.value}-{await self.ticket_manager.ticket_num(category=category.value)}",
             overwrites=overwrites
         )
-        await interaction.response.send_message(f"Ticket channel category changed to {category.name}")  # noqa
+        await interaction.response.send_message(
+            f"{ticket.creator.mention} ticket channel category changed to {category.name}. "
+            f"Kindly review {first_msg.jump_url}.",
+        )
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.TextChannel, after: discord.TextChannel):
@@ -468,29 +453,28 @@ class TicketSystem(commands.Cog):
             await message.delete()
 
     @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         if channel.guild.id != Guilds.DDNET:
             return
 
-        entry = None
         try:
-            async for log_entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
-                entry = log_entry
-                break
+            entry = await anext(
+                channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete), None
+            )
+            if not entry or entry.user.bot:
+                return
+            ticket = self.ticket_manager.tickets[channel.id]
         except discord.Forbidden:
-            log.warning("Missing permissions to read audit logs in guild %s", channel.guild.id)
+            log.warning("Missing permissions to read audit logs.")
             return
-
-        if not entry or entry.user.bot:
-            return
-
-        try:
-            ticket = self.ticket_manager.tickets[channel]
         except KeyError:
             return
 
         await self.ticket_manager.del_ticket(channel=channel, ticket=ticket)
-        log.info("Ticket channel named %s was manually removed by %s.", channel.name, entry.user)
+        log.info(
+            "Ticket channel named %s was manually removed by %s.",
+            channel.name, entry.user
+        )
 
     @commands.Cog.listener('on_message')
     async def fetch_demo_rank(self, message: discord.Message):

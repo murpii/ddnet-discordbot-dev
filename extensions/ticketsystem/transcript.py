@@ -56,22 +56,36 @@ class TicketTranscript:
         await self.send_or_edit(interaction, content="Collecting messages...")
 
         if self.ticket.category == TicketCategory.RENAME:
-            messages.append(
-                f"{self.ticket.category.value.title()} Ticket Transcript:\n"
-                f"=======================\n"
-                f"Old name:\n{self.ticket.rename_data[0]}\n"
-                f"New name:\n{self.ticket.rename_data[1]}"
-            )
+            if self.ticket.rename_data:
+                messages.append(
+                    f"{self.ticket.category.value.title()} Ticket Transcript:\n"
+                    f"=======================\n"
+                    f"Old name:\n{self.ticket.rename_data[0]}\n"
+                    f"New name:\n{self.ticket.rename_data[1]}"
+                )
+            else:
+                messages.append(
+                    f"{self.ticket.category.value.title()} Ticket Transcript:\n"
+                    f"=======================\n"
+                    f"Missing data. Ticket was most likely converted from a different category.\n"
+                )
 
         if self.ticket.category == TicketCategory.BAN_APPEAL:
-            messages.append(
-                f"{self.ticket.category.value.title()} Ticket Transcript:\n"
-                f"==========================\n"
-                f"IP: {self.ticket.appeal_data.address} | {self.ticket.appeal_data.dnsbl}\n"
-                f"Name: {self.ticket.appeal_data.name}\n"
-                f"Reason: {self.ticket.appeal_data.reason}\n"
-                f"Appeal: {self.ticket.appeal_data.appeal}\n"
-            )
+            if self.ticket.appeal_data:
+                messages.append(
+                    f"{self.ticket.category.value.title()} Ticket Transcript:\n"
+                    f"==========================\n"
+                    f"IP: {self.ticket.appeal_data.address} | {self.ticket.appeal_data.dnsbl}\n"
+                    f"Name: {self.ticket.appeal_data.name}\n"
+                    f"Reason: {self.ticket.appeal_data.reason}\n"
+                    f"Appeal: {self.ticket.appeal_data.appeal}\n"
+                )
+            else:
+                messages.append(
+                    f"{self.ticket.category.value.title()} Ticket Transcript:\n"
+                    f"==========================\n"
+                    "Missing data. Ticket was most likely converted from a different category.\n"
+                )
 
         messages_in_channel = [message async for message in channel.history(limit=None, oldest_first=True)]
         messages_to_process = messages_in_channel[1:]
