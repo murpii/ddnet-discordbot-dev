@@ -11,7 +11,7 @@ from extensions.map_testing.checklist import ChecklistView
 from extensions.map_testing.views.links import ButtonLinks
 from extensions.map_testing.views.testing_buttons import TestingMenu
 import extensions.map_testing.embeds as embeds
-from constants import Channels
+from constants import Guilds, Channels
 from utils.text import human_join, sanitize
 from utils.changelog import ChangelogPaginator
 
@@ -24,18 +24,24 @@ class MapChannel:
             (s for s in MapState if str(s) == channel.name[0]), MapState.TESTING
         )
 
-        try:
-            details, _, self.mapper_mentions, *votes = (channel.topic.splitlines())
-            self.votes = votes or []
-        except (AttributeError, IndexError):
-            raise ValueError("Malformed channel topic") from None
+        if not isinstance(channel.topic, str):
+            raise ValueError(f"{channel.name}: Channel topic is missing or not a string")
+
+        topic_lines = channel.topic.splitlines()
+        if len(topic_lines) < 3:
+            raise ValueError(f"{channel.name}: Malformed channel topic: not enough lines")
+
+        details = topic_lines[0]
+        _ = topic_lines[1]
+        self.mapper_mentions = topic_lines[2]
+        self.votes = topic_lines[3:] if len(topic_lines) > 3 else []
 
         match = re.match(
             r'^"(?P<name>.+)" by (?P<mappers>.+) \[(?P<server>.+)\]$',
             details.replace("**", ""),
         )
         if match is None:
-            raise ValueError("Malformed map details")
+            raise ValueError(f"{channel.name}: Malformed map details")
 
         self.name = match["name"]
         self.mappers = re.split(r", | & ", match["mappers"])
@@ -49,25 +55,35 @@ class MapChannel:
     @classmethod
     async def create(cls, bot, channel: discord.TextChannel):
         thread = next(iter(channel.threads), None)
+        guild = bot.get_guild(Guilds.DDNET)
+        votes = []
+    
         if thread is None:
             async for t in channel.archived_threads():
                 thread = t
                 break
-        if thread is None:
-            async for t in channel.archived_threads(private=True):
-                thread = t
-                break
+
         if thread and thread.archived:
             try:
                 await thread.edit(archived=False)
             except discord.Forbidden:
-                logging.warning(f"[MapChannel] No permission to un-archive thread {thread.id} in channel {channel.id}")
+                logging.warning(f"{channel.name}: No permission to un-archive thread {thread.id} in channel {channel.id}")
             except discord.HTTPException as e:
-                logging.warning(f"[MapChannel] Failed to un-archive thread {thread.id}: {e}")
-        if thread is None:
-            logging.warning(f"[MapChannel] Warning: No thread found in channel {channel.id} ({channel.name})")
+                logging.warning(f"{channel.name}: Failed to un-archive thread {thread.id}: {e}")
 
-        return cls(bot, channel, thread)
+        if thread is None:
+            logging.warning(f"{channel.name}: Warning: No thread found in channel {channel.id} ({channel.name})")
+
+        instance = cls(bot, channel, thread)
+        for user_id in instance.votes:
+            if match := re.search(r"<@!?(\d+)>", user_id):
+                user_id = int(match[1])
+                user = await bot.get_or_fetch_member(guild=guild, user_id=user_id)
+                votes.append(user)
+            else:
+                logging.warning(f"{channel.name}: Vote entry '{user_id}' is not a user mention and will be ignored.")
+        instance.votes = votes
+        return instance
 
     def __repr__(self):
         return json.dumps(
@@ -122,7 +138,7 @@ class MapChannel:
                 self.details,
                 self.preview_url,
                 self.mapper_mentions,
-                ", ".join(self.votes) if self.votes else None
+                ", ".join(user.mention for user in self.votes) if self.votes else None
             )
             if i is not None
         ]
@@ -138,6 +154,13 @@ class MapChannel:
         await self.changelog_paginator.get_data()
         self.changelog = await self.changelog_paginator.assign_changelog_message(self.thread)
         self.bot.add_view(view=self.changelog_paginator, message_id=self.changelog_paginator.changelog.id)
+
+    async def get_votes(self) -> list[discord.abc.User]:
+        users = []
+        for user_id in self.votes:
+            user = self.bot.get_or_fetch_member(guild=self.bot.get_guild(Guilds.DDNET), user_id=user_id)
+            users.append(user)
+        return users
 
     async def update(
         self, name: str = None, mappers: List[str] = None, server: str = None, mapper_mentions: str = None
@@ -169,14 +192,14 @@ class MapChannel:
         if (prev_details, prev_mapper_mentions) != (self.details, self.mapper_mentions):
             await self.edit(name=str(self), topic=self.topic)
 
-    async def set_state(self, *, state: MapState, set_by: str = None, reset_votes: bool = False):
+    async def set_state(self, *, state: MapState, set_by: discord.abc.User = None, reset_votes: bool = False):
         """|coro|
-        Update the state of the map channel and adjust its properties based on the new state.
+        Changes the map channel's state, moves the channel to the appropriate category, and updates votes if specified.
 
         Args:
-            state (MapState): The new state to assign to the map channel.
-            set_by (str, optional): The identifier of the user who set the state. Defaults to None.
-            reset_votes (bool, optional): Indicates whether to reset the channel's votes. Defaults to False.
+            state (MapState): The new state to set for the map channel.
+            set_by (discord.abc.User, optional): The user who set the state. If provided and not already in votes, they are added.
+            reset_votes (bool, optional): Whether to reset the votes list. Defaults to False.
         """
         self.state = state
 
@@ -193,7 +216,7 @@ class MapChannel:
             self.votes.append(set_by)
 
         if reset_votes:
-            self.reset_votes()
+            self.votes = []
 
         if category_id != self.category_id:
             options["category"] = category = self.guild.get_channel(category_id)
@@ -206,11 +229,8 @@ class MapChannel:
         options["topic"] = f"{self.topic}"
         await self.edit(**options)
 
-    def reset_votes(self):
-        self.votes = []
-
     @classmethod
-    async def from_submission(cls, isubm: InitialSubmission, init_state: MapState, thumbnail: discord.File, **options):
+    async def from_submission(cls, isubm: InitialSubmission, init_state: MapState, **options):
         self = cls.__new__(cls)
         self.name = isubm.name
         self.mappers = isubm.mappers

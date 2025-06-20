@@ -114,8 +114,10 @@ class Admin(commands.Cog):
         individual_delete = [m for m in messages_to_delete if m not in bulk_deletable]
 
         with contextlib.suppress(discord.HTTPException):
-            if bulk_deletable:
-                await interaction.channel.delete_messages(bulk_deletable)
+            # Bulk delete in chunks of 100
+            for i in range(0, len(bulk_deletable), 100):
+                chunk = bulk_deletable[i:i + 100]
+                await interaction.channel.delete_messages(chunk)
 
             for msg in individual_delete:
                 await msg.delete()

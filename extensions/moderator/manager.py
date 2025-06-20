@@ -10,11 +10,11 @@ from extensions.moderator.embeds import LogEmbed
 @dataclass
 class MemberInfo:
     member: Union[discord.User, discord.Member]
-    timeouts: int = None
+    timeouts: int = 0
     timeout_reasons: List[tuple] = field(default_factory=list)
-    bans: int = None
+    bans: int = 0
     ban_reasons: List[tuple] = field(default_factory=list)
-    kicks: int = None
+    kicks: int = 0
     kick_reasons: List[tuple] = field(default_factory=list)
     banned_from_testing: bool = False
     invoked_by: str = "Unknown"
@@ -36,7 +36,7 @@ class ModManager:
             if isinstance(member, discord.User):
                 member = await self.bot.fetch_user(member.id)
             else:
-                guild = self.bot.get_guild(Guilds.DDNET)
+                guild = self.bot.get_guild(id=Guilds.DDNET)
                 if not guild.get_member(member.id):
                     return None
         except discord.NotFound:

@@ -1,6 +1,7 @@
 import asyncio
 import re
 import contextlib
+from typing import Optional
 
 from requests_cache import CachedSession
 import discord
@@ -9,7 +10,8 @@ from discord.ext import commands
 import datetime
 import logging
 
-from .embeds import NoMemberInfoEmbed, MemberInfoEmbed, TimeoutsEmbed, BansEmbed, KicksEmbed
+from .views.links import ButtonLinks
+from .embeds import NoMemberInfoEmbed, MemberInfoEmbed, TimeoutsEmbed, BansEmbed, KicksEmbed, ServerInfoEmbed
 from .manager import ModManager
 from utils.text import choice_to_timedelta
 from utils.checks import is_staff
@@ -45,8 +47,7 @@ def ddnet_only(ctx: commands.Context) -> bool:
     return ctx.guild.id == Guilds.DDNET
 
 
-
-def extract_address(string: str) -> str:
+def extract_address(string: str) -> Optional[str]:
     pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5})"
     return match.group(1) if (match := re.search(pattern, string)) else None
 
@@ -73,6 +74,7 @@ def parse_community_info(resp):
         community["id"]: {
             "name": community["name"],
             "contact_urls": community.get("contact_urls", ""),
+            "url": community.get("icon", {}).get("url"),
         }
         for community in resp.get("communities", [])
     }
@@ -89,6 +91,7 @@ def find_server_info_by_type(resp, addr, community_info, server_key):
                     "contact_url": community_info[community_id]["contact_urls"],
                     "server_type": server_type,
                     "flagId": server.get("flagId"),
+                    "icon": community_info[community_id].get("url")
                 }
     return None
 
@@ -103,11 +106,10 @@ def find_server_info_by_icon(resp, addr, community_info):
                         return {
                             "network": community_info[community["id"]]["name"],
                             "name": community_info[community["id"]]["name"],
-                            "contact_url": community_info[community["id"]][
-                                "contact_urls"
-                            ],
+                            "contact_url": community_info[community["id"]]["contact_urls"],
                             "server_type": server_type,
                             "flagId": server.get("flagId"),
+                            "icon": community_info[community["id"]]["url"]
                         }
     return None
 
@@ -145,46 +147,33 @@ class AutoMod(commands.Cog):
         self.bot = bot
         self.message_cache = {}
         self.mod_call = []
-        self.ticket_manager = bot.ticket_manager
         self.timeout = datetime.timedelta(minutes=1)
         self.edited_with_mentions = set()
 
-    async def discord_resp(self, addr: str, channel: discord.TextChannel) -> str | dict[int, str]:
-        """
-        Retrieve and format server information based on the provided address.
-
-        This method fetches details about a server using its address and constructs a response
-        message that includes the server's name, type, and a quick join link. It also handles
-        cases where the server is not affiliated with the DDraceNetwork and provides contact
-        information if available.
+    async def discord_resp(self, addr: str, channel: discord.TextChannel):
+        """|coro|
+        Retrieves server details, constructs an embed and view for Discord, and determines the network name.
 
         Args:
-        - addr: The server address to fetch information for.
-        - channel: A discord channel object.
+            addr (str): The address of the server to look up.
+            channel (discord.TextChannel): The channel where the information will be displayed.
 
         Returns:
-        - A formatted string or a dictionary containing server information.
+            Tuple[discord.Embed, Optional[ButtonLinks], Optional[str]]: The embed to display, an optional view, and the network name if available.
         """
         info = fetch_server_info(addr)
 
         if not info:
-            msg = f"{addr} is not a DDraceNetwork or Community server. "
-            ticket = self.ticket_manager.tickets.get(channel.id)
-            if ticket and ticket.category in [ticket.category.REPORT, ticket.category.BAN_APPEAL]:
-                msg += "Therefore our moderators are unable to assist you with your concern."
-            return msg
+            embed = ServerInfoEmbed.from_server_info(
+                info=None,
+                addr=addr,
+            )
+            return embed, None, None
 
-        server_name = info.get("name")
-        server_type = info.get("server_type")
-        if server_type == "DDNet":
-            server_type = "DDrace"  # Else this will confuse people
-        network = info.get("network")
-        contact_urls = info.get("contact_url")
-        region = flag(info.get("flagId"))
-
+        contact_list: list = info.get("contact_url")
         contact_url = None
-        if contact_urls:
-            for url in contact_urls:
+        if contact_list:
+            for url in contact_list:
                 try:
                     await self.bot.fetch_invite(url)
                     contact_url = url
@@ -194,31 +183,20 @@ class AutoMod(commands.Cog):
                 except (TypeError, IndexError):
                     continue
 
-        strings = {
-            1: f"{addr}[{region}] is an official **{server_name}** (Type: {server_type}) server.\n",
-            2: f"Quick join: <https://ddnet.org/connect-to/?addr={addr}/>",
-        }
+        view = None
+        region = flag(info.get("flagId"))
+        ticket = self.bot.ticket_manager.tickets.get(channel.id)
+        is_ticket = ticket is not None
+        view = ButtonLinks(is_ticket, addr, info.get("network"), contact_url)
 
-        if network != "DDraceNetwork":
-            strings[1] += f"**{server_name} is __NOT__ affiliated with DDNet.**\n"
+        embed = ServerInfoEmbed.from_server_info(
+            addr=addr,
+            info=info,
+            ticket=is_ticket,
+            region=region,
+        )
 
-        if (
-            contact_url is not None
-            and network != "DDraceNetwork"
-            and channel.id in self.ticket_manager.tickets
-        ):
-            strings[1] += f"Join {contact_url} and ask for help there instead.\n"
-            strings[2] = ""
-
-        if (
-            channel.name.startswith("report-")
-            and network == "DDraceNetwork"
-            and channel not in self.mod_call
-        ):
-            strings[1] = f"<@&{Roles.MODERATOR}>\n{strings[1]}"
-            self.mod_call.append(channel)
-
-        return strings
+        return embed, view, info.get("network")
 
     @commands.Cog.listener("on_message")
     async def address_verify(self, message: discord.Message):
@@ -240,19 +218,22 @@ class AutoMod(commands.Cog):
         if not addr:
             return
 
-        words = await self.discord_resp(addr, message.channel)
-        msg = None
+        embed, view, network = await self.discord_resp(addr, message.channel)
 
-        if isinstance(words, str):
-            msg = await message.channel.send(words)
-        elif isinstance(words, dict):
-            try:
-                msg = await message.channel.send(f"{words[1] + words[2]}")
-            except AttributeError:
-                try:
-                    msg = await message.channel.send(f"{words[1] + words[2]}")
-                except discord.Forbidden:
-                    return
+        if (
+                message.channel.name.startswith("report-")
+                and network == "DDraceNetwork"
+                and message.channel not in self.mod_call
+        ):
+            self.mod_call.append(message.channel)
+            msg = await message.channel.send(content=f"<@&{Roles.MODERATOR}>", embed=embed, view=view)
+            self.message_cache[message.id] = msg.id
+            return
+
+        if view:
+            msg = await message.channel.send(embed=embed, view=view)
+        else:
+            msg = await message.channel.send(embed=embed)
 
         self.message_cache[message.id] = msg.id
 
@@ -296,8 +277,18 @@ class AutoMod(commands.Cog):
             await msg.delete()
             msg = None
 
-        strings = await self.discord_resp(addr, before.channel)
-
+        embed, view, network = await self.discord_resp(addr, before.channel)
+        
+        if (
+                after.channel.name.startswith("report-")
+                and network == "DDraceNetwork"
+                and after.channel not in self.mod_call
+        ):
+            self.mod_call.append(after.channel)
+            msg = await after.channel.send(content=f"<@&{Roles.MODERATOR}>", embed=embed, view=view)
+            self.message_cache[after.id] = msg.id
+            return
+        
         # This will send a new message with an @Moderator ping if msg is None
         if (
             before.channel.name.startswith("report-")
@@ -305,25 +296,17 @@ class AutoMod(commands.Cog):
         ):
             try:
                 if before.channel.topic.startswith("Ticket"):
-                    msg = await before.channel.send(content=f"{strings[1] + strings[2]}")
+                    msg = await before.channel.send(embed=embed, view=view)
             except AttributeError:  # NoneType case
-                msg = await before.channel.send(content=f"{strings[1] + strings[2]}")
+                msg = await before.channel.send(embed=embed, view=view)
             self.message_cache[after.id] = msg.id
             return
-
-        # All other cases, not in a report ticket
-        if isinstance(strings, str):
-            msg = self.bot.get_message(self.message_cache.get(before.id))
-            msg = await msg.edit(content=strings)
-        elif isinstance(strings, dict):
-            msg = self.bot.get_message(self.message_cache.get(before.id))
-            try:
-                msg = await msg.edit(content=f"{strings[1] + strings[2]}")
-            except AttributeError:  # NoneType case
-                try:
-                    msg = await msg.edit(content=f"{strings[1] + strings[2]}")
-                except discord.Forbidden:
-                    return
+        try:
+            if isinstance(embed, discord.Embed):
+                msg = self.bot.get_message(self.message_cache.get(before.id))
+                msg = await msg.edit(embed=embed, view=view)
+        except AttributeError:
+                msg = await before.channel.send(embed=embed, view=view)
 
         self.message_cache[after.id] = msg.id
 
@@ -891,5 +874,5 @@ class NoChat(commands.Cog):
 
 async def setup(bot: commands.bot):
     await bot.add_cog(AutoMod(bot))
-    await bot.add_cog(Moderation(bot))
-    await bot.add_cog(NoChat(bot))
+    await bot.add_cog(Moderation(commands.Bot))
+    await bot.add_cog(NoChat(commands.Bot))

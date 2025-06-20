@@ -4,12 +4,15 @@ from utils.profile import PlayerProfile
 
 
 class RenameEmbed(discord.Embed):
-    def __new__(cls, user):
+    """
+    Embed for guiding users through the player rename process.
+    This embed provides instructions and required information for users who wish to move their in-game points to a different name.
+    """
+    def __new__(cls):
         embed = discord.Embed(title="Player Rename", colour=2210995)
         embed.add_field(
             name="",
-            value=f"Hello {user.mention}, \n\n"
-            "To initiate the process of moving your in-game points to a different name, \n"
+            value="To initiate the process of moving your in-game points to a different name, \n"
             "we require some essential information from you.",
             inline=False)
         embed.add_field(
@@ -28,6 +31,10 @@ class RenameEmbed(discord.Embed):
 
 
 class RenameInfoEmbed(discord.Embed):
+    """
+    Embed for displaying or requesting player rename information.
+    This embed summarizes the old and new player profiles if provided, or prompts the user to supply the required names.
+    """
     def __new__(cls, profile_old: PlayerProfile = None, profile_new: PlayerProfile = None):
         if profile_old and profile_new:
             embed = discord.Embed(title="Provided Infos", colour=2210995)

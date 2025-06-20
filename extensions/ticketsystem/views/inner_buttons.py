@@ -172,7 +172,7 @@ class InnerTicketButtons(discord.ui.View):
                 messages.append(msg)
 
         if not messages:
-            await interaction.edit_original_response(content=f"Unable to find ban message.")
+            await interaction.edit_original_response(content="Unable to find ban message.")
             return
 
         now = datetime.now(timezone.utc)

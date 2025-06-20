@@ -82,7 +82,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
 
             await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel)
 
-            message = await ticket.channel.send(
+            ticket.start_message = await ticket.channel.send(
                 content=f"Alerts:{await self.ticket_manager.mentions(interaction, ticket.category)}",
                 embed=embeds.BanAppealEmbed(interaction.user)
             )
@@ -100,7 +100,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
 
             cloudflare = BAN_APPEAL_CLOUDFLARE.get(self.language, BAN_APPEAL_CLOUDFLARE["en"])
             
-            content = f"<@{interaction.user.id}> your ticket has been created: {message.jump_url}"
+            content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"
             if not await check_dm_channel(interaction.user):
                 content += ("\n\n**WARNING:**\n"
                             "I wasn't able to send you a DM.\n"

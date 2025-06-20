@@ -115,15 +115,14 @@ class MainMenu(discord.ui.View):
         close = inner_buttons.InnerTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
-        message = await ticket.channel.send(
+        ticket.start_message = await ticket.channel.send(
             await self.ticket_manager.mentions(interaction, ticket.category),
             embeds=[embeds.ReportEmbed(interaction.user), embeds.FollowUpEmbed()],
             view=close,
         )
+        await ticket.start_message.pin()
 
-        await message.pin()
-
-        content = f"<@{interaction.user.id}> your ticket has been created: {message.jump_url}"
+        content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"
         if not await check_dm_channel(interaction.user):
             content += ("\n\n**WARNING:**\n"
                         "The bot wasn't able to send you a DM.\n"
@@ -195,15 +194,15 @@ class MainMenu(discord.ui.View):
         close = inner_buttons.InnerTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
-        message = await ticket.channel.send(
+        ticket.start_message = await ticket.channel.send(
             await self.ticket_manager.mentions(interaction, ticket.category),
             embeds=[embeds.ComplaintEmbed(interaction.user), embeds.FollowUpEmbed()],
             view=close,
         )
 
-        await message.pin()
+        await ticket.start_message.pin()
 
-        content = f"<@{interaction.user.id}> your ticket has been created: {message.jump_url}"
+        content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"
         if not await check_dm_channel(interaction.user):
             content += ("\n\n**WARNING:**\n"
                         "I wasn't able to send you a DM.\n"
@@ -239,15 +238,15 @@ class MainMenu(discord.ui.View):
         close = inner_buttons.InnerTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
-        message = await ticket.channel.send(
+        ticket.start_message = await ticket.channel.send(
             await self.ticket_manager.mentions(interaction, ticket.category),
             embeds=[embeds.AdminMailEmbed(interaction.user), embeds.FollowUpEmbed()],
             view=close,
         )
 
-        await message.pin()
+        await ticket.start_message.pin()
 
-        content = f"<@{interaction.user.id}> your ticket has been created: {message.jump_url}"
+        content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"
         if not await check_dm_channel(interaction.user):
             content += ("\n\n**WARNING:**\n"
                         "I wasn't able to send you a DM.\n"

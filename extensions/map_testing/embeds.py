@@ -116,3 +116,24 @@ class MissingChangelog(discord.Embed):
                         f"include a changelog **ALONGSIDE** your map uploads (**pref. with screenshots**) !",
             color=discord.Color.dark_red()
             )
+    
+class TrialReadyEmbed(discord.Embed):
+    def __new__(cls, rating) -> discord.Embed:
+        return discord.Embed(
+            title="⭐ Channel state set to Release Candidate!",
+            description="First ready set by Trial Tester. "
+                        "The map needs to be tested again by an official tester before fully evaluated.\n\n"
+                        f"Suggested rating: {rating}",
+            colour=discord.Color.yellow()
+        )
+
+
+class ReadyEmbed(discord.Embed):
+    def __new__(cls, rating) -> discord.Embed:
+        return discord.Embed(
+            title="⭐ Channel state set to Release Candidate!",
+            description="First ready set. "
+                        "The map needs to be tested again by a different tester before fully evaluated.\n\n"
+                        f"Suggested rating: {rating}",
+            colour=discord.Color.yellow()
+        )

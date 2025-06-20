@@ -52,20 +52,14 @@ class AppealData:
 
 @dataclass(slots=True, kw_only=True)
 class RenameData:
-    name: str
-    address: str
-    dnsbl: str
-    reason: str
-    appeal: str
+    old_profile: PlayerProfile
+    new_profile: PlayerProfile
 
     def __repr__(self) -> str:
         return json.dumps(
             {
-                "name": str(self.name),
-                "address": str(self.address),
-                "dnsbl": str(self.dnsbl),
-                "reason": str(self.reason),
-                "appeal": str(self.appeal),
+                "old_profile": self.old_profile,
+                "new_profile": self.new_profile,
             },
             indent=4
         )
@@ -73,13 +67,14 @@ class RenameData:
 
 @dataclass(slots=True, kw_only=True)
 class Ticket:
-    channel: discord.TextChannel | None
-    creator: discord.User
+    channel: Optional[discord.TextChannel] = None
+    creator: discord.abc.User
     category: TicketCategory
     state: TicketState = TicketState.UNCLAIMED
+    start_message: Optional[discord.Message] = None # Stores the initial message sent in a ticket to rebuild the view if necessary
     rename_data: list[PlayerProfile] = field(default_factory=list, init=True) # TODO use RenameData dataclass
     appeal_data: AppealData = None
-    inactivity: int # Set to 0 initially by the create_ticket method
+    inactivity: int # Set to 0 initially by the create_ticket method # TODO: Just remove this function entirely
     being_closed: bool = False
     locked: bool = False
     lock: asyncio.Lock = field(init=False, repr=False)
@@ -96,6 +91,7 @@ class Ticket:
                 "name": str(self.channel),
                 "channel-id": str(self.channel.id) if self.channel else None,
                 "creator": str(self.creator),
+                "start_message": str(self.start_message),
                 "category": str(self.category),
                 "state": str(self.state),
                 "rename_data": player_repr,
@@ -230,13 +226,22 @@ class TicketManager:
         inactivity = result[0] if result else 0
         locked = result[1] if result else False
 
-        profiles, appeal_data = [], []
+        profiles, appeal_data, start_message = [], [], None
         if category in (TicketCategory.RENAME, TicketCategory.BAN_APPEAL):
             messages = [m async for m in channel.history(limit=2, oldest_first=True)]
+            start_message = messages[0] if messages else None
+
+            if start_message is None:
+                log.warning(
+                    f"Unable to fetch initial message for ticket channel: {channel.name}"
+                )
+
             if len(messages) < 2 or not messages[1].embeds:
                 log.warning(
-                    f"Channel {channel.name} is missing expected embed data. Continuing without extracted data. "
-                    f"This usually happens if the ticket category was changed manually.")
+                    f"Expected embed data not found in channel {channel.name}. "
+                    f"Rename information will be skipped and omitted from the transcript. "
+                    f"This often results from manual changes to the ticket category."
+                )
             else:
                 embed = messages[1].embeds[0]
                 if category == TicketCategory.RENAME:
@@ -249,6 +254,7 @@ class TicketManager:
                 channel=channel,
                 creator=creator,
                 category=category,
+                start_message=start_message,
                 state=state,
                 rename_data=profiles,
                 appeal_data=appeal_data,
@@ -343,6 +349,18 @@ class TicketManager:
         """
         await self.bot.upsert(query, locked, ticket.channel.id)
         ticket.locked = locked
+
+    async def lock_or_unlock_ticket(
+            self, 
+            ticket: Ticket, 
+            locked: bool, 
+    ):
+        await ticket.channel.set_permissions(ticket.creator, send_messages=not locked)
+        ticket.locked = locked
+        await self.set_lock(ticket, locked)
+        await ticket.channel.send(
+            content=f"The ticket has been {'locked' if locked else 'unlocked'}."
+        )
 
     def check_for_open_ticket(self, user: discord.User, category: Ticket.category) -> discord.TextChannel | None:
         """Returns ticket channels from a specific user and category."""

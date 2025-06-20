@@ -119,3 +119,77 @@ class LogEmbed(discord.Embed):
         )
         em.set_thumbnail(url=member.display_avatar.url)
         return em
+    
+
+class ServerInfoEmbed(discord.Embed):
+    """
+    This embed presents details about a server, including its address, type, region, and affiliation status.
+    """
+    @classmethod
+    def from_server_info(
+        cls,
+        info: dict | None,
+        addr: str,
+        ticket: bool = False,
+        region: str = None,
+    ) -> discord.Embed:
+        """
+        Generates an embed containing server information and warnings based on the provided server data.
+
+        Args:
+            info (dict | None): The server information dictionary, or None if not found.
+            addr (str): The address of the server.
+            ticket (bool, optional): Whether this is for a ticket context. Defaults to False.
+            region (str, optional): The region or country of the server. Defaults to None.
+
+        Returns:
+            discord.Embed: The constructed embed containing server information and warnings.
+        """
+        if info:
+            server_name = info.get("name")
+            server_type = info.get("server_type")
+            if server_type == "DDNet":
+                server_type = "DDrace"
+            network = info.get("network")
+            icon = info.get("icon")
+
+            embed = cls(
+                title=f"{server_name} Server Info",
+                color=discord.Color.orange() if network != "DDraceNetwork" else discord.Color.green()
+            )
+        else:
+            network = None
+            server_type = None
+            icon = None
+            embed = cls(
+                title="",
+                description=f"⚠️ {addr} is not a DDNet or Community server.",
+                color=discord.Color.red()
+            )
+
+        if info and network != "DDraceNetwork":
+            warning = "This server is **NOT** affiliated with DDNet.\n"
+            if ticket and network is not None:
+                warning += "Click the contact URL button and ask for help there instead."
+                embed.add_field(
+                    name="⚠️ Warning",
+                    value=warning.strip(),
+                    inline=False
+                )
+                return embed
+            else:
+                embed.add_field(
+                    name="⚠️ Warning",
+                    value=warning.strip(),
+                    inline=False
+                )
+
+        if info:
+            embed.add_field(name="Address", value=addr, inline=True)
+            embed.add_field(name="Country", value=region, inline=True)
+            embed.add_field(name="Server Type", value=server_type, inline=True)
+            if icon:
+                embed.set_thumbnail(url=icon)
+
+        return embed
+

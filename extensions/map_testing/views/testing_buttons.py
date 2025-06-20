@@ -93,7 +93,7 @@ class TestingMenu(discord.ui.View):
             )
             return
 
-        if interaction.user.mention in map_channel.votes and self.bot.user.mention not in map_channel.votes:
+        if interaction.user in map_channel.votes and self.bot.user not in map_channel.votes:
             await interaction.response.send_message(
                 "You cannot ready the map again. The map needs to be tested by a different tester before fully evaluated.",
                 ephemeral=True

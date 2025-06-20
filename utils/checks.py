@@ -8,7 +8,6 @@ from typing import Iterable
 from constants import Roles
 
 
-
 def has_map(message: discord.Message) -> bool:
     return any(
         attachment.filename.endswith(".map")

@@ -281,7 +281,7 @@ class InitialSubmission(Submission):
 
         debug_output = await self.debug_map()
         state = MapState.WAITING if debug_output else MapState.TESTING
-        self.map_channel, message = await MapChannel.from_submission(self, state, self.thumbnail, overwrites=overwrites)
+        self.map_channel, message = await MapChannel.from_submission(self, state, overwrites=overwrites)
 
         # DEBUG Map: Runs twmap-check-ddnet on the isubm map file
         if debug_output:

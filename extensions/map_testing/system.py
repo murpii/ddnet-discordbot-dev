@@ -91,6 +91,7 @@ class MapTesting(commands.Cog):
 
                 try:
                     map_channel = await MapChannel.create(self.bot, channel)
+                    print(map_channel.votes)
                     await map_channel.load_changelogs()
                     self.bot.map_channels[channel.id] = map_channel
                 except ValueError as exc:
@@ -560,7 +561,7 @@ class MapTesting(commands.Cog):
 
     async def reset_map_state(self, map_channel):
         new_state = MapState.TESTING if map_channel.state == MapState.WAITING else MapState.RC
-        set_by = self.bot.user.mention if new_state == MapState.RC else None
+        set_by = self.bot.user if new_state == MapState.RC else None
         await map_channel.set_state(state=new_state, set_by=set_by)
         global_cooldown.update_cooldown(map_channel.id)
         await map_channel.changelog_paginator.add_changelog(

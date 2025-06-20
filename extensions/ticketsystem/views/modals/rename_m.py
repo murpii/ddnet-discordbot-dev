@@ -103,30 +103,26 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
         ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
 
-        message = await ticket.channel.send(
+        inner_view = InnerTicketButtons(interaction.client)
+        inner_view.update_buttons(ticket)
+
+        ticket.start_message = await ticket.channel.send(
             content=f"Alerts:{await self.ticket_manager.mentions(interaction, ticket.category)}",
-            embed=embeds.RenameEmbed(interaction.user)
-        )
-
-        close = InnerTicketButtons(interaction.client)
-        close.update_buttons(ticket)
-
-        msg = await ticket.channel.send(
             embeds=[
+                embeds.RenameEmbed(),
                 embeds.RenameInfoEmbed(self.profile_old, self.profile_new), 
                 embeds.FollowUpEmbed()
             ], 
-            view=close
+            view=inner_view
         )
-        await msg.pin()
+        await ticket.start_message.pin()
 
-        content = f"<@{interaction.user.id}> your ticket has been created: {message.jump_url}"
+        content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"
         if not await check_dm_channel(interaction.user):
             content += ("\n\n**WARNING:**\n"
                         "I wasn't able to send you a DM.\n"
                         "You won't get a transcript or any messages our staff leave after the ticket is closed.\n"
                         "To fix this, shoot me a message or adjust your privacy settings.\n")
-
         await interaction.followup.send(content=content, ephemeral=True)
 
         log.info(
