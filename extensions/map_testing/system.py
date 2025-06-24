@@ -91,7 +91,6 @@ class MapTesting(commands.Cog):
 
                 try:
                     map_channel = await MapChannel.create(self.bot, channel)
-                    print(map_channel.votes)
                     await map_channel.load_changelogs()
                     self.bot.map_channels[channel.id] = map_channel
                 except ValueError as exc:

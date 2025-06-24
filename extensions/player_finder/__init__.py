@@ -17,14 +17,18 @@ from .manager import Player
 log = logging.getLogger()
 
 BAN_RE = (
-    r"(?P<author>\w+) banned (?P<banned_user>.+?) `\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}` until "
+    r"(?P<author>\w+) banned (?P<banned_user>.+?) `(?P<IP>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})` until "
     r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
 )
 BAN_REF_RE = (
-    r"!ban (?P<IP>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) *"
+    r"!ban "
+    r"(?P<IP>\d{1,3}(?:\.\d{1,3}){3}) *"
     r"(?P<name>'[^']*'|\"[^\"]*\"|[^'\"\s]+)? *"
     r"(?P<duration>\d+[a-zA-Z]{1,2}) *"
     r"(?P<reason>.+)"
+)
+UNBAN_RE = (
+    r""
 )
 
 
@@ -83,19 +87,22 @@ class PlayerFinder(commands.Cog):
         if message.channel.id != Channels.BANS:
             return
 
-        regex = re.compile(BAN_RE)
-        if not (match := regex.search(message.content)):
+        regex = re.match(BAN_RE, message.content)
+        if not regex:
+            print("Not Found")
             return
 
         ref_message = await message.channel.fetch_message(message.reference.message_id)
-        regex = re.compile(BAN_REF_RE)
+        regex_ref = re.match(BAN_REF_RE, ref_message.content)
 
-        await self.manager.add_player(
-                name=match["banned_user"],
-                expiry_date=datetime.strptime(match["timestamp"], "%Y-%m-%d %H:%M:%S"),
-                added_by=ref_message.author,  # noqa
-                reason=regex.search(ref_message.content)["reason"],  # noqa
+        player = await self.manager.add_player(
+            name=regex["banned_user"],
+            addr=regex["IP"],
+            expiry_date=datetime.strptime(regex["timestamp"], "%Y-%m-%d %H:%M:%S"),
+            added_by=regex["author"],
+            reason=regex_ref["reason"],
         )
+        print(player)
 
     async def filter(self) -> list:
         gamemodes = [
@@ -177,13 +184,21 @@ class PlayerFinder(commands.Cog):
     @app_commands.command(name="pf_add", description="Adds a player to the watchlist.")
     @app_commands.describe(name="Name of the player", reason="Reason", expiry_date="Duration")
     @app_commands.choices(expiry_date=duration())  # Use the choices from the duration function
-    async def add_player(self, interaction: discord.Interaction, name: str, reason: str, expiry_date: int):
+    async def add_player(
+            self, 
+            interaction: discord.Interaction, 
+            name: str, 
+            reason: str, 
+            expiry_date: int, 
+            addr: str = None
+    ):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
         try:
             # Convert the expiry_date (integer choice) to a datetime using a helper function
             expiry_datetime = choice_to_datetime(expiry_date)
             player = await self.manager.add_player(
                 name=name,
+                addr=addr or None,
                 reason=reason,
                 added_by=interaction.user,
                 expiry_date=expiry_datetime,
@@ -285,7 +300,7 @@ class PlayerFinder(commands.Cog):
             if player.name in players_online and any(
                 server[1] in server_filter for server in players_online[player.name])
         }
-
+        
         await self.playerfinder(players_filtered)
 
     @overseer.before_loop
@@ -336,7 +351,7 @@ class PlayerFinder(commands.Cog):
                                 } | {
                                     f"({i})brainless tee" for i in range(1, 30)
                                 }
-
+        
         if len(player_name) < 4 or player_name in excl_common_names_set:
             return
 
@@ -346,9 +361,11 @@ class PlayerFinder(commands.Cog):
                 message = await channel.fetch_message(message_id)
                 await message.edit(embed=embed)
             else:
+                print("cba")
                 message = await channel.send(embed=embed)
                 self.embed_messages[player_name] = message.id
         except discord.NotFound:
+            print("abc")
             message = await channel.send(embed=embed)
             self.embed_messages[player_name] = message.id
 

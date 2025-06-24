@@ -868,11 +868,11 @@ class NoChat(commands.Cog):
                             delete_after=5
                         )
                 except discord.Forbidden:
-                    print("Missing permissions to delete messages.")
+                    log.error("media_only: Missing permissions to delete messages.")
                 return
 
 
 async def setup(bot: commands.bot):
     await bot.add_cog(AutoMod(bot))
-    await bot.add_cog(Moderation(commands.Bot))
-    await bot.add_cog(NoChat(commands.Bot))
+    await bot.add_cog(Moderation(bot))
+    await bot.add_cog(NoChat(bot))

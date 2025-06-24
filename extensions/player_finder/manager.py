@@ -1,6 +1,8 @@
+import ipaddress
+import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Union
+from typing import Union, Optional
 
 import discord
 
@@ -11,13 +13,18 @@ class Player:
     reason: str
     expiry_date: datetime
     added_by: discord.User
+    addr: str = None
 
     def __repr__(self):
-        return (
-            f"Player(name={self.name}, "
-            f"reason={self.reason}, "
-            f"expiry_date={self.expiry_date}, "
-            f"added_by={self.added_by})"
+        return json.dumps(
+            {
+                "name": self.name,
+                "addr": self.addr,
+                "reason": self.reason,
+                "expiry_date": str(self.expiry_date),
+                "added_by": self.added_by,
+            },
+            indent=4
         )
 
 
@@ -29,19 +36,20 @@ class PlayerfinderManager:
     async def load_players(self):
         query = """
         SELECT 
-            name, 
+            name,
+            addr,
             expiry_date, 
             added_by, 
-            reason 
+            reason
         FROM 
             discordbot_playerfinder
         """
         rows = await self.bot.fetch(query, fetchall=True)
 
         for row in rows:
-            name, expiry_date, added_by, reason = row
+            name, addr, expiry_date, added_by, reason = row
             player = Player(
-                name=name, expiry_date=expiry_date, added_by=added_by, reason=reason
+                name=name, addr=addr, expiry_date=expiry_date, added_by=added_by, reason=reason
             )
             self.players.append(player)
 
@@ -49,20 +57,21 @@ class PlayerfinderManager:
         query = """
         INSERT INTO 
             discordbot_playerfinder (
-                name, 
+                name,
+                addr,
                 expiry_date, 
                 added_by, 
                 reason
             )
         VALUES 
-            (%s, %s, %s, %s)
+            (%s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             expiry_date = VALUES(expiry_date),
             added_by = VALUES(added_by),
             reason = VALUES(reason)
         """
         await self.bot.upsert(
-            query, player.name, player.expiry_date, str(player.added_by), player.reason
+            query, player.name, player.addr, player.expiry_date, str(player.added_by), player.reason
         )
 
     async def delete(self, player: Player):
@@ -78,25 +87,27 @@ class PlayerfinderManager:
         query = """
         UPDATE 
             discordbot_playerfinder
-        SET 
-            expiry_date = %s, 
-            added_by = %s, 
+        SET
+            addr = %s,
+            expiry_date = %s,
+            added_by = %s,
             reason = %s
         WHERE 
             name = %s
         """
         await self.bot.upsert(
-            query, player.expiry_date, str(player.added_by), player.reason, player.name
+            query, player.addr, player.expiry_date, str(player.added_by), player.reason, player.name
         )
 
     async def add_player(
             self,
             name: str,
+            addr: str,
             expiry_date: datetime,
             added_by: Union[discord.User, discord.Member],
             reason: str
     ) -> Player:
-        player = Player(name=name, expiry_date=expiry_date,added_by=added_by, reason=reason)
+        player = Player(name=name, addr=addr, expiry_date=expiry_date,added_by=added_by, reason=reason)
         await self.insert(player)
         self.players.append(player)
         return player
