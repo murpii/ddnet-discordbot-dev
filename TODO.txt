@@ -4,7 +4,7 @@
 - Turn the $help command into a app command for less spam
 - Check rating_selection.py and move embeds to embeds package
 - Debug map_channel.votes
-- Fix playerfinder :pepehands: change the primary key on ddnet
+
 
 Long term:
 - Implement global chat and vote mute functionality for DDNet servers

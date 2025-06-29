@@ -6,18 +6,12 @@ import logging
 from typing import Optional
 
 from .manager import Ticket, TicketCategory
+from utils.checks import is_staff
 from constants import Channels, Roles
 
 
 log = logging.getLogger("tickets")
 MAX_ZIP_SIZE = 24 * 1024 * 1024
-
-
-def is_staff(member: discord.Member) -> bool:
-    return any(
-        role.id in (Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
-        for role in member.roles
-    )
 
 
 class TicketTranscript:
@@ -343,7 +337,7 @@ class TicketTranscript:
             postscript (Optional[str]): The message sent to the ticket author.
             inactive (bool): Indicates if the ticket is closed due to inactivity.
         """
-        if interaction and is_staff(interaction.user):
+        if interaction and is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]):
             response = f"**Your \"{self.ticket.category.value.lower()}\" ticket has been closed by staff.**"
         elif inactive:
             response = f"**Your \"{self.ticket.category.value.lower()}\" ticket has been closed due to inactivity.**"

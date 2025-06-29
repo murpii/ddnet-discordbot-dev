@@ -103,7 +103,8 @@ class SkinDB(commands.Cog):
         self.bot = bot
         self.cache = {}  # im using a dict to store all message ids for now
 
-    async def send_error_messages(self, message: discord.Message, error_messages: list) -> bool:
+    @staticmethod
+    async def send_error_messages(message: discord.Message, error_messages: list) -> bool:
         try:
             error_messages.insert(0, "Skin Submit Errors: ")
             await message.author.send("\n".join(error_messages))

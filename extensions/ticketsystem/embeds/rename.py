@@ -8,25 +8,32 @@ class RenameEmbed(discord.Embed):
     Embed for guiding users through the player rename process.
     This embed provides instructions and required information for users who wish to move their in-game points to a different name.
     """
-    def __new__(cls):
-        embed = discord.Embed(title="Player Rename", colour=2210995)
+
+    def __new__(cls, user: discord.abc.User):
+        embed = discord.Embed(
+            title="Player Rename Request",
+            colour=2210995,
+            description=f"Hi **{user.mention}**,\n"
+                        f"to transfer your in-game points to a new name, we need a few details first."
+        )
+
         embed.add_field(
-            name="",
-            value="To initiate the process of moving your in-game points to a different name, \n"
-            "we require some essential information from you.",
-            inline=False)
+            name="Step 1: Past Renames",
+            value="1. Have you ever received a rename before?\n"
+                  "  - If yes, please mention who processed it.",
+            inline=False
+        )
+
         embed.add_field(
-            name="Kindly provide answers to the following questions:",
-            value="* Have you ever received a rename before? \n"
-            "  - If yes, by whom? \n"
-            "* To validate the ownership of the points being transferred, "
-            "we require you to provide us verifiable evidence of ownership. \n"
-            "  - We accept proof in form of old demo files that contain finishes done on DDNet. "
-            "The demo files directory can be found in your config directory. "
-            "Use $configdir if you're unsure where that is. \n"
-            "  - Alternatively, if you have any personal connections to one of our staff members, "
-            "you can ask them to vouch for your credibility.",
-            inline=False)
+            name="Step 2: Proof of Ownership",
+            value="To verify that you own the points being moved, we accept **one** of the following:\n\n"
+                  "**1.** Demo files showing your finishes on DDNet (check your `demos` folder in the config directory, "
+                  "use `$configdir` if you're unsure where that is).\n\n"
+                  "**2.** A personal vouch from a known DDNet staff member confirming your identity.",
+            inline=False
+        )
+
+        embed.set_footer(text="Your request will be reviewed once we receive the necessary information.")
         return embed
 
 

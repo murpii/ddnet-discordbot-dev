@@ -108,13 +108,16 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
 
         ticket.start_message = await ticket.channel.send(
             content=f"Alerts:{await self.ticket_manager.mentions(interaction, ticket.category)}",
+            embed=embeds.RenameEmbed(ticket.creator)
+        )
+
+        await ticket.channel.send(
             embeds=[
-                embeds.RenameEmbed(),
                 embeds.RenameInfoEmbed(self.profile_old, self.profile_new), 
                 embeds.FollowUpEmbed()
-            ], 
-            view=inner_view
-        )
+            ],
+            view=inner_view)
+        
         await ticket.start_message.pin()
 
         content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"

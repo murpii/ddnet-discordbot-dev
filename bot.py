@@ -36,6 +36,7 @@ extensions = [
     ("extensions.map_testing.bans", True),
     ("extensions.skindb", True),
     ("extensions.player_finder", True),
+    ("extensions.player_finder.secret", True),
     ("extensions.ticketsystem", True),
     ("extensions.misc.meme", True),
     ("extensions.misc.misc", True),
@@ -51,8 +52,8 @@ extensions = [
     # ("extensions.events.teeguesser", False),
     # ("extensions.events.banner", False),
     # ("extensions.events", True),
-    # ("extensions.events.secret", False),
-    ("extensions.debug", True)
+    ("extensions.events.secret", False),
+    # ("extensions.debug", False)
 ]
 
 
@@ -151,7 +152,7 @@ class DDNet(commands.Bot):
         loading each one that is marked for initialization.
         It also checks the status of the database connection pool and retrieves a session for the bot's operations
         """
-        
+
         for cog, init in extensions:
             if init:
                 try:
@@ -227,7 +228,7 @@ class SessionManager:
 
     Methods:
         get_session(cog_name): Retrieves an existing session or creates a new one for the specified cog.
-        close_session(cog_name): Closes and removes the session associated with the specified cog.
+        Close_session(cog_name): Closes and removes the session associated with the specified cog.
     """
 
     def __init__(self):

@@ -58,10 +58,9 @@ class MainMenuEmbed(discord.Embed):
 
 class MainMenuFollowUp(discord.Embed):
     def __new__(cls):
-        embed_warning = discord.Embed(
+        return discord.Embed(
             title="If you create tickets with no valid reason or solely to troll, "
             "you will be given a timeout.",
             description="",
             colour=16776960,
         )
-        return embed_warning

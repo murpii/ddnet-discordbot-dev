@@ -497,7 +497,7 @@ class Moderation(commands.Cog):
         pass
     
     @timeout_group.command(
-        name="add",
+        name="user",
         with_app_command=True,
         description="Timeout a user for a number of minutes, with an optional message.",
         usage="$timeout <@mention> <minutes> <reason>")
@@ -859,7 +859,7 @@ class NoChat(commands.Cog):
                     await message.delete()
                     try:
                         await message.author.send(
-                            "Only media or links are allowed in this channel.", 
+                            f"{message.channel.jump_url}: Only media or links are allowed in this channel.", 
                             delete_after=30
                         )
                     except discord.Forbidden:

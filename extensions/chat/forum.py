@@ -75,7 +75,8 @@ class Forum(commands.Cog):
         async for msg in thread.history(limit=1, oldest_first=True):
             if thread.archived:  # can't do it earlier, discord api race conditions...
                 return
-            await msg.pin()
+            with contextlib.suppress(Exception):
+                await msg.pin()
 
         # moderator application specific
         if thread.parent_id == Forums.MODERATOR_APPS:

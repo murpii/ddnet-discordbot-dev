@@ -12,7 +12,7 @@ from extensions.ticketsystem.manager import TicketCategory, TicketState
 from extensions.admin.rename import process_rename
 from utils.text import str_to_timedelta, strip_surrounding_quotes, to_discord_timestamp
 from utils.checks import is_staff
-from utils.regex import BAN_REF_RE
+from utils.regex import BAN_REF_RE, BAN_RE
 from constants import Roles, Channels
 
 log = logging.getLogger("tickets")
@@ -63,7 +63,7 @@ class InnerTicketButtons(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Print CMD (Admin only)",
+        label="Print CMD",
         style=discord.ButtonStyle.blurple,
         custom_id="RenameCMDButton"
     )
@@ -74,9 +74,11 @@ class InnerTicketButtons(discord.ui.View):
                 ephemeral=True
             )
             return
+
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
-        if not ticket.rename_data[0] or not ticket.rename_data[1]:
-            await interaction.response.send_message("BUG: Could not fetch names for rename.")
+
+        if not ticket.rename_data:
+            await interaction.response.send_message("Could not fetch names for rename.", ephemeral=True)
             return
         else:
             old = ticket.rename_data[0].name
@@ -90,7 +92,7 @@ class InnerTicketButtons(discord.ui.View):
             )
 
     @discord.ui.button(
-        label="Run Rename (Admin only)",
+        label="Run Rename",
         style=discord.ButtonStyle.red,
         custom_id="RenameButton"
     )
@@ -148,7 +150,7 @@ class InnerTicketButtons(discord.ui.View):
 
     @discord.ui.button(
         label="Find Ban",
-        style=discord.ButtonStyle.red,
+        style=discord.ButtonStyle.red,  # type: ignore
         custom_id="FindBan")
     async def t_appeal_find_ban(self, interaction: discord.Interaction, button: Button):
         if not is_staff(
@@ -162,13 +164,15 @@ class InnerTicketButtons(discord.ui.View):
             await interaction.response.send_message("Only staff members are allowed to use this button.")
 
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
-        messages = []
 
+        if not ticket.appeal_data or not ticket.appeal_data.address:
+            await interaction.response.send_message("No address found.", ephemeral=True)
+            return
+
+        messages = []
         await interaction.response.defer(ephemeral=True, thinking=True)
         async for msg in self.bot.get_channel(Channels.BANS).history(limit=1000, oldest_first=False):
-            # if msg.author.bot:
-            #     continue
-            if f"!ban {ticket.appeal_data.address}" in msg.content:
+            if f"`{ticket.appeal_data.address}`" in msg.content:
                 messages.append(msg)
 
         if not messages:
@@ -179,30 +183,33 @@ class InnerTicketButtons(discord.ui.View):
         string = f"{'One ban' if len(messages) == 1 else 'Multiple bans'} found for IP `{ticket.appeal_data.address}`:\n"
         last_name = None
         for message in messages:
-            regex = re.match(BAN_REF_RE, message.content)
+            regex = re.match(BAN_RE, message.content)
             if not regex:
                 continue
 
-            duration_str = regex['duration']
             try:
-                ban_duration_td = str_to_timedelta(duration_str)
+                dt = datetime.strptime(regex['timestamp'], "%Y-%m-%d %H:%M:%S")
+                ban_duration_td = to_discord_timestamp(dt, style='R')
             except ValueError:
                 ban_duration_td = None
 
-            ban_start = message.created_at
-
             if ban_duration_td:
-                ban_expiry = ban_start + ban_duration_td
-                expired = now > ban_expiry
+                expired = now > dt.replace(tzinfo=timezone.utc)
                 expiry_info = (
-                    "**Expired**" if expired else f"**Expires:** {to_discord_timestamp(ban_expiry, style='R')}"
+                    "**Expired**" if expired else f"**Expires:** {ban_duration_td}"
                 )
             else:
-                expiry_info = "(invalid duration)"
+                expiry_info = "ERROR"
 
-            name = strip_surrounding_quotes(regex['name'] or '').strip()
-            reason = regex['reason'].strip()
+            try:
+                ref_message = await message.channel.fetch_message(message.reference.message_id)
+                regex_ref = re.match(BAN_REF_RE, ref_message.content)
+                reason = regex_ref['reason'].strip()
+            except discord.NotFound:
+                reason = "Unknown"
+
             author = message.author.mention
+            name = strip_surrounding_quotes(regex['banned_user'] or '').strip()
 
             if name != last_name:
                 string += f"{name}:\n"
@@ -210,7 +217,6 @@ class InnerTicketButtons(discord.ui.View):
 
             string += (f"    {reason}  "
                        f"Banned by: {author}  "
-                       f"{message.created_at.strftime('%m/%d/%Y %I:%M%p')}  "
                        f"{expiry_info}  "
                        f"({message.jump_url})\n")
 

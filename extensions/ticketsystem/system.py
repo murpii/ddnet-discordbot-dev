@@ -216,6 +216,16 @@ class TicketSystem(commands.Cog):
             category (app_commands.Choice[str]): The new category to assign to the ticket.
         """
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
+
+        if category.value == TicketCategory.RENAME.value:
+            await interaction.response.send_message(
+                "Tickets can't be changed to the **Rename** category. "
+                "Rename tickets require specific checks that only run during ticket creation. "
+                "Please ask the ticket creator to open a new ticket instead.", 
+                ephemeral=True
+            )
+            return
+
         if ticket.category == TicketCategory(category.value):
             await interaction.response.send_message(
                 f"This ticket is already a **{category.name}** ticket.", ephemeral=True
@@ -245,8 +255,7 @@ class TicketSystem(commands.Cog):
         close = inner_buttons.InnerTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
-        first_msg = messages[0]
-        await first_msg.edit(embeds=em, view=close)
+        await ticket.start_message.edit(embeds=em, view=close)
 
         for message in messages[1:]:
             if message.author.bot:
@@ -262,8 +271,8 @@ class TicketSystem(commands.Cog):
             overwrites=overwrites
         )
         await interaction.response.send_message(
-            f"{ticket.creator.mention} ticket channel category changed to {category.name}. "
-            f"Kindly review {first_msg.jump_url}.",
+            f"{ticket.creator.mention} ticket channel category changed to **{category.name}**. "
+            f"Kindly review {ticket.start_message.jump_url}.",
         )
 
     @commands.Cog.listener()

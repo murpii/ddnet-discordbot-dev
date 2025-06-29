@@ -52,6 +52,7 @@ def is_testing_staff(member: discord.Member) -> bool:
     )
 
 
+# TODO: Move this to global utils
 async def send_response(
         msg_type: Union[discord.Message, discord.Interaction],
         content: Union[discord.Embed, str],

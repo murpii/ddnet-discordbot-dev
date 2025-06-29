@@ -11,7 +11,8 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from constants import Guilds, Channels, Roles
-from utils.text import choice_to_datetime
+from utils.text import choice_to_datetime, to_discord_timestamp
+from utils.checks import is_staff
 from .manager import Player
 
 log = logging.getLogger()
@@ -32,13 +33,9 @@ UNBAN_RE = (
 )
 
 
-def is_staff(member: discord.Member) -> bool:
-    return any(r.id in (Roles.ADMIN, Roles.MODERATOR) for r in member.roles)
-
-
 def predicate(interaction: discord.Interaction) -> bool:
     return interaction.channel.id == Channels.PLAYERFINDER and is_staff(
-        interaction.user
+        interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
     )
 
 
@@ -89,20 +86,18 @@ class PlayerFinder(commands.Cog):
 
         regex = re.match(BAN_RE, message.content)
         if not regex:
-            print("Not Found")
             return
 
         ref_message = await message.channel.fetch_message(message.reference.message_id)
         regex_ref = re.match(BAN_REF_RE, ref_message.content)
 
-        player = await self.manager.add_player(
+        await self.manager.add_player(
             name=regex["banned_user"],
-            addr=regex["IP"],
             expiry_date=datetime.strptime(regex["timestamp"], "%Y-%m-%d %H:%M:%S"),
             added_by=regex["author"],
             reason=regex_ref["reason"],
+            link=message.jump_url
         )
-        print(player)
 
     async def filter(self) -> list:
         gamemodes = [
@@ -150,14 +145,17 @@ class PlayerFinder(commands.Cog):
                         )
         return players
 
-    @app_commands.guilds(Guilds.DDNET)
-    @app_commands.check(predicate)
-    @app_commands.command(
-        name="pf_list",
-        description="Uploads a text file containing all players currently in the watchlist")
-    async def player_list(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+    pf = app_commands.Group(
+        name="pf",
+        description="Playerfinder watchlist commands",
+        guild_ids=[Guilds.DDNET],
+        guild_only=True
+    )
 
+    @pf.command(name="list", description="Uploads a text file containing all players currently in the watchlist")
+    @app_commands.check(predicate)
+    async def pf_list(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         if not self.manager.players:
             await interaction.followup.send("No players found.")
         else:
@@ -169,44 +167,29 @@ class PlayerFinder(commands.Cog):
                     f'for reason: "{player.reason}", '
                     f"expires: {player.expiry_date}\n"
                 )
-
             with open("data/player_list.txt", "w", encoding="utf-8") as f:
                 f.write(response)
-
             with open("data/player_list.txt", "rb") as f:
-                await interaction.followup.send(
-                    file=discord.File(f, "player_list.txt")  # noqa
-                )  # noqa
+                await interaction.followup.send(file=discord.File(f, "player_list.txt"))
             os.remove("data/player_list.txt")
 
-    @app_commands.guilds(Guilds.DDNET)
+    @pf.command(name="add", description="Adds a player to the watchlist.")
     @app_commands.check(predicate)
-    @app_commands.command(name="pf_add", description="Adds a player to the watchlist.")
     @app_commands.describe(name="Name of the player", reason="Reason", expiry_date="Duration")
-    @app_commands.choices(expiry_date=duration())  # Use the choices from the duration function
-    async def add_player(
-            self, 
-            interaction: discord.Interaction, 
-            name: str, 
-            reason: str, 
-            expiry_date: int, 
-            addr: str = None
-    ):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+    @app_commands.choices(expiry_date=duration())
+    async def pf_add(self, interaction: discord.Interaction, name: str, reason: str, expiry_date: int):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         try:
-            # Convert the expiry_date (integer choice) to a datetime using a helper function
             expiry_datetime = choice_to_datetime(expiry_date)
             player = await self.manager.add_player(
                 name=name,
-                addr=addr or None,
                 reason=reason,
                 added_by=interaction.user,
                 expiry_date=expiry_datetime,
             )
         except ValueError as e:
-            await interaction.followup.send(e)
+            await interaction.followup.send(str(e))
             return
-
         try:
             await interaction.followup.send(
                 f"Added: `{player.name}` "
@@ -214,14 +197,13 @@ class PlayerFinder(commands.Cog):
                 f"expires: `{player.expiry_date.strftime('%Y-%m-%d %H:%M:%S')}`"
             )
         except discord.app_commands.errors.CommandInvokeError as e:
-            await interaction.followup.send(e)
+            await interaction.followup.send(str(e))
 
-    @app_commands.guilds(Guilds.DDNET)
+    @pf.command(name="rm", description="Removes a player from the watchlist.")
     @app_commands.check(predicate)
-    @app_commands.command(name="pf_rm", description="Removes a player from the watchlist.")
     @app_commands.describe(name="Name of the player")
-    async def remove_player(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+    async def pf_rm(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             player_obj = self.manager.find_player(name)
             await self.manager.del_player(player_obj)
@@ -229,14 +211,11 @@ class PlayerFinder(commands.Cog):
         except AttributeError:
             await interaction.followup.send(f'Player named "{name}" not found.')
 
-    @app_commands.guilds(Guilds.DDNET)
+    @pf.command(name="info", description="Sends playerfinder related info's of a player.")
     @app_commands.check(predicate)
-    @app_commands.command(
-        name="pf_info", description="Sends playerfinder related info's of a player.")
     @app_commands.describe(name="Name of the player")
-    async def send_info(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
+    async def pf_info(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         if player_obj := self.manager.find_player(name):
             await interaction.followup.send(f"{player_obj}")
         else:
@@ -244,19 +223,16 @@ class PlayerFinder(commands.Cog):
                 f'Player named "{name}" not in watchlist.'
             )
 
-    @app_commands.guilds(Guilds.DDNET)
+    @pf.command(name="edit", description="Edits the info field of the provided player.")
     @app_commands.check(predicate)
-    @app_commands.command(
-        name="pf_edit", description="Edits the info field of the provided player.")
     @app_commands.describe(name="Name of the player", reason="The new reason")
-    async def edit_info(self, interaction: discord.Interaction, name: str, reason: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
+    async def pf_edit(self, interaction: discord.Interaction, name: str, reason: str):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             old_reason, player = await self.manager.edit_reason(name, reason)
             await interaction.followup.send(
                 f"Info for {player.name} has been changed: \n"
-                f"```diff\n- {old_reason}\n+ {player.reason}```"
+                f"``````"
             )
         except ValueError:
             await interaction.followup.send(
@@ -265,6 +241,7 @@ class PlayerFinder(commands.Cog):
 
     @app_commands.command(
         name="find", description="Search for a player currently in-game")
+    @app_commands.check(predicate)
     @app_commands.describe(name="The players name you're looking for.")
     async def search_player(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
@@ -288,7 +265,7 @@ class PlayerFinder(commands.Cog):
         if interaction.response.is_done():  # noqa
             return
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=30)
     async def overseer(self):
         await self.del_expired_bans()
         server_filter = await self.filter()
@@ -300,14 +277,20 @@ class PlayerFinder(commands.Cog):
             if player.name in players_online and any(
                 server[1] in server_filter for server in players_online[player.name])
         }
-        
+
+        copycat_cog = self.bot.get_cog("Copycat")
+        if copycat_cog is not None:
+            await copycat_cog.pattern(players_online, server_filter)
+
         await self.playerfinder(players_filtered)
 
     @overseer.before_loop
     async def before_overseer(self):
         await self.bot.wait_until_ready()
-        channel = self.bot.get_channel(Channels.PLAYERFINDER)
-        await channel.purge()
+        pf_channel = self.bot.get_channel(Channels.PLAYERFINDER)
+        await pf_channel.purge()
+        alert_channel = self.bot.get_channel(Channels.ALERTS)
+        await alert_channel.purge()
         await self.manager.load_players()
 
     async def playerfinder(self, players_online: dict):
@@ -361,11 +344,9 @@ class PlayerFinder(commands.Cog):
                 message = await channel.fetch_message(message_id)
                 await message.edit(embed=embed)
             else:
-                print("cba")
                 message = await channel.send(embed=embed)
                 self.embed_messages[player_name] = message.id
         except discord.NotFound:
-            print("abc")
             message = await channel.send(embed=embed)
             self.embed_messages[player_name] = message.id
 
@@ -373,20 +354,30 @@ class PlayerFinder(commands.Cog):
     def embed_struct(player: Player, servers) -> discord.Embed:
         embed = discord.Embed(colour=discord.Colour.blurple())
         embed.title = f"Player: {player.name}"
-        embed.description = (
-            f"Reason: {player.reason}\n"
-            f"Expires: `{player.expiry_date.strftime('%Y-%m-%d %H:%M:%S')}`\n"
+
+        embed.add_field(
+            name="Reason",
+            value=player.reason,
+            inline=True,
         )
-        for server_name, address in servers[:3]:
-            data = (
-                f"* Server: {server_name}\n"
-                f" * <https://ddnet.org/connect-to/?addr={address}/>\n"
-            )
-            embed.add_field(
-                name="",
-                value=data,
-                inline=False,
-            )
+        embed.add_field(
+            name="Expires",
+            value=to_discord_timestamp(player.expiry_date, "R"),
+            inline=True,
+        )
+        embed.add_field(
+            name="Ban Author",
+            value=player.added_by,
+            inline=True,
+        )
+        data = "\n".join(
+            f"[{server_name}](https://ddnet.org/connect-to/?addr={address})"
+            for server_name, address in servers[:3]
+        )
+
+        embed.add_field(name="Servers:", value=data, inline=False)
+        if player.ban_link:
+            embed.add_field(name="Ban Message:", value=f"[Link]({player.ban_link})", inline=False)
         return embed
 
     @app_commands.guilds(Guilds.DDNET)
@@ -420,17 +411,13 @@ class PlayerFinder(commands.Cog):
             await self.clean_up()
             self.overseer.start()
             await interaction.followup.send("Initializing search...")
-
-    @player_list.error
+    
+    @staticmethod
     @start_player_search.error
     @stop_player_search.error
     @search_player.error
-    @remove_player.error
-    @add_player.error
-    @send_info.error
-    @edit_info.error
-    async def on_app_command_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    @pf.error
+    async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError
     ):
         async def send(content: str):
             if interaction.response.is_done():  # noqa
@@ -440,11 +427,11 @@ class PlayerFinder(commands.Cog):
 
         if isinstance(error, app_commands.CheckFailure):
             await send(
-                "You are not allowed to use that command here. Try again in the appropriate channel."
+                "You are not allowed to use that command here. Try again in the channel associated with the app command."
             )
             interaction.extras["error_handled"] = True
             return
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot):
     await bot.add_cog(PlayerFinder(bot))

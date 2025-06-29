@@ -90,13 +90,13 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             close = InnerTicketButtons(interaction.client)
             close.update_buttons(ticket)
             profile = await PlayerProfile.from_database(self.bot, self.ingame_name.value)
-            msg = await ticket.channel.send(
+            await ticket.channel.send(
                 embeds=[
                     embeds.BanAppealInfoEmbed(ticket, profile),
                     embeds.FollowUpEmbed()
                 ],
                 view=close)
-            await msg.pin()
+            await ticket.start_message.pin()
 
             cloudflare = BAN_APPEAL_CLOUDFLARE.get(self.language, BAN_APPEAL_CLOUDFLARE["en"])
             

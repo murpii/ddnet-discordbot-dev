@@ -21,3 +21,4 @@ data/tools/dontuse/
 data/tools/render_map/
 data/events/
 !data/events/teeguesser/*.json.schema
+/extensions/player_finder/secret/

@@ -13,16 +13,16 @@ class Player:
     reason: str
     expiry_date: datetime
     added_by: discord.User
-    addr: str = None
+    ban_link: Optional[str] = None
 
     def __repr__(self):
         return json.dumps(
             {
                 "name": self.name,
-                "addr": self.addr,
                 "reason": self.reason,
                 "expiry_date": str(self.expiry_date),
                 "added_by": self.added_by,
+                "ban_link": self.ban_link,
             },
             indent=4
         )
@@ -37,19 +37,19 @@ class PlayerfinderManager:
         query = """
         SELECT 
             name,
-            addr,
             expiry_date, 
             added_by, 
-            reason
+            reason,
+            link
         FROM 
             discordbot_playerfinder
         """
         rows = await self.bot.fetch(query, fetchall=True)
 
         for row in rows:
-            name, addr, expiry_date, added_by, reason = row
+            name, expiry_date, added_by, reason, link = row
             player = Player(
-                name=name, addr=addr, expiry_date=expiry_date, added_by=added_by, reason=reason
+                name=name, expiry_date=expiry_date, added_by=added_by, reason=reason, ban_link=link
             )
             self.players.append(player)
 
@@ -58,20 +58,21 @@ class PlayerfinderManager:
         INSERT INTO 
             discordbot_playerfinder (
                 name,
-                addr,
                 expiry_date, 
                 added_by, 
-                reason
+                reason,
+                link
             )
         VALUES 
             (%s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             expiry_date = VALUES(expiry_date),
             added_by = VALUES(added_by),
-            reason = VALUES(reason)
+            reason = VALUES(reason),
+            link = VALUES(link)
         """
         await self.bot.upsert(
-            query, player.name, player.addr, player.expiry_date, str(player.added_by), player.reason
+            query, player.name, player.expiry_date, str(player.added_by), player.reason, player.ban_link
         )
 
     async def delete(self, player: Player):
@@ -88,26 +89,26 @@ class PlayerfinderManager:
         UPDATE 
             discordbot_playerfinder
         SET
-            addr = %s,
             expiry_date = %s,
             added_by = %s,
-            reason = %s
+            reason = %s,
+            link = %s
         WHERE 
             name = %s
         """
         await self.bot.upsert(
-            query, player.addr, player.expiry_date, str(player.added_by), player.reason, player.name
+            query, player.expiry_date, str(player.added_by), player.reason, player.name, player.ban_link
         )
 
     async def add_player(
             self,
             name: str,
-            addr: str,
             expiry_date: datetime,
             added_by: Union[discord.User, discord.Member],
-            reason: str
+            reason: str,
+            link: str = None
     ) -> Player:
-        player = Player(name=name, addr=addr, expiry_date=expiry_date,added_by=added_by, reason=reason)
+        player = Player(name=name, expiry_date=expiry_date,added_by=added_by, reason=reason, ban_link=link)
         await self.insert(player)
         self.players.append(player)
         return player

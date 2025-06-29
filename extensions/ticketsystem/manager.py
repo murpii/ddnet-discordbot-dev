@@ -85,7 +85,7 @@ class Ticket:
 
     def __repr__(self) -> str:
         player_repr = [str(p) for p in self.rename_data] if self.rename_data else []
-        appeal_data = [str(p) for p in self.appeal_data] if self.appeal_data else []
+        # appeal_data = [str(p) for p in self.appeal_data] if self.appeal_data else []
         return json.dumps(
             {
                 "name": str(self.channel),
@@ -95,7 +95,7 @@ class Ticket:
                 "category": str(self.category),
                 "state": str(self.state),
                 "rename_data": player_repr,
-                "appeal_data": appeal_data,
+                "appeal_data": self.appeal_data,
                 "inactivity_count": self.inactivity,
                 "locked": self.locked,
                 "being_closed": self.being_closed,
@@ -239,7 +239,7 @@ class TicketManager:
             if len(messages) < 2 or not messages[1].embeds:
                 log.warning(
                     f"Expected embed data not found in channel {channel.name}. "
-                    f"Rename information will be skipped and omitted from the transcript. "
+                    f"Rename/Ban Appeal information will be skipped and omitted from the transcript. "
                     f"This often results from manual changes to the ticket category."
                 )
             else:
