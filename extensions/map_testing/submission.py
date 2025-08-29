@@ -12,6 +12,8 @@ import discord
 from extensions.map_testing.map_states import MapState
 from utils.misc import run_process_shell, run_process_exec, check_os
 from utils.text import sanitize
+from constants import Channels
+import map_visualize_size
 
 log = logging.getLogger("mt")
 
@@ -85,6 +87,12 @@ class Submission:
         if self.message.pinned:
             return
         await self.message.pin()
+
+    async def visualize_size(self) -> discord.File:
+        buf = await self.buffer()
+        out_buf = map_visualize_size.visualize_from_bytes(buf.getvalue())
+        file = discord.File(out_buf, filename=f"FileSizeStats.png")
+        return file
 
     async def debug_map(self) -> Optional[str]:
         _, ext = check_os()

@@ -341,6 +341,24 @@ class MapTesting(commands.Cog):
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.check(predicate(staff_only=True))
     @app_commands.command(
+        name="visualize-size", description="Visualize the map's file size")
+    async def visualize_size(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+
+        map_channel = self.get_map_channel(interaction.channel.id)  # noqa
+        pins = await map_channel.pins()
+        try:
+            file = await Submission(pins[0]).visualize_size()
+            await map_channel.send("Map size breakdown :mag:", file=file)
+        except Exception as e:
+            await map_channel.send(f"Failed to produce visualization: {e}")
+
+        if interaction.response.is_done():  # noqa
+            await interaction.delete_original_response()
+
+    @app_commands.guilds(Guilds.DDNET)
+    @app_commands.check(predicate(staff_only=True))
+    @app_commands.command(
         name="twmap-edit", description="Edits a map according to the passed arguments")
     @app_commands.describe(
         options="Options, separate each option with a comma. Use --help option to see all available options.")
@@ -432,7 +450,7 @@ class MapTesting(commands.Cog):
             self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ):
         if isinstance(
-            error, (NotStaffError, NotTestingChannelError)
+                error, (NotStaffError, NotTestingChannelError)
         ) or not isinstance(error, app_commands.CheckFailure):
             msg = error
         else:
@@ -652,4 +670,3 @@ class MapTesting(commands.Cog):
         log.info(
             "%s approved submission %r in channel #%s", user, subm.filename, channel
         )
-
