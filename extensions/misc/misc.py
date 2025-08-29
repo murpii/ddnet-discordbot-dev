@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 from __future__ import absolute_import
 
-import asyncio
 import logging
 import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
-from multiprocessing.managers import Value
 
 import discord
 import psutil
@@ -62,7 +59,7 @@ class Misc(commands.Cog):
         stats = f"{len(self.bot.guilds)} Guilds\n{channels} Channels\n{len(self.bot.users)} Users"
         embed.add_field(name="Stats", value=stats)
 
-        memory = self.process.memory_full_info().uss / 1024**2
+        memory = self.process.memory_full_info().uss / 1024 ** 2
         cpu = self.process.cpu_percent() / psutil.cpu_count()
         threads = self.process.num_threads()
         embed.add_field(

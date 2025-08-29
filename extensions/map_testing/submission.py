@@ -13,7 +13,6 @@ from extensions.map_testing.map_states import MapState
 from utils.misc import run_process_shell, run_process_exec, check_os
 from utils.text import sanitize
 
-
 log = logging.getLogger("mt")
 
 
@@ -80,7 +79,6 @@ class Submission:
                 await self.message.clear_reaction(reaction)
 
         await self.message.add_reaction(str(status))
-
 
     # What's the point of this method?
     async def pin(self):
@@ -239,6 +237,8 @@ class InitialSubmission(Submission):
             cmd[0] += ext
         cmd.append(tmp)
 
+        stdout, stderr = await run_process_shell(' '.join(cmd))
+
         try:
             stdout, stderr = await run_process_shell(' '.join(cmd))
         except Exception as e:
@@ -247,8 +247,11 @@ class InitialSubmission(Submission):
         else:
             log.info("stdout: %s", stdout)
             if stderr:
-                log.error("stderr: %s", stderr)
-                raise RuntimeError(stderr)
+                if "XDG_RUNTIME_DIR is invalid or not set" in stderr:
+                    log.warning("Ignoring harmless stderr: %s", stderr)
+                else:
+                    log.error("stderr: %s", stderr)
+                    raise RuntimeError(stderr)
 
         try:
             with open(f'{self.message.id}.png', 'rb') as f:

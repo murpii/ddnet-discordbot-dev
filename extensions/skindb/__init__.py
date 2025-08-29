@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 from io import BytesIO
+from datetime import datetime, timezone, timedelta
 
 import discord
 from discord import RawMessageUpdateEvent
@@ -23,7 +24,6 @@ from constants import Guilds, Channels, Roles, Emojis
 from utils.image import skin_renderer
 
 log = logging.getLogger("skin_submits")
-
 
 ERROR_MAP = {
     "check_if_has_attachments": (
@@ -191,9 +191,9 @@ class SkinDB(commands.Cog):
             return
 
         if (
-            message.channel.id != Channels.SKIN_SUBMIT
-            or message.author.bot
-            or is_staff(message.author)
+                message.channel.id != Channels.SKIN_SUBMIT
+                or message.author.bot
+                or is_staff(message.author)
         ):
             return
 
@@ -202,7 +202,7 @@ class SkinDB(commands.Cog):
             image_preview_message = await message.channel.send(file=file)
             self.cache[message.id] = image_preview_message.id
             await image_preview_message.add_reaction(self.bot.get_emoji(Emojis.BROWNBEAR))
-            await asyncio.sleep(1) # Ratelimit
+            await asyncio.sleep(1)  # Ratelimit
             await image_preview_message.add_reaction(self.bot.get_emoji(Emojis.CAMMOSTRIPES))
         else:
             await message.delete()
@@ -222,35 +222,29 @@ class SkinDB(commands.Cog):
         """
         channel = self.bot.get_channel(payload.channel_id)
 
-        if not channel:
+        if not channel or isinstance(channel, discord.DMChannel):
             return
 
         if (
-            channel.guild is None
-            or channel.guild.id != Guilds.DDNET
-            or channel.id != Channels.SKIN_SUBMIT
+                channel.guild.id != Guilds.DDNET
+                or channel.id != Channels.SKIN_SUBMIT
         ):
-            return
-
-        try:
-            message = await channel.fetch_message(payload.message_id)
-        except discord.NotFound or discord.Forbidden:
             return
 
         if (
-                message.author.bot
-                or is_staff(message.author)
+                payload.message.author.bot
+                or is_staff(payload.message.author)
+                or (datetime.now(timezone.utc) - payload.message.created_at) > timedelta(weeks=1)
         ):
+            # the date check is currently a workaround to the weird discord ratelimit behavior...
+            # The symptom: The bot is somehow receiving message_edit events for hundreds of messages
+            # that are more than a year old in a short timeframe causing Rate limits. Discord could not explain why.
             return
 
-        if not await self.checks(message):
-            await message.add_reaction("❌")
+        if not await self.checks(payload.message):
+            await payload.message.add_reaction("❌")
         else:
-            for reaction in message.reactions:
-                if str(reaction.emoji) == "❌":
-                    async for user in reaction.users():
-                        await message.remove_reaction("❌", user)
-                        await asyncio.sleep(1)  # Ratelimit
+            await payload.message.clear_reactions()
 
 
 async def setup(bot: commands.Bot):

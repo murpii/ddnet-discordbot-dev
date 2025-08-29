@@ -57,7 +57,7 @@ class MapChannel:
         thread = next(iter(channel.threads), None)
         guild = bot.get_guild(Guilds.DDNET)
         votes = []
-    
+
         if thread is None:
             async for t in channel.archived_threads():
                 thread = t
@@ -67,7 +67,8 @@ class MapChannel:
             try:
                 await thread.edit(archived=False)
             except discord.Forbidden:
-                logging.warning(f"{channel.name}: No permission to un-archive thread {thread.id} in channel {channel.id}")
+                logging.warning(
+                    f"{channel.name}: No permission to un-archive thread {thread.id} in channel {channel.id}")
             except discord.HTTPException as e:
                 logging.warning(f"{channel.name}: Failed to un-archive thread {thread.id}: {e}")
 
@@ -89,9 +90,18 @@ class MapChannel:
         return json.dumps(
             {
                 "MapChannel": {
-                    "name": self.name, "state": repr(self.state), "mappers": self.mappers,
-                    "mapper_mentions": self.mapper_mentions, "server": self.server, "votes": self.votes,
-                    "channel_id": self._channel.id, "channel_name": self._channel.name, "thread": self.thread,
+                    "name": self.name,
+                    "state": repr(self.state),
+                    "mappers": self.mappers,
+                    "mapper_mentions": self.mapper_mentions,
+                    "server": self.server,
+                    "votes": self.votes,
+                    "channel_id": self._channel.id,
+                    "channel_name": self._channel.name,
+                    "thread": {
+                        "id": self.thread.id,
+                        "name": self.thread.name
+                    } if self.thread else None,
                     "changelog": self.changelog.id if self.changelog is not None else None,
                     "paginator": repr(self.changelog_paginator),
                 }
@@ -163,7 +173,7 @@ class MapChannel:
         return users
 
     async def update(
-        self, name: str = None, mappers: List[str] = None, server: str = None, mapper_mentions: str = None
+            self, name: str = None, mappers: List[str] = None, server: str = None, mapper_mentions: str = None
     ):
         """|coro|
         Updates the properties of the channel with the provided details.
@@ -274,7 +284,7 @@ class MapChannel:
         file = await isubm.get_file()
         message = await self._channel.send(file=file)  # This message contains the map file itself
         self.thread = await self._channel.create_thread(name=f"{self.name} — TESTER CONTROLS", message=message)
-        
+
         # Thread Changelog
         self.changelog_paginator = ChangelogPaginator(isubm.bot, channel=self._channel)
         await self.changelog_paginator.add_changelog(
@@ -292,12 +302,12 @@ class MapChannel:
             allowed_mentions=discord.AllowedMentions(users=False),
         )
         await self.changelog_paginator.assign_changelog_message(self.thread)
-        
+
         # Thread checklist
         view = ChecklistView()
         embed = view.generate_checklist_embed()
         await self.thread.send(embed=embed, view=view)
-        
+
         # Thread Tester Controls
         await self.thread.send(
             embed=embeds.TesterControls(),

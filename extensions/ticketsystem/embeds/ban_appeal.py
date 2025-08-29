@@ -39,7 +39,7 @@ class BanAppealInfoEmbed(discord.Embed):
             embed.add_field(
                 name="Ban Reason:",
                 value=f"{ticket.appeal_data.reason}",
-                inline=False
+                inline=True
             )
             embed.add_field(
                 name="Appeal Statement:",

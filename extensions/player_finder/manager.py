@@ -12,7 +12,7 @@ class Player:
     name: str
     reason: str
     expiry_date: datetime
-    added_by: discord.User
+    added_by: discord.abc.User | str
     ban_link: Optional[str] = None
 
     def __repr__(self):
@@ -21,7 +21,7 @@ class Player:
                 "name": self.name,
                 "reason": self.reason,
                 "expiry_date": str(self.expiry_date),
-                "added_by": self.added_by,
+                "added_by": str(self.added_by),
                 "ban_link": self.ban_link,
             },
             indent=4
@@ -53,7 +53,7 @@ class PlayerfinderManager:
             )
             self.players.append(player)
 
-    async def insert(self, player: Player):
+    async def add(self, player: Player):
         query = """
         INSERT INTO 
             discordbot_playerfinder (
@@ -71,9 +71,11 @@ class PlayerfinderManager:
             reason = VALUES(reason),
             link = VALUES(link)
         """
+
         await self.bot.upsert(
             query, player.name, player.expiry_date, str(player.added_by), player.reason, player.ban_link
         )
+        self.players.append(player)
 
     async def delete(self, player: Player):
         query = """
@@ -83,49 +85,63 @@ class PlayerfinderManager:
             name = %s
         """
         await self.bot.upsert(query, player.name)
-
+        self.players.remove(player)
+    
     async def update(self, player: Player):
+        # Update the player in the database
         query = """
-        UPDATE 
-            discordbot_playerfinder
-        SET
-            expiry_date = %s,
-            added_by = %s,
-            reason = %s,
-            link = %s
-        WHERE 
-            name = %s
-        """
+                UPDATE
+                    discordbot_playerfinder
+                SET expiry_date = %s,
+                    added_by    = %s,
+                    reason      = %s,
+                    link        = %s
+                WHERE name = %s
+                """
+
         await self.bot.upsert(
-            query, player.expiry_date, str(player.added_by), player.reason, player.name, player.ban_link
+            query,
+            player.expiry_date,
+            str(player.added_by),
+            player.reason,
+            player.ban_link,
+            player.name
         )
+
+        if player := self.find_player(player.name):
+            player.expiry_date = player.expiry_date
+            player.added_by = player.added_by
+            player.reason = player.reason
+            player.ban_link = player.ban_link
 
     async def add_player(
             self,
             name: str,
             expiry_date: datetime,
-            added_by: Union[discord.User, discord.Member],
+            added_by: discord.abc.User | str,
             reason: str,
             link: str = None
     ) -> Player:
-        player = Player(name=name, expiry_date=expiry_date,added_by=added_by, reason=reason, ban_link=link)
-        await self.insert(player)
-        self.players.append(player)
+        player = Player(name=name, expiry_date=expiry_date, added_by=added_by, reason=reason, ban_link=link)
+        await self.add(player)
         return player
 
-    async def del_player(self, player: Player):
+    async def del_player(self, player: Player | str):
+        if isinstance(player, str):
+            player = self.find_player(player)
+            if not player:
+                raise ValueError(f"No player found with name '{player}'")
         await self.delete(player)
-        self.players.remove(player)
 
     def find_player(self, name) -> Player:
         return next((player for player in self.players if player.name == name), None)
 
-    async def edit_reason(self, name, reason=None) -> tuple[str, Player]:
+    async def edit_reason(self, name, reason) -> tuple[str, Player]:
         player = self.find_player(name)
-        old_reason = player.reason
         if player is None:
             raise ValueError(f"No player found with name {name}")
-        if reason is not None:
-            player.reason = reason
-            await self.update(player)
+
+        old_reason = player.reason
+        player.reason = reason
+        await self.update(player)
         return old_reason, player

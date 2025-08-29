@@ -26,7 +26,7 @@ class TestingBans(commands.Cog):
         bans_channel: discord.TextChannel = self.bot.get_channel(Channels.TESTER_BANS)
         if bans_channel is None:
             raise ValueError(f"{self.__cog_name__} ERROR: Bans channel not set up.")
-        
+
         try:
             self.changelog = await bans_channel.fetch_message(self.changelog)
         except discord.NotFound as e:
@@ -48,8 +48,10 @@ class TestingBans(commands.Cog):
 
     async def load_banned_users(self):
         query = """
-        SELECT * FROM discordbot_testing_bans WHERE banned_bool is TRUE
-        """
+                SELECT *
+                FROM discordbot_testing_bans
+                WHERE banned_bool is TRUE \
+                """
         banned_users = await self.bot.fetch(query, fetchall=True)
         for user_id, mod_id, reason, active_flag, timestamp in banned_users:
             guild = self.bot.get_guild(Guilds.DDNET)
@@ -67,7 +69,7 @@ class TestingBans(commands.Cog):
         bans_channel: discord.message = self.bot.get_channel(Channels.TESTER_BANS)
         if bans_channel is None:
             raise ValueError(f"{self.__cog_name__} ERROR: Bans channel not set up.")
-        
+
         try:
             self.bans_embed = await bans_channel.fetch_message(self.bans_embed)
         except discord.NotFound as e:
@@ -120,7 +122,7 @@ class TestingBans(commands.Cog):
             except discord.Forbidden as e:
                 log.exception(e)
                 raise PermissionError(
-                    f"Failed to {'ban' if ban else 'unban'} user {user} from channel #{channel.name}: {e}"
+                    f"Failed to {'ban' if ban else 'unban'} user {user.mention} from {channel.mention}: {e}"
                 ) from e
 
         for map_channel in self.bot.map_channels.values():
@@ -134,16 +136,15 @@ class TestingBans(commands.Cog):
             except discord.Forbidden as e:
                 log.exception(e)
                 raise PermissionError(
-                    f"Failed to {'ban' if ban else 'unban'} user {user} from channel #{channel.name}: {e}"
+                    f"Failed to {'ban' if ban else 'unban'} user {user.mention} from {map_channel.mention}: {e}"
                 ) from e
 
         guild = self.bot.get_guild(Guilds.DDNET)
         testing_role = guild.get_role(Roles.TESTING)
         member = guild.get_member(user.id) or await guild.fetch_member(user.id)
-        
+
         if ban and testing_role in member.roles:
             await member.remove_roles(testing_role)
-
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

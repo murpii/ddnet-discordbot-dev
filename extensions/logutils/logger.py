@@ -76,9 +76,9 @@ class Logging(commands.Cog):
             logging.info("%s used /%s in %s", interaction.user, app_command.name, destination)
 
         query = """
-        INSERT INTO discordbot_stats_commands (guild_id, channel_id, author_id, timestamp, command) 
-        VALUES (%s, %s, %s, %s, %s);
-        """
+                INSERT INTO discordbot_stats_commands (guild_id, channel_id, author_id, timestamp, command)
+                VALUES (%s, %s, %s, %s, %s); \
+                """
 
         values = (
             guild_id,
@@ -120,12 +120,12 @@ class GuildLog(commands.Cog):
 
     async def log_message(self, message: discord.Message):
         if (
-            not message.guild
-            or message.guild.id != Guilds.DDNET
-            or message.is_system()
-            or message.channel.id in (Channels.LOGS, Channels.PLAYERFINDER)
-            or message.channel.category.id == Channels.CAT_INTERNAL
-            or message.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
+                not message.guild
+                or message.guild.id != Guilds.DDNET
+                or message.is_system()
+                or message.channel.id in (Channels.LOGS, Channels.PLAYERFINDER, Channels.ALERTS)
+                or message.channel.category.id == Channels.CAT_INTERNAL
+                or message.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
         ):
             return
 
@@ -224,13 +224,13 @@ class GuildLog(commands.Cog):
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
         if (
-            not before.guild
-            or before.guild.id != Guilds.DDNET
-            or before.is_system()
-            or before.channel.id == Channels.LOGS
-            or before.channel.category.id == Channels.CAT_INTERNAL
-            or before.author.bot
-            or before.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
+                not before.guild
+                or before.guild.id != Guilds.DDNET
+                or before.is_system()
+                or before.channel.id in (Channels.LOGS, Channels.PLAYERFINDER, Channels.ALERTS)
+                or before.channel.category.id == Channels.CAT_INTERNAL
+                or before.author.bot
+                or before.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
         ):
             return
 

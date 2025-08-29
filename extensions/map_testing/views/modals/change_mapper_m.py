@@ -8,13 +8,13 @@ class CMappersModal(discord.ui.Modal, title="Change Mappers"):
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
-        self.map_testing = self.bot.get_cog("SubmissionHandler")
 
     mappers = discord.ui.TextInput(
         label="Mappers",
         placeholder="Example: Welf, louis, Pipou, Ravie",
         max_length=64,
-        style=discord.TextStyle.short)
+        style=discord.TextStyle.short
+    )
 
     @staticmethod
     def get_mapper_urls(mappers: list) -> list:
@@ -26,7 +26,7 @@ class CMappersModal(discord.ui.Modal, title="Change Mappers"):
     async def on_submit(self, interaction: discord.Interaction):
         mappers_list = [mapper.strip() for mapper in self.mappers.value.split(",")]
         mapper_urls = self.get_mapper_urls(mappers_list)
-        map_channel = self.map_testing.get_map_channel(interaction.channel.parent.id)
+        map_channel = self.bot.map_channels.get(interaction.channel.parent.id)
         await map_channel.update(mappers=mappers_list)
         global_cooldown.update_cooldown(interaction.channel.parent.id)
 
@@ -34,7 +34,7 @@ class CMappersModal(discord.ui.Modal, title="Change Mappers"):
             map_channel,
             interaction.user,
             category="MapTesting/CHANGE_MAPPERS",
-            string="Mappers has been changed to: {}.".format(", ".join(mapper_urls))
+            string=f'Mappers has been changed to: {", ".join(mapper_urls)}.',
         )
         await map_channel.changelog_paginator.update_changelog()
 

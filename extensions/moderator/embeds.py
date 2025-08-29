@@ -1,4 +1,6 @@
 import discord
+from datetime import datetime, timezone
+from utils.text import to_discord_timestamp
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,7 +19,8 @@ class NoMemberInfoEmbed(discord.Embed):
 class MemberInfoEmbed(discord.Embed):
     def __new__(cls, member_info: "MemberInfo"):
         embed = discord.Embed(
-            title=":crossed_swords: User Info", color=discord.Color.blurple()
+            title=":crossed_swords: User Info", color=discord.Color.blurple(),
+            colour=3619648,
         )
         embed.set_thumbnail(url=member_info.member.display_avatar.url)
 
@@ -40,13 +43,29 @@ class MemberInfoEmbed(discord.Embed):
             inline=True
         )
 
+        if member_info.timed_out and member_info.timed_out > datetime.now(timezone.utc):
+            timed_out_str = f"✅ (Ends: {to_discord_timestamp(member_info.timed_out, style='R')})"
+        else:
+            timed_out_str = "❌"
+
+        embed.add_field(
+            name="Status",
+            value=(
+                f"Banned: {'✅' if member_info.banned else '❌'}\n"
+                f"Timed out: {timed_out_str}\n"
+                f"Banned from Testing: {'✅' if member_info.banned_from_testing else '❌'}"
+            ),
+            inline=False
+        )
+
         return embed
 
 
 class TimeoutsEmbed(discord.Embed):
     def __new__(cls, member_info: "MemberInfo"):
         embed = discord.Embed(
-            title="", color=discord.Color.blurple()
+            title="", color=discord.Color.blurple(),
+            colour=3619648,
         )
         if member_info.timeouts:
             if member_info.timeout_reasons:
@@ -68,7 +87,8 @@ class TimeoutsEmbed(discord.Embed):
 class BansEmbed(discord.Embed):
     def __new__(cls, member_info: "MemberInfo"):
         embed = discord.Embed(
-            title="", color=discord.Color.blurple()
+            title="", color=discord.Color.blurple(),
+            colour=3619648,
         )
         if member_info.bans:
             if member_info.ban_reasons:
@@ -83,14 +103,14 @@ class BansEmbed(discord.Embed):
             embed.add_field(name=title.center(32, '─'), value=reasons, inline=False)
         else:
             embed.add_field(name="Bans", value="No bans found.", inline=False)
-
         return embed
 
 
 class KicksEmbed(discord.Embed):
     def __new__(cls, member_info: "MemberInfo"):
         embed = discord.Embed(
-            title="", color=discord.Color.blurple()
+            title="", color=discord.Color.blurple(),
+            colour=3619648,
         )
         if member_info.kicks:
             if member_info.kick_reasons:
@@ -109,29 +129,39 @@ class KicksEmbed(discord.Embed):
         return embed
 
 
+class NoEntries(discord.Embed):
+    def __new__(cls, sections: list[str]):
+        return discord.Embed(
+            title="",
+            description="\n".join(f"No {section.lower()} found." for section in sections),
+            color=3619648,
+        )
+
+
 class LogEmbed(discord.Embed):
     def __new__(cls, string: str, member: discord.abc.User):
         em = discord.Embed(
             title=":crossed_swords: Discord Moderation",
-            color=discord.Color.blurple(),
+            color=discord.Color.red(),
             timestamp=discord.utils.utcnow(),
             description=string,
         )
         em.set_thumbnail(url=member.display_avatar.url)
         return em
-    
+
 
 class ServerInfoEmbed(discord.Embed):
     """
     This embed presents details about a server, including its address, type, region, and affiliation status.
     """
+
     @classmethod
     def from_server_info(
-        cls,
-        info: dict | None,
-        addr: str,
-        ticket: bool = False,
-        region: str = None,
+            cls,
+            info: dict | None,
+            addr: str,
+            ticket: bool = False,
+            region: str = None,
     ) -> discord.Embed:
         """
         Generates an embed containing server information and warnings based on the provided server data.
@@ -192,4 +222,3 @@ class ServerInfoEmbed(discord.Embed):
                 embed.set_thumbnail(url=icon)
 
         return embed
-

@@ -50,11 +50,11 @@ class TicketSystem(commands.Cog):
         await self.bot.session_manager.close_session(self.__class__.__name__)
 
     async def transcript(
-        self,
-        ticket,
-        interaction: Optional[discord.Interaction] = None,
-        ps: Optional[str] = None,
-        inactive: bool = False,
+            self,
+            ticket,
+            interaction: Optional[discord.Interaction] = None,
+            ps: Optional[str] = None,
+            inactive: bool = False,
     ):
         """
         Creates a transcript for the specified ticket and notifies the ticket creator.
@@ -125,8 +125,8 @@ class TicketSystem(commands.Cog):
             await interaction.followup.send("Only moderators are allowed to invite.")
             return
         if (
-            isinstance(user, discord.Role)
-            and user.id == interaction.guild.default_role.id
+                isinstance(user, discord.Role)
+                and user.id == interaction.guild.default_role.id
         ):
             await interaction.followup.send("Inviting the default role is prohibited.")
             return
@@ -178,24 +178,34 @@ class TicketSystem(commands.Cog):
 
         async with ticket.lock:
             ticket.being_closed = True
+            try:
+                if message:
+                    await ticket.channel.send(message)
 
-            if message:
-                await ticket.channel.send(message)
+                await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+                await self.transcript(ticket, interaction, message)
+                await self.ticket_manager.del_ticket(ticket=ticket)
 
-            await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-            await self.transcript(ticket, interaction, message)
-            await self.ticket_manager.del_ticket(ticket=ticket)
+                log.info(
+                    f"{interaction.user} [ID: {interaction.user.id}] "
+                    f"closed a {ticket.category.value.title()} ticket made by {ticket.creator} [ID: {ticket.creator.id}]. "
+                    f"Removed channel named {interaction.channel.name} [ID: {interaction.channel_id}]"
+                )
 
-            log.info(
-                f"{interaction.user} [ID: {interaction.user.id}] "
-                f"closed a {ticket.category.value.title()} ticket made by {ticket.creator} [ID: {ticket.creator.id}]. "
-                f"Removed channel named {interaction.channel.name} [ID: {interaction.channel_id}]"
-            )
+                if interaction.response.is_done():  # noqa
+                    await interaction.channel.delete()
+                    if len(interaction.channel.category.channels) == 0:
+                        await interaction.channel.category.delete()
 
-            if interaction.response.is_done():  # noqa
-                await interaction.channel.delete()
-                if len(interaction.channel.category.channels) == 0:
-                    await interaction.channel.category.delete()
+            except Exception as e:
+                log.exception(f"{ticket.channel.name}: Error during ticket closure: {e}")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("An error occurred while closing the ticket.",
+                                                            ephemeral=True)
+                else:
+                    await interaction.followup.send("An error occurred while closing the ticket.", ephemeral=True)
+            finally:
+                ticket.being_closed = False
 
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.check(predicate)
@@ -221,7 +231,7 @@ class TicketSystem(commands.Cog):
             await interaction.response.send_message(
                 "Tickets can't be changed to the **Rename** category. "
                 "Rename tickets require specific checks that only run during ticket creation. "
-                "Please ask the ticket creator to open a new ticket instead.", 
+                "Please ask the ticket creator to open a new ticket instead.",
                 ephemeral=True
             )
             return
@@ -252,7 +262,7 @@ class TicketSystem(commands.Cog):
         async for message in ticket.channel.history(limit=3, oldest_first=True):
             messages.append(message)
 
-        close = inner_buttons.InnerTicketButtons(interaction.client)
+        close = inner_buttons.BaseTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
         await ticket.start_message.edit(embeds=em, view=close)
@@ -305,7 +315,6 @@ class TicketSystem(commands.Cog):
             except ValueError as e:
                 log.error(e)
 
-
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.default_permissions(administrator=True)
     @app_commands.command(name="cleanup", description="Removes tickets from DB which no longer exist.")
@@ -317,8 +326,9 @@ class TicketSystem(commands.Cog):
             interaction (discord.Interaction): The interaction object representing the user's action.
         """
         query = """
-        SELECT channel_id FROM discordbot_tickets
-        """
+                SELECT channel_id
+                FROM discordbot_tickets \
+                """
         rows = await self.bot.fetch(query, fetchall=True)
         deleted_tickets = []
 
@@ -326,16 +336,18 @@ class TicketSystem(commands.Cog):
             channel_id = row[0]
             if int(channel_id) not in self.ticket_manager.tickets:
                 delete_query = """
-                DELETE FROM discordbot_tickets WHERE channel_id = %s
-                """
+                               DELETE
+                               FROM discordbot_tickets
+                               WHERE channel_id = %s \
+                               """
                 await self.bot.upsert(delete_query, channel_id)
                 deleted_tickets.append(f"Channel ID: {channel_id}")
 
         if deleted_tickets:
             message = "Deleted tickets:\n" + "\n".join(deleted_tickets)
-            await interaction.response.send_message(message, ephemeral=True) # noqa
+            await interaction.response.send_message(message, ephemeral=True)  # noqa
         else:
-            await interaction.response.send_message("No tickets were deleted.", ephemeral=True) # noqa
+            await interaction.response.send_message("No tickets were deleted.", ephemeral=True)  # noqa
 
     @invite.error
     @close.error
@@ -359,7 +371,6 @@ class TicketSystem(commands.Cog):
         async with self.ticket_manager.lock:
             for channel_id, ticket in self.ticket_manager.tickets.items():
 
-                # Configurable
                 if ticket.category in [
                     TicketCategory.RENAME, TicketCategory.ADMIN_MAIL,
                     TicketCategory.COMPLAINT, TicketCategory.BAN_APPEAL
@@ -368,7 +379,6 @@ class TicketSystem(commands.Cog):
 
                 recent_messages = []
 
-                # Skip bot messages
                 try:
                     async for msg in ticket.channel.history(limit=3, oldest_first=False):
                         if not msg.author.bot:
@@ -381,15 +391,16 @@ class TicketSystem(commands.Cog):
 
                 now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
                 if recent_messages and recent_messages[0].created_at.astimezone(
-                    timezone.utc
-                ) > now - timedelta(days=3): # Duration can be configured here. Default: 1 day
+                        timezone.utc
+                ) > now - timedelta(days=3):  # Duration can be configured here. Default: 1 day
                     ticket.inactivity = 0
                 else:
                     ticket.inactivity += 1
                     query = """
-                    UPDATE discordbot_tickets SET inactivity_count = %s
-                    WHERE channel_id = %s;
-                    """
+                            UPDATE discordbot_tickets
+                            SET inactivity_count = %s
+                            WHERE channel_id = %s; \
+                            """
                     await self.bot.upsert(query, ticket.inactivity, ticket.channel.id)
 
                 if ticket.inactivity == 2:
@@ -452,12 +463,12 @@ class TicketSystem(commands.Cog):
     @commands.Cog.listener("on_message")
     async def del_system_pin_message(self, message: discord.Message):
         if (
-            isinstance(message.channel, discord.TextChannel)
-            and (
+                isinstance(message.channel, discord.TextChannel)
+                and (
                 message.guild.id == Guilds.DDNET
                 and message.channel.category.name == "Tickets"
                 and message.type is discord.MessageType.pins_add
-            )
+        )
         ):
             await message.delete()
 

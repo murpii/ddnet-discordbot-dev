@@ -20,9 +20,9 @@ class BannerIconEvents(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     @app_commands.command(name="contest", description="The Banner menu with buttons")
     @app_commands.choices(theme=[
-            app_commands.Choice(name="Christmas", value="christmas"),
-            app_commands.Choice(name="Halloween", value="halloween"),
-            app_commands.Choice(name="Easter", value="easter")
+        app_commands.Choice(name="Christmas", value="christmas"),
+        app_commands.Choice(name="Halloween", value="halloween"),
+        app_commands.Choice(name="Easter", value="easter")
     ])
     @app_commands.describe(
         theme="Choose which theme the event is supposed to be.",
@@ -105,10 +105,6 @@ class Submit(discord.ui.View):
             interaction.guild.me: discord.PermissionOverwrite(
                 read_messages=True, send_messages=True
             ),
-            interaction.guild.get_role(Roles.DISCORD_MODERATOR): discord.PermissionOverwrite(
-                read_messages=True,
-                send_messages=True
-            ),
             interaction.guild.get_role(Roles.BANNER_CURATOR): discord.PermissionOverwrite(
                 read_messages=True,
                 send_messages=True
@@ -180,10 +176,6 @@ class Submit(discord.ui.View):
             ),
             interaction.guild.me: discord.PermissionOverwrite(
                 read_messages=True, send_messages=True
-            ),
-            interaction.guild.get_role(Roles.DISCORD_MODERATOR): discord.PermissionOverwrite(
-                read_messages=True,
-                send_messages=True
             ),
             interaction.guild.get_role(Roles.BANNER_CURATOR): discord.PermissionOverwrite(
                 read_messages=True,

@@ -83,7 +83,6 @@ class Wiki(commands.Cog):
 
     def search_articles(self, keyword):
         api = "https://wiki.ddnet.org/api.php"
-
         params = {
             "action": "query",
             "format": "json",
@@ -95,18 +94,18 @@ class Wiki(commands.Cog):
         try:
             response = self.bot.request_cache.get(api, params=params)
             response.raise_for_status()
-
             if response.status_code == 200:
                 data = response.json()
+                # print(data)
+
+                if "error" in data:
+                    raise ValueError(f"Wiki API Error: {data['error'].get('info', 'Unknown error')}")
+
                 articles = data.get("query", {}).get("search", [])
                 return [article for article in articles if "/" not in article["title"]]
-            else:
-                logging.error("Error: Unexpected status code -", response.status_code)
-                return []
-
+            raise ValueError(f"Unexpected status code from Wiki API: {response.status_code}")
         except requests.RequestException as e:
-            logging.error("Error fetching articles:", e)
-            return []
+            raise ValueError(f"Failed to fetch articles: {e}") from e
 
     @commands.command(
         name="wiki",
@@ -120,8 +119,16 @@ class Wiki(commands.Cog):
             await ctx.send("Please enter a keyword that is at least 3 characters long.")
             return
 
-        resp = self.wiki_search(search_query, max_articles=5, max_sections_per_article=3)
-        embed = discord.Embed(description=resp, colour=discord.Colour.blurple())
+        try:
+            resp = self.wiki_search(search_query, max_articles=5, max_sections_per_article=3)
+            embed = discord.Embed(description=resp, colour=discord.Colour.blurple())
+        except ValueError as e:
+            embed = discord.Embed(
+                title="Wiki Search Error",
+                description=str(e),
+                colour=discord.Colour.red()
+            )
+
         with contextlib.suppress(discord.Forbidden):
             if ctx.interaction:
                 await ctx.interaction.followup.send(embed=embed)

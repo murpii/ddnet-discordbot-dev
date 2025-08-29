@@ -40,22 +40,30 @@ class BaseConfirmView(discord.ui.View):
     ):
         async with ticket.lock:
             ticket.being_closed = True
-            await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-            await self.transcript(interaction, ticket, message)
-            await self.ticket_manager.del_ticket(ticket=ticket)
+            try:
+                await interaction.response.defer(ephemeral=True, thinking=True)
+                await self.transcript(interaction, ticket, message)
+                await self.ticket_manager.del_ticket(ticket=ticket)
 
-            log.info(
-                f"{interaction.user} [ID: {interaction.user.id}] "
-                f"closed a {ticket.category.value.title()} ticket made by {ticket.creator} [ID: {ticket.creator.id}]. "
-                f"Removed channel named {interaction.channel.name} [ID: {interaction.channel_id}]"
-            )
+                log.info(
+                    f"{interaction.user} [ID: {interaction.user.id}] "
+                    f"closed a {ticket.category.value.title()} ticket made by {ticket.creator} [ID: {ticket.creator.id}]. "
+                    f"Removed channel named {interaction.channel.name} [ID: {interaction.channel_id}]"
+                )
 
-            if interaction.response.is_done():  # noqa
-                await interaction.edit_original_response(content="Closing Ticket...")
-                await interaction.channel.delete()
-                if len(interaction.channel.category.channels) == 0:
-                    await interaction.channel.category.delete()
-
+                if interaction.response.is_done():
+                    await interaction.edit_original_response(content="Closing Ticket...")
+                    await interaction.channel.delete()
+                    if len(interaction.channel.category.channels) == 0:
+                        await interaction.channel.category.delete()
+            except Exception as e:
+                log.exception(f"{ticket.channel.name}: Error during ticket closure: {e}")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("An error occurred while closing the ticket.", ephemeral=True)
+                else:
+                    await interaction.followup.send("An error occurred while closing the ticket.", ephemeral=True)
+            finally:
+                ticket.being_closed = False
 
 
 class ConfirmView(BaseConfirmView):

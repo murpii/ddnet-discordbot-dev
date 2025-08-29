@@ -28,7 +28,7 @@ ban_appeal_m = {
         "ip_placeholder": "Например: 192.168.2.100",
         "name_label": "Ваш игровой никнейм",
         "name_placeholder": "nnameless tee",
-        "reason_label": "Причина бана, указанная в сообщении о блокировке",
+        "reason_label": "Причина бана из сообщения о блокировке",
         "reason_placeholder": "Например: blocking is prohibited (блок запрещён)",
         "appeal_label": "Напишите Ваше обжалование",
         "appeal_placeholder": "Четко и честно опишите ситуацию и "

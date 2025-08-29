@@ -531,7 +531,7 @@ class MapTesting(commands.Cog):
     @staticmethod
     async def validate_filename(map_channel, subm):
         if map_channel.filename != str(subm):
-            await subm.message.reply(embed=UnmatchedFilename, mention_author=False)
+            await subm.message.reply(embed=UnmatchedFilename(), mention_author=False)
             return False
         return True
 
@@ -559,9 +559,9 @@ class MapTesting(commands.Cog):
         await upload_submission(self.session, subm)
 
     async def reset_map_state(self, map_channel):
-        new_state = MapState.TESTING if map_channel.state == MapState.WAITING else MapState.RC
-        set_by = self.bot.user if new_state == MapState.RC else None
-        await map_channel.set_state(state=new_state, set_by=set_by)
+        state = MapState.TESTING if map_channel.state == MapState.WAITING else MapState.RC
+        set_by = self.bot.user if state == MapState.RC else None
+        await map_channel.set_state(state=state, set_by=set_by)
         global_cooldown.update_cooldown(map_channel.id)
         await map_channel.changelog_paginator.add_changelog(
             map_channel,
@@ -578,10 +578,10 @@ class MapTesting(commands.Cog):
                 map_channel,
                 message.author,
                 category="MapTesting/VERIFY_UPDATE",
-                string=f"\"{map_channel.name}\" has received new map updates but need to be verified first."
+                string=f"\"{map_channel.name}\" has received new map updates but needs to be approved first."
             )
             await map_channel.changelog_paginator.update_changelog()
-            await message.reply(embed=UnmatchedSubmOwner, mention_author=False)  # type: ignore
+            await message.reply(embed=UnmatchedSubmOwner(), mention_author=False)  # type: ignore
         elif subm.state == SubmissionState.UPLOADED:
             await map_channel.changelog_paginator.add_changelog(
                 map_channel,

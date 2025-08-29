@@ -7,11 +7,12 @@ from extensions.ticketsystem import embeds
 from extensions.ticketsystem.queries import check_common_teamranks
 from extensions.ticketsystem.utils import create_ticket_channel
 from extensions.ticketsystem.manager import Ticket, TicketCategory
-from extensions.ticketsystem.views.inner_buttons import InnerTicketButtons
+from extensions.ticketsystem.views.inner_buttons import RenameTicketButtons
 from utils.checks import check_dm_channel
 from utils.profile import PlayerProfile
 
 log = logging.getLogger("tickets")
+
 
 class RenameModal(discord.ui.Modal, title="Rename Ticket"):
     def __init__(self, bot):
@@ -48,7 +49,8 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
 
         # Points check
         if not self.profile_old.points:
-            errors.append(f'- "{self.profile_old.name}" doesn\'t have any points. Make sure you typed your in-game name correctly.')
+            errors.append(
+                f'- "{self.profile_old.name}" doesn\'t have any points. Make sure you typed your in-game name correctly.')
         elif self.profile_old.points < 3000:
             errors.append("- Your old name doesn't have enough points. Please read the rename requirements above.")
         if self.profile_new.points and self.profile_new.points > 200:
@@ -103,7 +105,7 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
         ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
 
-        inner_view = InnerTicketButtons(interaction.client)
+        inner_view = RenameTicketButtons(interaction.client)
         inner_view.update_buttons(ticket)
 
         ticket.start_message = await ticket.channel.send(
@@ -113,11 +115,11 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
 
         await ticket.channel.send(
             embeds=[
-                embeds.RenameInfoEmbed(self.profile_old, self.profile_new), 
+                embeds.RenameInfoEmbed(self.profile_old, self.profile_new),
                 embeds.FollowUpEmbed()
             ],
             view=inner_view)
-        
+
         await ticket.start_message.pin()
 
         content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"

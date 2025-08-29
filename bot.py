@@ -2,6 +2,7 @@ import asyncio
 import logging
 import platform
 import time
+import sys
 from configparser import ConfigParser
 from typing import Optional
 import traceback
@@ -33,6 +34,7 @@ extensions = [
     ("extensions.assignees", True),
     ("extensions.moderator", True),
     ("extensions.map_testing", True),
+    ("extensions.map_testing.secret_testing", True),
     ("extensions.map_testing.bans", True),
     ("extensions.skindb", True),
     ("extensions.player_finder", True),
@@ -52,8 +54,7 @@ extensions = [
     # ("extensions.events.teeguesser", False),
     # ("extensions.events.banner", False),
     # ("extensions.events", True),
-    ("extensions.events.secret", False),
-    # ("extensions.debug", False)
+    ("extensions.debug", True)
 ]
 
 
@@ -91,7 +92,6 @@ class DDNet(commands.Bot):
             cache_name="data/cache", backend="sqlite", expire_after=60 * 60 * 2
         )
         self.session_manager = SessionManager()
-
         self.synced = False
 
     async def close(self):
@@ -161,6 +161,9 @@ class DDNet(commands.Bot):
                 except Exception:
                     logging.error("Failed to load extension:\n%s", traceback.format_exc())
 
+        log.info(f"Python version: {sys.version}")
+        log.info(f"Discord version: {discord.__version__}")
+
         if self.pool is None:
             await self.close()
             return
@@ -173,23 +176,23 @@ class DDNet(commands.Bot):
         await self.wait_until_ready()
         # Using colorama here, so ANSI escape character sequences work under MS Windows
         prefix = (
-            Back.RESET
-            + Fore.GREEN
-            + time.strftime("%H:%M:%S UTC", time.gmtime())
-            + Back.RESET
-            + Fore.WHITE
-            + Style.BRIGHT
+                Back.RESET
+                + Fore.GREEN
+                + time.strftime("%H:%M:%S UTC", time.gmtime())
+                + Back.RESET
+                + Fore.WHITE
+                + Style.BRIGHT
         )
         print(f"{prefix} Logged in as {Fore.YELLOW}{self.user.name}")
         print(f"{prefix} Bot ID {Fore.YELLOW}{str(self.user.id)}")
         print(f"{prefix} Discord.py Version {Fore.YELLOW}{discord.__version__}")
         print(f"{prefix} Python Version {Fore.YELLOW}{str(platform.python_version())}")
-        
+
         await self.change_presence(
             status=discord.Status.online,
             activity=discord.Game(name="DDNet")
         )
-        
+
         # on_ready is called multiple times and syncing is heavily rate-limited
         # so a check here should hopefully ensure this only happens once
         if not self.synced:
@@ -213,11 +216,14 @@ class DDNet(commands.Bot):
             reference.fail_if_not_exists = False
         return await message.channel.send(content, reference=reference, **kwargs)
 
-    async def get_or_fetch_member(self, *, guild: discord.Guild, user_id: int) -> discord.Member | None:
+    async def get_or_fetch_member(self, *, guild: discord.Guild, user_id: int) -> discord.Member | discord.User | None:
         try:
-            return guild.get_member(user_id) or await guild.fetch_member(user_id) or await self.fetch_user(user_id)
+            return guild.get_member(user_id) or await guild.fetch_member(user_id)
         except discord.NotFound:
-            return None
+            try:
+                return await self.fetch_user(user_id)
+            except discord.NotFound:
+                return None
 
 
 class SessionManager:

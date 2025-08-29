@@ -3,12 +3,12 @@ import contextlib
 import logging
 import os
 import re
-from collections import defaultdict
 from datetime import datetime
-
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
+
+from .utils import filter, players, group_players_by_server
 
 from constants import Guilds, Channels, Roles
 from utils.text import choice_to_datetime, to_discord_timestamp
@@ -18,18 +18,12 @@ from .manager import Player
 log = logging.getLogger()
 
 BAN_RE = (
-    r"(?P<author>\w+) banned (?P<banned_user>.+?) `(?P<IP>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})` until "
-    r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
+    r"(?P<author>\w+) banned (?P<banned_user>.+?) `(?P<IP>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})` "
+    r"for `(?P<reason>.+?)` until (?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
 )
-BAN_REF_RE = (
-    r"!ban "
-    r"(?P<IP>\d{1,3}(?:\.\d{1,3}){3}) *"
-    r"(?P<name>'[^']*'|\"[^\"]*\"|[^'\"\s]+)? *"
-    r"(?P<duration>\d+[a-zA-Z]{1,2}) *"
-    r"(?P<reason>.+)"
-)
+
 UNBAN_RE = (
-    r""
+    r"^Unbanned (?P<name>.+)$"
 )
 
 
@@ -84,66 +78,18 @@ class PlayerFinder(commands.Cog):
         if message.channel.id != Channels.BANS:
             return
 
-        regex = re.match(BAN_RE, message.content)
-        if not regex:
-            return
+        if regex := re.match(BAN_RE, message.content):
+            author = message.guild.get_member_named(regex['author'])
+            await self.manager.add_player(
+                name=regex["banned_user"],
+                expiry_date=datetime.strptime(regex["timestamp"], "%Y-%m-%d %H:%M:%S"),
+                added_by=author if author is not None else regex['author'],
+                reason=regex["reason"],
+                link=message.jump_url
+            )
 
-        ref_message = await message.channel.fetch_message(message.reference.message_id)
-        regex_ref = re.match(BAN_REF_RE, ref_message.content)
-
-        await self.manager.add_player(
-            name=regex["banned_user"],
-            expiry_date=datetime.strptime(regex["timestamp"], "%Y-%m-%d %H:%M:%S"),
-            added_by=regex["author"],
-            reason=regex_ref["reason"],
-            link=message.jump_url
-        )
-
-    async def filter(self) -> list:
-        gamemodes = [
-            "DDNet", "Test", "Tutorial",
-            "Block", "Infection", "iCTF",
-            "gCTF", "Vanilla", "zCatch",
-            "TeeWare", "TeeSmash", "Foot",
-            "xPanic", "Monster",
-        ]
-        resp = await self.session.get(self.info_url)
-        data = await resp.json()
-        servers = data.get("servers", [])
-        ddnet_ips = []
-        for entry in servers:
-            sv_list = entry.get("servers")
-            for mode in gamemodes:
-                server_lists = sv_list.get(mode)
-                if server_lists is not None:
-                    ddnet_ips += server_lists
-        return ddnet_ips
-
-    @staticmethod
-    def format_address(address):
-        if address_match := re.match(r"tw-0.6\+udp://([\d.]+):(\d+)", address):
-            ip, port = address_match.groups()
-            return f"{ip}:{port}"
-        return None
-
-    async def players(self) -> dict:
-        resp = await self.session.get(self.master_url)
-        data = await resp.json()
-        players = defaultdict(list)
-
-        for server in data["servers"]:
-            server_addresses = []
-            for address in server["addresses"]:
-                fmt_addr = self.format_address(address)
-                if fmt_addr is not None:
-                    server_addresses.append(fmt_addr)
-            if "clients" in server["info"]:
-                for player in server["info"]["clients"]:
-                    for address in server_addresses:
-                        players[player["name"]].append(
-                            (server["info"]["name"], address)
-                        )
-        return players
+        if regex := re.match(UNBAN_RE, message.content):
+            await self.manager.del_player(regex["name"])
 
     pf = app_commands.Group(
         name="pf",
@@ -231,8 +177,11 @@ class PlayerFinder(commands.Cog):
         try:
             old_reason, player = await self.manager.edit_reason(name, reason)
             await interaction.followup.send(
-                f"Info for {player.name} has been changed: \n"
-                f"``````"
+                f"Info for {player.name} has been changed:\n"
+                "```diff\n"
+                f"+{player.reason}\n"
+                f"-{old_reason}\n"
+                "```"
             )
         except ValueError:
             await interaction.followup.send(
@@ -241,12 +190,11 @@ class PlayerFinder(commands.Cog):
 
     @app_commands.command(
         name="find", description="Search for a player currently in-game")
-    @app_commands.check(predicate)
     @app_commands.describe(name="The players name you're looking for.")
     async def search_player(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
-        players_dict = await self.players()
+        players_dict = await players(self.bot.session, self.master_url)
         if name in players_dict:
             player_info = players_dict[name]
             message = (
@@ -265,11 +213,11 @@ class PlayerFinder(commands.Cog):
         if interaction.response.is_done():  # noqa
             return
 
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=10)
     async def overseer(self):
         await self.del_expired_bans()
-        server_filter = await self.filter()
-        players_online = await self.players()
+        server_filter = await filter(self.bot.session, self.info_url)
+        players_online = await players(self.bot.session, self.master_url)
 
         players_filtered = {
             player.name: (player, [server for server in players_online[player.name] if server[1] in server_filter])
@@ -280,7 +228,8 @@ class PlayerFinder(commands.Cog):
 
         copycat_cog = self.bot.get_cog("Copycat")
         if copycat_cog is not None:
-            await copycat_cog.pattern(players_online, server_filter)
+            players_per_server = await group_players_by_server(self.bot.session, self.master_url)
+            await copycat_cog.detect_copycats(players_per_server, server_filter)
 
         await self.playerfinder(players_filtered)
 
@@ -305,6 +254,7 @@ class PlayerFinder(commands.Cog):
                 with contextlib.suppress(discord.errors.DiscordServerError):
                     message = await channel.fetch_message(message_id)
                     await message.delete()
+
         changes = {
             name: (player, servers)
             for name, (player, servers) in players_online.items()
@@ -350,8 +300,11 @@ class PlayerFinder(commands.Cog):
             message = await channel.send(embed=embed)
             self.embed_messages[player_name] = message.id
 
-    @staticmethod
-    def embed_struct(player: Player, servers) -> discord.Embed:
+
+    def embed_struct(self, player: Player, servers) -> discord.Embed:
+        guild = self.bot.get_guild(Guilds.DDNET)
+        member = guild.get_member_named(player.added_by)
+        author = member.mention if member else player.added_by
         embed = discord.Embed(colour=discord.Colour.blurple())
         embed.title = f"Player: {player.name}"
 
@@ -367,9 +320,10 @@ class PlayerFinder(commands.Cog):
         )
         embed.add_field(
             name="Ban Author",
-            value=player.added_by,
+            value=author,
             inline=True,
         )
+
         data = "\n".join(
             f"[{server_name}](https://ddnet.org/connect-to/?addr={address})"
             for server_name, address in servers[:3]
@@ -411,14 +365,13 @@ class PlayerFinder(commands.Cog):
             await self.clean_up()
             self.overseer.start()
             await interaction.followup.send("Initializing search...")
-    
+
     @staticmethod
     @start_player_search.error
     @stop_player_search.error
     @search_player.error
     @pf.error
-    async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError
-    ):
+    async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         async def send(content: str):
             if interaction.response.is_done():  # noqa
                 await interaction.followup.send(content, ephemeral=True)

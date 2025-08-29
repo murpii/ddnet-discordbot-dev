@@ -4,7 +4,7 @@ import logging
 import re
 import json
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Optional, Any, Coroutine
 from enum import Enum
 import discord
 from discord import PermissionOverwrite
@@ -14,6 +14,7 @@ from constants import Guilds, Channels, Roles
 from utils.profile import PlayerProfile
 
 log = logging.getLogger("tickets")
+
 
 class TicketCategory(Enum):
     REPORT = "report"
@@ -71,10 +72,11 @@ class Ticket:
     creator: discord.abc.User
     category: TicketCategory
     state: TicketState = TicketState.UNCLAIMED
-    start_message: Optional[discord.Message] = None # Stores the initial message sent in a ticket to rebuild the view if necessary
-    rename_data: list[PlayerProfile] = field(default_factory=list, init=True) # TODO use RenameData dataclass
+    start_message: Optional[
+        discord.Message] = None  # Stores the initial message sent in a ticket to rebuild the view if necessary
+    rename_data: list[PlayerProfile] = field(default_factory=list, init=True)  # TODO use RenameData dataclass
     appeal_data: AppealData = None
-    inactivity: int # Set to 0 initially by the create_ticket method # TODO: Just remove this function entirely
+    inactivity: int  # Set to 0 initially by the create_ticket method # TODO: Just remove this function entirely
     being_closed: bool = False
     locked: bool = False
     lock: asyncio.Lock = field(init=False, repr=False)
@@ -100,7 +102,8 @@ class Ticket:
                 "locked": self.locked,
                 "being_closed": self.being_closed,
             },
-            indent=4
+            indent=4,
+            default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o)
         )
 
     def get_overwrites(
@@ -108,20 +111,24 @@ class Ticket:
             interaction: discord.Interaction
     ) -> dict[discord.Role | discord.Member, discord.PermissionOverwrite]:
         """Returns the overwrites based on the ticket category"""
-        overwrites = {interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                      interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                      self.creator: discord.PermissionOverwrite(read_messages=True, send_messages=True)}
+        overwrites = {
+            interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            self.creator: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        }
 
-        if self.category in [TicketCategory.REPORT, TicketCategory.BAN_APPEAL]:
-            overwrites[interaction.guild.get_role(Roles.DISCORD_MODERATOR)] = discord.PermissionOverwrite(
-                read_messages=True, send_messages=True)
-            overwrites[interaction.guild.get_role(Roles.MODERATOR)] = discord.PermissionOverwrite(
-                read_messages=True, send_messages=True)
+        config = interaction.client.config
+        roles_key = f"{self.category.value}"
 
-        elif self.category in [TicketCategory.RENAME, TicketCategory.ADMIN_MAIL, TicketCategory.COMPLAINT]:
-            overwrites[interaction.guild.get_role(Roles.DISCORD_MODERATOR)] = discord.PermissionOverwrite(
-                read_messages=True, send_messages=True)
-
+        if config.has_option("TICKETS", roles_key):
+            role_ids = [
+                int(r.strip())
+                for r in config.get("TICKETS", roles_key).split(",")
+                if r.strip().isdigit()
+            ]
+            for role_id in role_ids:
+                if role_obj := interaction.guild.get_role(role_id):
+                    overwrites[role_obj] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         return overwrites
 
     async def set_state(self, state: TicketState) -> None:
@@ -146,6 +153,7 @@ class TicketManager:
         lock (asyncio.Lock): A lock to manage concurrent access to ticket operations.
         category_mapping (dict): A mapping of category strings to their corresponding TicketCategory enums.
     """
+
     def __init__(self, bot):
         self.bot = bot
         self.tickets = {}
@@ -201,41 +209,50 @@ class TicketManager:
             Ticket: The ticket object tied to the specified channel.
         """
 
+        # Case: Ticket object already exists
         if ticket:
             self.add_ticket(channel=ticket.channel, ticket=ticket)
             if init:
-                await self.bot.upsert(queries.create_ticket, ticket.creator.id, ticket.channel.id, ticket.category)
+                await self.bot.upsert(
+                    queries.create_ticket,
+                    ticket.creator.id,
+                    ticket.channel.id,
+                    ticket.category
+                )
             return ticket
 
         if not channel or not channel.topic:
             raise ValueError("Channel or its topic is missing for ticket creation.")
 
+        # Extract ticket creator ID from channel topic
         match = re.search(r"<@!?(\d+)>", channel.topic)
         if not match:
-            raise ValueError(f"{channel.name}[ID:{channel.id}]: "
-                             f"Malformed channel topic, unable to extract ticket creator.")
+            raise ValueError(
+                f"{channel.name}[ID:{channel.id}]: Malformed channel topic, unable to extract ticket creator."
+            )
 
         creator_id = int(match[1])
         guild = self.bot.get_guild(Guilds.DDNET)
         creator = await self.bot.get_or_fetch_member(guild=guild, user_id=creator_id)
 
+        # State
         state = next((s for s in TicketState if s.value == channel.name[0]), TicketState.UNCLAIMED)
         category = self.get_category(channel)
 
+        # Lock Status
         result = await self.bot.fetch(queries.get_ticket_status, channel.id)
-        inactivity = result[0] if result else 0
-        locked = result[1] if result else False
+        inactivity, locked = (result or (0, False))
 
-        profiles, appeal_data, start_message = [], [], None
+        # Fetch initial messages
+        messages = [m async for m in channel.history(limit=2, oldest_first=True)]
+        if not messages:
+            raise ValueError(f"No messages found in ticket channel: {channel.name}")
+
+        start_message = messages[0]
+        profiles, appeal_data = [], None
+
+        # Extract embed data for rename and ban appeal tickets
         if category in (TicketCategory.RENAME, TicketCategory.BAN_APPEAL):
-            messages = [m async for m in channel.history(limit=2, oldest_first=True)]
-            start_message = messages[0] if messages else None
-
-            if start_message is None:
-                log.warning(
-                    f"Unable to fetch initial message for ticket channel: {channel.name}"
-                )
-
             if len(messages) < 2 or not messages[1].embeds:
                 log.warning(
                     f"Expected embed data not found in channel {channel.name}. "
@@ -244,11 +261,17 @@ class TicketManager:
                 )
             else:
                 embed = messages[1].embeds[0]
-                if category == TicketCategory.RENAME:
-                    profiles = await self.extract_data_from_embed(embed, rename=True)
-                elif category == TicketCategory.BAN_APPEAL:
-                    appeal_data = await self.extract_data_from_embed(embed, appeal=True)
+                try:
+                    if category == TicketCategory.RENAME:
+                        profiles = await self.extract_rename_data(embed)
+                    else:  # BAN_APPEAL
+                        appeal_data = await self.extract_appeal_data(embed)
+                except ValueError as e:
+                    log.warning(
+                        f"Invalid embed data in channel {channel.name} for {category.name}: {e}"
+                    )
 
+        # Register the ticket
         async with self.lock:
             ticket = Ticket(
                 channel=channel,
@@ -278,7 +301,6 @@ class TicketManager:
         category = self.category_mapping.get(category.lower())
         ticket.category = category
         await self.bot.upsert(queries.change_category, category, ticket.channel.id, ticket.creator.id)
-        ticket.category = category
 
     def add_ticket(self, ticket: Ticket, channel: Optional[discord.TextChannel]):
         """
@@ -313,7 +335,7 @@ class TicketManager:
     async def get_ticket(self, channel: discord.TextChannel) -> Ticket:
         """|coro|
         Retrieve the ticket associated with a specific text channel.
-        If the ticket is not found, it logs an error and creates a new ticket for that channel.
+        If the ticket is not found, it logs an error and attempts to create a ticket object for that channel.
 
         Args:
             channel (discord.TextChannel): The text channel for which to retrieve the ticket.
@@ -345,17 +367,19 @@ class TicketManager:
             locked (bool): Whether the ticket should be marked as locked or not.
         """
         query = """
-        UPDATE discordbot_tickets SET locked = %s WHERE channel_id = %s;
-        """
+                UPDATE discordbot_tickets
+                SET locked = %s
+                WHERE channel_id = %s; \
+                """
         await self.bot.upsert(query, locked, ticket.channel.id)
         ticket.locked = locked
 
     async def lock_or_unlock_ticket(
-            self, 
-            ticket: Ticket, 
-            locked: bool, 
+            self,
+            ticket: Ticket,
+            locked: bool,
     ):
-        await ticket.channel.set_permissions(ticket.creator, send_messages=not locked)
+        await ticket.channel.set_permissions(ticket.creator, send_messages=not locked)  # type: ignore
         ticket.locked = locked
         await self.set_lock(ticket, locked)
         await ticket.channel.send(
@@ -364,7 +388,6 @@ class TicketManager:
 
     def check_for_open_ticket(self, user: discord.User, category: Ticket.category) -> discord.TextChannel | None:
         """Returns ticket channels from a specific user and category."""
-
         return next(
             (
                 ticket.channel
@@ -387,8 +410,10 @@ class TicketManager:
         """
 
         fetch_query = """
-        SELECT user_id FROM discordbot_subscriptions WHERE category = %s;
-        """
+                      SELECT user_id
+                      FROM discordbot_subscriptions
+                      WHERE category = %s;
+                      """
         user_ids = await self.bot.fetch(fetch_query, category, fetchall=True)
 
         mention_subscribers = [f"<@{user_id[0]}>" for user_id in user_ids]
@@ -410,62 +435,53 @@ class TicketManager:
             await self.bot.upsert(queries.update_ticket_num, category, ticket_num, ticket_num)
             return ticket_num
 
-    async def extract_data_from_embed(
-            self,
-            embed: discord.Embed,
-            *,
-            rename: bool = False,
-            appeal: bool = False
-    ) -> list[PlayerProfile] | AppealData | None:
-        if rename:
-            old_name = None
-            new_name = None
-            for field in embed.fields:  # noqa
-                if "Current Name" in field.value:
-                    old_name = field.value.split("```")[1]
-                elif "New Name" in field.value:
-                    new_name = field.value.split("```")[1]
+    async def extract_rename_data(self, embed: discord.Embed) -> tuple[PlayerProfile, PlayerProfile]:
+        old_name = None
+        new_name = None
+        for field in embed.fields:
+            if "Current Name" in field.value:
+                old_name = field.value.split("```")[1]
+            elif "New Name" in field.value:
+                new_name = field.value.split("```")[1]
 
-            if old_name is None or new_name is None:
-                raise ValueError("Could not extract old or new name from the embed.")
+        if old_name is None or new_name is None:
+            raise ValueError("Could not extract old or new name from the embed.")
 
-            profile_old, profile_new = await asyncio.gather(
-                PlayerProfile.from_database(self.bot, old_name),
-                PlayerProfile.from_database(self.bot, new_name),
+        return await asyncio.gather(
+            PlayerProfile.from_database(self.bot, old_name),
+            PlayerProfile.from_database(self.bot, new_name),
+        )
+
+    async def extract_appeal_data(self, embed: discord.Embed) -> AppealData:
+        data = {}
+        for f in embed.fields:
+            name = f.name.lower()
+            value = f.value.strip()
+
+            if "ipv4" in name:
+                parts = value.split("```")
+                ip = parts[1] if len(parts) > 1 else None
+                dnsbl = parts[-1].split("**")[1] if "**" in parts[-1] else None
+                data["address"] = ip
+                data["dnsbl"] = dnsbl
+
+            elif "in-game name" in name:
+                parts = value.split("```")
+                data["name"] = parts[1] if len(parts) > 1 else None
+
+            elif "ban reason" in name:
+                data["reason"] = value
+
+            elif "appeal statement" in name:
+                data["appeal"] = value
+
+        if all(key in data for key in ("address", "dnsbl", "name", "reason", "appeal")):
+            return AppealData(
+                name=data["name"],
+                address=data["address"],
+                dnsbl=data["dnsbl"],
+                reason=data["reason"],
+                appeal=data["appeal"],
             )
-            return [profile_old, profile_new]
-        elif appeal:
-            data = {}
 
-            for f in embed.fields:
-                name = f.name.lower()
-                value = f.value.strip()
-
-                if "ipv4" in name:
-                    parts = value.split("```")
-                    ip = parts[1] if len(parts) > 1 else None
-                    dnsbl = parts[-1].split("**")[1] if "**" in parts[-1] else None
-                    data["address"] = ip
-                    data["dnsbl"] = dnsbl
-
-                elif "in-game name" in name:
-                    parts = value.split("```")
-                    data["name"] = parts[1] if len(parts) > 1 else None
-
-                elif "ban reason" in name:
-                    data["reason"] = value
-
-                elif "appeal statement" in name:
-                    data["appeal"] = value
-
-            if all(key in data for key in ("address", "dnsbl", "name", "reason", "appeal")):
-                return AppealData(
-                    name=data["name"],
-                    address=data["address"],
-                    dnsbl=data["dnsbl"],
-                    reason=data["reason"],
-                    appeal=data["appeal"],
-                )
-            else:
-                raise ValueError("Could not extract appeal data from the embed.")
-        return None
+        raise ValueError("Could not extract appeal data from the embed.")

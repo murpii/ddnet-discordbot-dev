@@ -4,7 +4,7 @@ from typing import Optional
 
 from extensions.ticketsystem import embeds
 from extensions.ticketsystem.lang.ban_appeal_m import ban_appeal_m, BAN_APPEAL_CLOUDFLARE
-from extensions.ticketsystem.views.inner_buttons import InnerTicketButtons
+from extensions.ticketsystem.views.inner_buttons import BanAppealTicketButtons
 from extensions.ticketsystem.utils import create_ticket_channel
 from extensions.ticketsystem.manager import Ticket, TicketCategory, AppealData
 from utils.checks import check_dm_channel, check_public_ip, check_ip
@@ -15,6 +15,7 @@ log = logging.getLogger("tickets")
 
 class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
     session = None
+
     def __init__(self, bot, language="en"):
         self.bot = bot
         self.language = language
@@ -31,7 +32,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             style=discord.TextStyle.short,
         )
         self.add_item(self.public_ip)
-    
+
         self.ingame_name = discord.ui.TextInput(
             label=modal["name_label"],
             placeholder=modal["name_label"],
@@ -65,10 +66,10 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
             dnsbl, cloudflare = await check_ip(self.public_ip.value, self.session, self.api_key)
             data = AppealData(
-                address=self.public_ip.value, 
-                dnsbl=dnsbl, 
-                name=self.ingame_name.value, 
-                reason=self.ban_reason.value, 
+                address=self.public_ip.value,
+                dnsbl=dnsbl,
+                name=self.ingame_name.value,
+                reason=self.ban_reason.value,
                 appeal=self.appeal.value
             )
             ticket = Ticket(
@@ -87,7 +88,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
                 embed=embeds.BanAppealEmbed(interaction.user)
             )
 
-            close = InnerTicketButtons(interaction.client)
+            close = BanAppealTicketButtons(interaction.client)
             close.update_buttons(ticket)
             profile = await PlayerProfile.from_database(self.bot, self.ingame_name.value)
             await ticket.channel.send(
@@ -98,8 +99,6 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
                 view=close)
             await ticket.start_message.pin()
 
-            cloudflare = BAN_APPEAL_CLOUDFLARE.get(self.language, BAN_APPEAL_CLOUDFLARE["en"])
-            
             content = f"<@{interaction.user.id}> your ticket has been created: {ticket.start_message.jump_url}"
             if not await check_dm_channel(interaction.user):
                 content += ("\n\n**WARNING:**\n"
@@ -109,14 +108,15 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             await interaction.followup.send(content=content, ephemeral=True)
 
             if cloudflare:
+                cloudflare = BAN_APPEAL_CLOUDFLARE.get(self.language, BAN_APPEAL_CLOUDFLARE["en"])
                 cloudflare_em = discord.Embed(
                     title="Cloudflare",
                     colour=discord.Color.red(),
-                    description=f"{ticket.creator.mention} {cloudflare["description"]}"
+                    description=f"{ticket.creator.mention} {cloudflare['description']}"
                 )
                 cloudflare_em.add_field(
                     name=cloudflare["title"],
-                    value=f"[{cloudflare["value"]}]"
+                    value=f"[{cloudflare['value']}]"
                           "(https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/remove-warp/)",
                 )
                 await ticket.channel.send(embed=cloudflare_em)

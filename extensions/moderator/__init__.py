@@ -11,14 +11,16 @@ import datetime
 import logging
 
 from .views.links import ButtonLinks
-from .embeds import NoMemberInfoEmbed, MemberInfoEmbed, TimeoutsEmbed, BansEmbed, KicksEmbed, ServerInfoEmbed
-from .manager import ModManager
+from .embeds import (
+    NoMemberInfoEmbed, MemberInfoEmbed, TimeoutsEmbed,
+    BansEmbed, KicksEmbed, ServerInfoEmbed, NoEntries
+)
+from .manager import ModeratorDB
 from utils.text import choice_to_timedelta
 from utils.checks import is_staff
 from constants import Guilds, Channels, Roles
 from data.countryflags import COUNTRYFLAGS
 from constants import Emojis
-
 
 # If the bot is running into KeyErrors, use /clear_cache to clear the sqlite cache the bot uses.
 session = CachedSession(cache_name="data/cache", expire_after=60 * 60 * 2)
@@ -175,9 +177,10 @@ class AutoMod(commands.Cog):
         if contact_list:
             for url in contact_list:
                 try:
-                    await self.bot.fetch_invite(url)
-                    contact_url = url
-                    break
+                    if url.startswith("https://discord.gg/"):
+                        await self.bot.fetch_invite(url)
+                        contact_url = url
+                        break
                 except discord.errors.NotFound:
                     continue
                 except (TypeError, IndexError):
@@ -204,9 +207,9 @@ class AutoMod(commands.Cog):
         This method checks if a message contains a valid server address and sends a response if it does.
         """
         if (
-            message.guild is None
-            or message.author.bot
-            or message.guild.id != Guilds.DDNET
+                message.guild is None
+                or message.author.bot
+                or message.guild.id != Guilds.DDNET
         ):
             return
 
@@ -270,15 +273,15 @@ class AutoMod(commands.Cog):
         # This is necessary because editing the message with an @mention does not actually notify the role/user...
 
         if (
-            before.channel.name.startswith("report-")
-            and before.channel not in self.mod_call
-            and msg
+                before.channel.name.startswith("report-")
+                and before.channel not in self.mod_call
+                and msg
         ):
             await msg.delete()
             msg = None
 
         embed, view, network = await self.discord_resp(addr, before.channel)
-        
+
         if (
                 after.channel.name.startswith("report-")
                 and network == "DDraceNetwork"
@@ -288,11 +291,11 @@ class AutoMod(commands.Cog):
             msg = await after.channel.send(content=f"<@&{Roles.MODERATOR}>", embed=embed, view=view)
             self.message_cache[after.id] = msg.id
             return
-        
+
         # This will send a new message with an @Moderator ping if msg is None
         if (
-            before.channel.name.startswith("report-")
-            and not msg
+                before.channel.name.startswith("report-")
+                and not msg
         ):
             try:
                 if before.channel.topic.startswith("Ticket"):
@@ -306,7 +309,7 @@ class AutoMod(commands.Cog):
                 msg = self.bot.get_message(self.message_cache.get(before.id))
                 msg = await msg.edit(embed=embed, view=view)
         except AttributeError:
-                msg = await before.channel.send(embed=embed, view=view)
+            msg = await before.channel.send(embed=embed, view=view)
 
         self.message_cache[after.id] = msg.id
 
@@ -426,16 +429,11 @@ class AutoMod(commands.Cog):
 
 
 # TODO: Add changelogs for every command.
-
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.manager = ModManager(bot)
-        self.is_kick = False
-        self.is_timeout = False
-        self.logged = {}  # Dictionary to track logged bans
-        self.logged_timeout = set()
-        self.lock = asyncio.Lock()  # Lock for thread safety
+        self.manager = ModeratorDB(bot)
+        self.actions: dict[int | str, tuple[discord.User, str, str]] = {}
 
     @staticmethod
     def slow_mode_choices() -> list:
@@ -483,7 +481,7 @@ class Moderation(commands.Cog):
             log.info(f"Slow mode has been disabled automatically in {channel.mention}.")
         else:
             await interaction.response.send_message(content=message, ephemeral=True)
-    
+
     @commands.hybrid_group(
         name="timeout",
         with_app_command=True,
@@ -495,7 +493,7 @@ class Moderation(commands.Cog):
     @app_commands.checks.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     async def timeout_group(self, ctx):
         pass
-    
+
     @timeout_group.command(
         name="user",
         with_app_command=True,
@@ -517,10 +515,9 @@ class Moderation(commands.Cog):
             )
             return
 
-        self.logged_timeout.add(member.id)
+        self.actions[member.id] = (ctx.author, "timeout", reason)
         await member.timeout(datetime.timedelta(minutes=minutes), reason=reason)
         await ctx.send(f"User {member.mention} has been timed out for {minutes} minutes. Reason: {reason}")
-        await self.manager.log_action(ctx.author, member, "timeout", reason)
 
     @timeout_group.command(
         name="remove",
@@ -538,10 +535,8 @@ class Moderation(commands.Cog):
             await ctx.send(f"{member.mention} is not currently timed out.")
             return
 
-        self.logged_timeout.discard(member.id)
         await member.timeout(None, reason="Timeout removed by staff")
         await ctx.send(f"Timeout has been removed for user {member.mention}.")
-        await self.manager.log_action(ctx.author, member, "remove_timeout", "Timeout removed by command")
 
     @commands.hybrid_group(
         name="kick",
@@ -566,25 +561,19 @@ class Moderation(commands.Cog):
         delete_message_history="How much of their recent message history to delete.",
         reason="The reason for the kick.")
     async def kick_member(
-        self, ctx, member: discord.Member, delete_message_history: app_commands.Choice[int], *, reason: str
+            self, ctx, member: discord.Member, delete_message_history: app_commands.Choice[int], *, reason: str
     ):
-        # I'm using ban to be able to mass delete messages from a user. The "banned" user is unbanned right after.
-        self.is_kick = True
+        # Using guild.ban allows to mass delete messages from a user. The user is unbanned right after.
         await ctx.defer(ephemeral=True)
 
-        if member is None:  # Technically not possible
-            await ctx.send("Member is not in the server.")
+        if member is None:
+            await ctx.send("Member is no longer in the server.")
             return
 
-        async with self.lock:
-            if member.id in self.logged:
-                await ctx.send(f"Unable to kick. User {member.mention} (ID: `{member.id}`) was banned.")
-                return
+        self.actions[member.id] = (ctx.author, "kick", reason)
         await ctx.guild.ban(member, delete_message_seconds=seconds_list[delete_message_history.value], reason=reason)
         await ctx.guild.unban(member)
         await ctx.send(f"User {member.mention} has been kicked. Reason: {reason}")
-        await self.manager.log_action(ctx.author, member, "kick", reason)
-        self.is_kick = False
 
     @kick_group.command(
         name="id",
@@ -592,35 +581,24 @@ class Moderation(commands.Cog):
         description="Kicks a user by their ID.")
     @app_commands.choices(delete_message_history=history())
     @app_commands.describe(
-        user_identifier="The users ID to kick.",
+        id="The users ID to kick.",
         delete_message_history="How much of their recent message history to delete.",
         reason="The reason for the kick.")
     async def kick_user_id(
-        self, ctx, user_identifier: str, delete_message_history: app_commands.Choice[int], *, reason: str
+            self, ctx, id: str, delete_message_history: app_commands.Choice[int], *, reason: str
     ):
         await ctx.defer(ephemeral=True)
-        user = await self.bot.fetch_user(int(user_identifier))
+        user = await self.bot.fetch_user(int(id))
         member = ctx.guild.get_member(user.id)
         if member is None:
-            await ctx.send(f"User with ID: `{user_identifier}` is not in the server.")
+            await ctx.send(f"User with ID: `{id}` is not in the server.")
             return
 
-        async with self.lock:
-            if user.id in self.logged:
-                await ctx.send(f"Unable to kick. User {user.mention} (ID: `{user_identifier}`) was banned.")
-                return
-
-        # I'm using ban to be able to mass delete messages from a user. The "kicked" user is unbanned right after.
-        try:
-            self.is_kick = True
-            await ctx.guild.ban(user, delete_message_seconds=seconds_list[delete_message_history.value], reason=reason)
-            await ctx.guild.unban(user)
-            await ctx.send(f"User {user.mention} (ID: `{user_identifier}`) has been kicked. Reason: {reason}")
-        except discord.NotFound:
-            await ctx.send(f"Could not find user with ID: `{user_identifier}`.")
-        finally:
-            self.is_kick = False
-            await self.manager.log_action(ctx.author, user, "kick", reason)
+        # Using guild.ban allows to mass delete messages from a user. The user is unbanned right after.
+        self.actions[member.id] = (ctx.author, "kick", reason)
+        await ctx.guild.ban(user, delete_message_seconds=seconds_list[delete_message_history.value], reason=reason)
+        await ctx.guild.unban(user)
+        await ctx.send(f"User {user.mention} (ID: `{id}`) has been kicked. Reason: {reason}")
 
     @commands.hybrid_group(
         name="ban",
@@ -640,52 +618,63 @@ class Moderation(commands.Cog):
     @app_commands.describe(
         user="The user to ban.",
         delete_message_history="How much of their recent message history to delete.",
-        reason="The reason for banning")
+        reason="The reason for banning"
+    )
     async def ban_user(
             self, ctx, user: discord.User, delete_message_history: app_commands.Choice[int], *, reason: str
     ):
         await ctx.defer(ephemeral=True)
-        bans = [ban_entry async for ban_entry in ctx.guild.bans()]
-        banned_users = [ban_entry.user.id for ban_entry in bans]
 
-        async with self.lock:
-            if user.id in self.logged or user.id in banned_users:
-                await ctx.send(f"User {user.mention} (ID: `{user.id}`) has already been banned.")
+        try:
+            bans = await ctx.guild.bans()
+            if any(ban_entry.user.id == user.id for ban_entry in bans):
+                await ctx.send(f"{user.mention} (ID: `{user.id}`) is already banned.")
                 return
-            self.logged[user.id] = True
+        except discord.Forbidden:
+            await ctx.send("I do not have permission to view bans.")
+            return
+        except discord.HTTPException:
+            await ctx.send("HTTPException: Failed to check if user is banned. Try again later.")
+            return
 
+        self.actions[user.id] = (ctx.author, "ban", reason)
         await ctx.guild.ban(user, delete_message_seconds=seconds_list[delete_message_history.value], reason=reason)
-        await self.manager.log_action(ctx.author, user, "ban", reason)
-        await ctx.send(f"User {user.mention} has been banned. Reason Provided: {reason}")
+        await ctx.send(f"User {user.mention} has been banned for \"{reason}\"")
 
     @ban_group.command(name="id", with_app_command=True, description="Bans a user by their ID.")
     @commands.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     @app_commands.checks.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     @app_commands.choices(delete_message_history=history())
     @app_commands.describe(
-        user_identifier="The user's ID to ban.",
+        id="The user's ID to ban.",
         delete_message_history="How much of their recent message history to delete.",
         reason="The reason for banning")
     async def ban_user_id(
-            self, ctx, user_identifier: str, delete_message_history: app_commands.Choice[int], *, reason: str
+            self, ctx, id: str, delete_message_history: app_commands.Choice[int], *, reason: str
     ):
         await ctx.defer(ephemeral=True)
-        user = await self.bot.fetch_user(int(user_identifier))
-        bans = [ban_entry async for ban_entry in ctx.guild.bans()]
-        banned_users = [ban_entry.user.id for ban_entry in bans]
-
-        async with self.lock:
-            if user.id in self.logged or user.id in banned_users:
-                await ctx.send(f"User {user.mention} (ID: `{user_identifier}`) has already been banned.")
-                return
-            self.logged[user.id] = True
 
         try:
-            await ctx.guild.ban(user, delete_message_seconds=seconds_list[delete_message_history.value], reason=reason)
-            await self.manager.log_action(ctx.author, user, "ban", reason)
-            await ctx.send(f"User {user.mention} (ID: `{user_identifier}`) has been banned. Reason: {reason}")
+            user = await self.bot.fetch_user(int(id))
         except discord.NotFound:
-            await ctx.send(f"Could not find user with ID: `{user_identifier}`.")
+            await ctx.send(f"Could not find user with ID: `{id}`.")
+            return
+
+        try:
+            async for ban_entry in ctx.guild.bans():
+                if ban_entry.user.id == user.id:
+                    await ctx.send(f"{user.mention} (ID: `{id}`) is already banned.")
+                    return
+        except discord.Forbidden:
+            await ctx.send("I do not have permission to view bans.")
+            return
+        except discord.HTTPException:
+            await ctx.send("HTTPException: Failed to check if user is banned. Try again later.")
+            return
+
+        self.actions[user.id] = (ctx.author, "ban", reason)
+        await ctx.guild.ban(user, delete_message_seconds=seconds_list[delete_message_history.value], reason=reason)
+        await ctx.send(f"User {user.mention} (ID: `{id}`) has been banned for \"{reason}\"")
 
     @commands.hybrid_group(name="unban", with_app_command=True)
     @commands.check(ddnet_only)
@@ -702,10 +691,6 @@ class Moderation(commands.Cog):
     async def unban_user(self, ctx, user: discord.User):
         await ctx.defer(ephemeral=True)
 
-        async with self.lock:
-            with contextlib.suppress(KeyError):
-                del self.logged[user.id]
-
         try:
             await ctx.guild.unban(user)
             await ctx.send(f"User {user.mention} has been unbanned.")
@@ -715,14 +700,10 @@ class Moderation(commands.Cog):
     @unban_group.command(name="id", with_app_command=True, description="Unbans a user by their ID.")
     @commands.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
     @app_commands.checks.has_any_role(Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
-    @app_commands.describe(user_identifier="The user ID to unban.")
-    async def unban_user_id(self, ctx, user_identifier: str):
+    @app_commands.describe(id="The user ID to unban.")
+    async def unban_user_id(self, ctx, id: str):
         await ctx.defer(ephemeral=True)
-        user = await self.bot.fetch_user(int(user_identifier))
-
-        async with self.lock:
-            with contextlib.suppress(KeyError):
-                del self.logged[user.id]
+        user = await self.bot.fetch_user(int(id))
 
         try:
             await ctx.guild.unban(user)
@@ -745,81 +726,84 @@ class Moderation(commands.Cog):
         info = await self.manager.fetch_user_info(user)
 
         if not info:
-            await ctx.send(embed=NoMemberInfoEmbed)
+            await ctx.send(embed=NoMemberInfoEmbed())
             return
+
+        em = [MemberInfoEmbed(info)]
+        empty_sections = []
+        non_empty_embeds = []
+
+        if info.timeouts:
+            non_empty_embeds.append(TimeoutsEmbed(info))
         else:
-            await ctx.send(
-                embeds=[MemberInfoEmbed(info), TimeoutsEmbed(info), BansEmbed(info), KicksEmbed(info)])
+            empty_sections.append("Timeouts")
+
+        if info.bans:
+            non_empty_embeds.append(BansEmbed(info))
+        else:
+            empty_sections.append("Bans")
+
+        if info.kicks:
+            non_empty_embeds.append(KicksEmbed(info))
+        else:
+            empty_sections.append("Kicks")
+
+        if empty_sections:
+            em.append(NoEntries(empty_sections))
+
+        # Add all non-empty embeds
+        em.extend(non_empty_embeds)
+
+        await ctx.send(embeds=em)
 
     @commands.Cog.listener()
-    async def on_member_ban(self, guild: discord.Guild, user: discord.User):
-        """
-        This listener checks if a user is banned from our guild and logs the action
-        along with the reason provided in the audit logs (DB)
-        """
+    async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
+        guild = entry.guild
 
         if guild.id != Guilds.DDNET:
             return
 
-        if self.is_kick:
-            return
+        target = entry.target
+        reason = entry.reason or "No reason provided"
+        action = entry.action
 
-        async with self.lock:
-            if user.id in self.logged:
+        # bans
+        if action == discord.AuditLogAction.ban:
+            if target.id in self.actions:
+                moderator, action_type, custom_reason = self.actions.pop(target.id)
+                await self.manager.log_action(moderator, target, action_type, custom_reason)
+            else:
+                await self.manager.log_action(entry.user, target, "ban", reason)
+
+        # kicks
+        elif action == discord.AuditLogAction.kick:
+            if target.id in self.actions:
+                moderator, action_type, custom_reason = self.actions.pop(target.id)
+                await self.manager.log_action(moderator, target, action_type, custom_reason)
+            else:
+                await self.manager.log_action(entry.user, target, "kick", reason)
+
+        # timeouts
+        elif action == discord.AuditLogAction.member_update:
+            if not hasattr(entry.before, "timed_out_until"):
                 return
 
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
-            if entry.target == user and not self.logged:
-                reason = entry.reason or "No reason provided"
-                await self.manager.log_action(entry.user, user, "ban", reason)
+            before = entry.before.timed_out_until
+            after = entry.after.timed_out_until
 
-    @commands.Cog.listener()
-    async def on_member_remove(self, member):
-        """
-        This listener checks if a member is removed (kicked) from our guild.
-        It retrieves the reason for the kick and logs the action along with the reason provided in the audit logs (DB).
-        """
+            if before is None and after is not None:
+                if target.id in self.actions:
+                    moderator, action_type, custom_reason = self.actions.pop(target.id)
+                    await self.manager.log_action(moderator, target, action_type, custom_reason)
+                else:
+                    await self.manager.log_action(entry.user, target, "timeout", reason)
 
-        if member.guild.id != Guilds.DDNET:
-            return
-
-        async with self.lock:
-            if member.id in self.logged:
-                return
-
-        async for entry in member.guild.audit_logs(limit=1, action=discord.AuditLogAction.kick):
-            if entry.target == member and not self.logged:
-                reason = entry.reason or "No reason provided"
-                await self.manager.log_action(entry.user, member, "kick", reason)
-
-    @commands.Cog.listener()
-    async def on_member_update(self, before, after):
-        """
-        This listener checks for changes in a member's timeout status within our guild.
-        If a member's timeout is updated, it logs the action along with the reason provided in the audit logs (DB).
-        """
-
-        if before.guild.id != Guilds.DDNET:
-            return
-
-        async with self.lock:
-            if before.id in self.logged or before.id in self.logged_timeout:
-                with contextlib.suppress(KeyError):
-                    self.logged_timeout.remove(before.id)
-                return
-
-        if before.timed_out_until != after.timed_out_until:
-            if after.timed_out_until is None:
-                return
-
-            async for entry in after.guild.audit_logs(limit=1, action=discord.AuditLogAction.member_update):
-                if (
-                        entry.target == after
-                        and not self.logged
-                        and entry.action == discord.AuditLogAction.member_update
-                ):
-                    reason = entry.reason or "No reason provided"
-                    await self.manager.log_action(entry.user, after, "timeout", reason)
+    @commands.command()
+    @commands.check(ddnet_only)
+    @commands.has_permissions(administrator=True)
+    async def import_bans(self, ctx):
+        string = await self.manager.import_existing_bans(ctx.guild)
+        await ctx.send(string)
 
 
 class NoChat(commands.Cog):
@@ -829,8 +813,8 @@ class NoChat(commands.Cog):
     @commands.Cog.listener("on_message")
     async def robot_cmds(self, message: discord.Message):
         if (
-            not message.author.bot
-            and message.channel.id == Channels.BOT_CMDS
+                not message.author.bot
+                and message.channel.id == Channels.BOT_CMDS
         ):
             with contextlib.suppress(discord.NotFound):
                 await message.delete()
@@ -838,8 +822,8 @@ class NoChat(commands.Cog):
     @commands.Cog.listener("on_message")
     async def playerfinder(self, message: discord.Message):
         if (
-            message.channel.id == Channels.PLAYERFINDER
-            and message.author != self.bot.user
+                message.channel.id == Channels.PLAYERFINDER
+                and message.author != self.bot.user
         ):
             with contextlib.suppress(discord.NotFound):
                 await message.delete()
@@ -859,7 +843,7 @@ class NoChat(commands.Cog):
                     await message.delete()
                     try:
                         await message.author.send(
-                            f"{message.channel.jump_url}: Only media or links are allowed in this channel.", 
+                            f"{message.channel.jump_url}: Only media or links are allowed in this channel.",
                             delete_after=30
                         )
                     except discord.Forbidden:

@@ -1,3 +1,4 @@
+import ipaddress
 import urllib
 import discord
 import asyncio
@@ -80,7 +81,7 @@ async def run_process_shell(cmd: str, timeout: float = 90.0) -> Tuple[str, str]:
 
 
 async def run_process_exec(
-    program: str, *args: str, timeout: float = 90.0
+        program: str, *args: str, timeout: float = 90.0
 ) -> Tuple[str, str]:
     proc = await asyncio.create_subprocess_exec(
         program, *args, stdout=PIPE, stderr=PIPE
@@ -93,6 +94,7 @@ async def run_process_exec(
         raise RuntimeError("Process timed out") from e
     else:
         return stdout.decode(), stderr.decode()
+
 
 def executor(func: Callable):
     @functools.wraps(func)
@@ -119,3 +121,23 @@ def rating() -> list:
         discord.SelectOption(label="Rating: ★★★★☆", value="3"),
         discord.SelectOption(label="Rating: ★★★★★", value="4"),
     ]
+
+
+def ip_matches(ip: str, target: str) -> bool:
+    ip = ip.strip()
+    target = target.strip()
+
+    if ip == target:
+        return True
+
+    if "-" in target:
+        start_ip, end_ip = target.split("-", 1)
+        try:
+            start = int(ipaddress.IPv4Address(start_ip.strip()))
+            end = int(ipaddress.IPv4Address(end_ip.strip()))
+            current = int(ipaddress.IPv4Address(ip))
+            return start <= current <= end
+        except ipaddress.AddressValueError:
+            return False
+
+    return False

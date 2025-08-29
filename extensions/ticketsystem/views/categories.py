@@ -32,6 +32,7 @@ class ButtonOnCooldown(commands.CommandError):
     Args:
         retry_after (float): The time in seconds until the button can be pressed again.
     """
+
     def __init__(self, retry_after: float):
         self.retry_after = retry_after
 
@@ -75,7 +76,7 @@ class MainMenu(discord.ui.View):
                     await interaction.client.fetch_channel(channel.id)
                 except discord.NotFound:
                     log.warning(f"Initial ticket generation: {channel} no longer exists but still in cache? "
-                              f"This can happen if a ticket channel was removed manually or to some HTTPException.")
+                                f"This can happen if a ticket channel was removed manually or to some HTTPException.")
                     await self.ticket_manager.del_ticket(channel)
                     return True
                 except discord.Forbidden as e:
@@ -112,9 +113,7 @@ class MainMenu(discord.ui.View):
         ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
 
-        close = inner_buttons.InnerTicketButtons(interaction.client)
-        close.update_buttons(ticket)
-
+        close = inner_buttons.ReportTicketButtons(interaction.client)
         ticket.start_message = await ticket.channel.send(
             await self.ticket_manager.mentions(interaction, ticket.category),
             embeds=[embeds.ReportEmbed(interaction.user), embeds.FollowUpEmbed()],
@@ -166,11 +165,7 @@ class MainMenu(discord.ui.View):
             return
         user_locale = str(interaction.locale)
         language = user_locale.split("-")[0]
-        await interaction.response.send_modal(
-            ban_appeal_m.BanAppealModal(
-                self.bot, 
-                language=language)
-        )
+        await interaction.response.send_modal(ban_appeal_m.BanAppealModal(self.bot, language=language))
 
     @discord.ui.button(label="Staff Complaint", style=discord.ButtonStyle.blurple, custom_id="MainMenu:complaint")
     async def t_complaints(self, interaction: discord.Interaction, _: Button):  # noqa
@@ -191,7 +186,7 @@ class MainMenu(discord.ui.View):
         ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
 
-        close = inner_buttons.InnerTicketButtons(interaction.client)
+        close = inner_buttons.BaseTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
         ticket.start_message = await ticket.channel.send(
@@ -235,7 +230,7 @@ class MainMenu(discord.ui.View):
         ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
 
-        close = inner_buttons.InnerTicketButtons(interaction.client)
+        close = inner_buttons.BaseTicketButtons(interaction.client)
         close.update_buttons(ticket)
 
         ticket.start_message = await ticket.channel.send(

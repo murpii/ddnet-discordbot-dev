@@ -78,7 +78,6 @@ async def send_response(
         else:
             await msg_type.edit_original_response(content=content)
 
-
 async def debug_check(subm: Any, msg_type: Union[discord.Message, discord.Interaction], r_event: bool = False) -> bool:
     """Checks the debug output of a submission and sends a formatted response.
 
@@ -114,5 +113,5 @@ async def debug_check(subm: Any, msg_type: Union[discord.Message, discord.Intera
             msg = f"{msg}Debug output is too long, see attached text file."
             file = discord.File(io.StringIO(debug_output), filename="debug_output.txt")  # noqa
 
-    await send_response(msg_type, msg, file)  # noqa
+    await send_response(msg_type, msg, file)  # TODO: Return a string/embed/file instead
     return True

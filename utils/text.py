@@ -46,7 +46,7 @@ def escape_custom_emojis(text: str) -> str:
 
 
 def escape(
-    text: str, markdown: bool = True, mentions: bool = True, custom_emojis: bool = True
+        text: str, markdown: bool = True, mentions: bool = True, custom_emojis: bool = True
 ) -> str:
     if markdown:
         text = discord.utils.escape_markdown(text)
@@ -202,7 +202,25 @@ def datetime_to_unix(datetime_str: str) -> int:
 
 
 def to_discord_timestamp(dt: datetime, style: str = 'f') -> str:
-    """Convert a datetime object to a Discord timestamp string."""
+    """
+    Convert a datetime object to a Discord-formatted timestamp string.
+
+    Parameters:
+        dt : datetime
+            The datetime object to convert. Should be timezone-aware or in UTC.
+        style : str, optional
+            The Discord timestamp style to use (default is 'f'). Options are:
+            - 't' : Short time (e.g. 16:20)
+            - 'T' : Long time (e.g. 16:20:30)
+            - 'd' : Short date (e.g. 20/04/2021)
+            - 'D' : Long date (e.g. 20 April 2021)
+            - 'f' : Short date/time (e.g. 20 April 2021 16:20)
+            - 'F' : Long date/time (e.g. Tuesday, 20 April 2021 16:20)
+            - 'R' : Relative time (e.g. 2 months ago, in 10 minutes)
+
+    Returns:
+        str: A Discord timestamp string in the format `<t:unix_timestamp:style>`.
+    """
     unix_ts = int(dt.timestamp())
     return f"<t:{unix_ts}:{style}>"
 
