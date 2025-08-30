@@ -9,11 +9,10 @@ from typing import Optional
 
 import discord
 
+from . import map_visualize_size
 from extensions.map_testing.map_states import MapState
 from utils.misc import run_process_shell, run_process_exec, check_os
 from utils.text import sanitize
-from constants import Channels
-import map_visualize_size
 
 log = logging.getLogger("mt")
 

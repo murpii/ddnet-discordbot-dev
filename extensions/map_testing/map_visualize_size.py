@@ -10,10 +10,36 @@
 # Author: Patiga
 # License: MIT
 
-from tw_map_v4 import TwMapV4
+from extensions.map_testing.tw_map_v4 import TwMapV4
 import matplotlib.pyplot as plt
 import numpy as np
 import io
+
+
+def numbered_pie(ax, sizes, names, title):
+    ax.set_title(title)
+    if not sizes:
+        ax.text(0.5, 0.5, f"No {title.lower()}", ha="center", va="center")
+        return
+
+    total_size = sum(sizes)
+    percentages = [(s / total_size) * 100 for s in sizes]
+    sorted_data = sorted(zip(names, sizes, percentages), key=lambda x: x[2], reverse=True)
+    names, sizes, percentages = zip(*sorted_data)
+    numbered_labels = [str(i + 1) for i in range(len(names))]
+    wedges, _ = ax.pie(sizes, labels=numbered_labels, startangle=90)
+    legend_entries = [
+        f"{i + 1}. {name} — {perc:.1f}%"
+        for i, (name, perc) in enumerate(zip(names, percentages))
+    ]
+    ax.legend(
+        wedges,
+        legend_entries,
+        title=title,
+        loc="center left",
+        bbox_to_anchor=(1, 0, 0.5, 1)
+    )
+
 
 def visualize_from_bytes(data) -> io.BytesIO:
     map = TwMapV4.from_bytes(data)
@@ -23,24 +49,22 @@ def visualize_from_bytes(data) -> io.BytesIO:
     sound_names = []
     sound_sizes = []
 
-    total = 0
     for item in map.items:
         if item.type_id == TwMapV4.ItemKind.image:
             image = item.content
-            image_names.append(f"{image.name.string.strip('\0')} ({item.id})")
+            image_names.append(f"{image.name.string.strip(chr(0))} ({item.id})")
             if image.data_index is not TwMapV4.Optional.not_set:
                 image_sizes.append(len(map._raw__raw_data_items[image.data_index]))
             else:
                 image_sizes.append(0)
         elif item.type_id == TwMapV4.ItemKind.sound:
             sound = item.content
-            sound_names.append(f"{sound.name.string.strip('\0')} ({item.id})")
+            sound_names.append(f"{sound.name.string.strip(chr(0))} ({item.id})")
             if sound.data_index is not TwMapV4.Optional.not_set:
                 sound_sizes.append(len(map._raw__raw_data_items[sound.data_index]))
             else:
                 sound_sizes.append(0)
 
-    # https://stackoverflow.com/a/1094933
     def sizeof_fmt(num, suffix="B"):
         for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
             if abs(num) < 1024.0:
@@ -53,40 +77,46 @@ def visualize_from_bytes(data) -> io.BytesIO:
     total_map_size = map.header.size
     other = total_map_size - total_images_size - total_sounds_size
 
-    fig, ((total, single_items), (images, sounds)) = plt.subplots(2, 2)
+    max_items = max(len(image_names), len(sound_names))
+    width = 12
+    height = 8 + max_items * 0.25
+
+    fig, ((total, single_items), (images, sounds)) = plt.subplots(2, 2, figsize=(width, height))
+
     total.set_title("Total")
     total.pie(
         [total_images_size, total_sounds_size, other],
         labels=["Images", "Sounds", "Remaining"],
         autopct='%1.1f%%',
     )
-    images.set_title("Images")
-    images.pie(image_sizes, labels=image_names, autopct='%1.1f%%')
-    sounds.set_title("Sounds")
-    sounds.pie(sound_sizes, labels=sound_names, autopct='%1.1f%%')
+
+    numbered_pie(images, image_sizes, image_names, "Images")
 
     items = []
     for sizes, names, prefix in [(image_sizes, image_names, "I"), (sound_sizes, sound_names, "S")]:
         for size, name in zip(sizes, names):
             items.append((size, f"[{prefix}] {name}"))
-    items = list(reversed(sorted(items, key=lambda item: item[0])))
-    items = items[:min(10, len(items))]
+    items = sorted(items, key=lambda item: item[0], reverse=True)
+
     y_pos = np.arange(len(items))
     single_items.set_title("Items")
-    bars = single_items.barh(
-        y_pos,
-        [size for size, _ in items],
-        align='center',
-    )
-    single_items.bar_label(bars, fmt=sizeof_fmt)
-    single_items.set_yticks(
-        y_pos,
-        labels=[name for _, name in items],
-    )
-    single_items.invert_yaxis()  # labels read top-to-bottom
-    plt.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1, hspace=0.4, wspace=0.3)
+    if items:
+        bars = single_items.barh(
+            y_pos,
+            [size for size, _ in items],
+            align='center',
+        )
+        single_items.bar_label(bars, fmt=sizeof_fmt)
+        single_items.set_yticks(
+            y_pos,
+            labels=[name for _, name in items],
+        )
+        single_items.invert_yaxis()
+    else:
+        single_items.text(0.5, 0.5, "No items", ha="center", va="center")
 
+    plt.tight_layout()
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', bbox_inches="tight")
     buf.seek(0)
     return buf
