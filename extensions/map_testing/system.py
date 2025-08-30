@@ -26,7 +26,7 @@ from extensions.map_testing.utils import (
     debug_check
 )
 from extensions.ticketsystem.queries import rm_mapinfo_from_db, fetch_map_from_db
-from utils.checks import has_map
+from utils.checks import has_map, is_staff
 from utils.conn import ddnet_upload, ddnet_delete, upload_submission
 from constants import Guilds, Channels, Roles, Emojis
 from utils.text import to_discord_timestamp
@@ -339,32 +339,37 @@ class MapTesting(commands.Cog):
         global_cooldown.update_cooldown(map_channel.id)
 
     @app_commands.guilds(Guilds.DDNET)
-    @app_commands.check(predicate(staff_only=True))
-    @app_commands.command(
-        name="visualize-size", description="Visualize the map's file size")
+    @app_commands.command(name="visualize-size", description="Visualize the map's file size")
     async def visualize_size(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
-        map_channel = self.get_map_channel(interaction.channel.id)  # noqa
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        map_channel = self.get_map_channel(interaction.channel.id)
         pins = await map_channel.pins()
         try:
             file = await Submission(pins[0]).visualize_size()
-            await map_channel.send("Map size breakdown :mag:", file=file)
+            if is_staff(interaction.user):
+                await map_channel.send("Map size breakdown :mag:", file=file)
+                if interaction.response.is_done():
+                    await interaction.delete_original_response()
+            else:
+                await interaction.followup.send("Map size breakdown :mag:", file=file)
         except Exception as e:
-            await map_channel.send(f"Failed to produce visualization: {e}")
-
-        if interaction.response.is_done():  # noqa
-            await interaction.delete_original_response()
+            await interaction.followup.send(f"Failed to produce visualization: {e}")
 
     @app_commands.guilds(Guilds.DDNET)
-    @app_commands.check(predicate(staff_only=True))
-    @app_commands.command(
-        name="twmap-edit", description="Edits a map according to the passed arguments")
+    @app_commands.command(name="twmap-edit", description="Edits a map according to the passed arguments")
     @app_commands.describe(
-        options="Options, separate each option with a comma. Use --help option to see all available options.")
+        options="Options, separate each option with a comma. Use --help option to see all available options."
+    )
     async def twmap_edit(self, interaction: discord.Interaction, options: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+        map_channel = self.get_map_channel(interaction.channel.id)  # noqa
+        if not (is_staff(interaction.user) or map_channel.mapper_mentions == interaction.user.mention):
+            await interaction.response.send_message(
+                "Only staff members and the map owner are allowed to use this command.",
+                ephemeral=True
+            )
+            return
 
+        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
         options = [option.strip() for option in options.split(",")]
         map_channel = self.get_map_channel(interaction.channel.id)  # noqa
         pins = await map_channel.pins()
