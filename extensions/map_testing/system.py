@@ -1,3 +1,4 @@
+import io
 import logging
 import re
 from datetime import datetime, timezone, timedelta
@@ -381,15 +382,14 @@ class MapTesting(commands.Cog):
             return
 
         if stdout:
-            stdout = f"```{stdout}```"
+            if len(stdout) > 1900:
+                file_stdout = discord.File(io.BytesIO(stdout.encode()), filename="output.txt")
+                await interaction.followup.send("Output too long, sending as a file:", file=file_stdout)
+            else:
+                await interaction.followup.send(f"```{stdout}```")
 
-        if file is None:
-            await interaction.followup.send(stdout)
-        else:
-            await map_channel.send(stdout, file=file)
-
-            if interaction.response.is_done():  # noqa
-                await interaction.delete_original_response()
+        if file:
+            await map_channel.send(file=file)
 
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.check(predicate(staff_only=False))
