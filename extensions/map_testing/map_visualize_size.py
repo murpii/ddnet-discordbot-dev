@@ -91,6 +91,7 @@ def visualize_from_bytes(data) -> io.BytesIO:
     )
 
     numbered_pie(images, image_sizes, image_names, "Images")
+    numbered_pie(sounds, sound_sizes, sound_names, "Sounds")
 
     items = []
     for sizes, names, prefix in [(image_sizes, image_names, "I"), (sound_sizes, sound_names, "S")]:
