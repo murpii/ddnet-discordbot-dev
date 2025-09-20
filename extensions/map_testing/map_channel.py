@@ -20,6 +20,7 @@ class MapChannel:
     def __init__(self, bot, channel: discord.TextChannel, thread: discord.Thread | None = None):
         self.bot = bot
         self._channel = channel
+        self.thread = thread
         self.state = next(
             (s for s in MapState if str(s) == channel.name[0]), MapState.TESTING
         )
@@ -46,8 +47,6 @@ class MapChannel:
         self.name = match["name"]
         self.mappers = re.split(r", | & ", match["mappers"])
         self.server = match["server"]
-
-        self.thread = thread
 
         self.changelog: Optional[discord.Message] = None
         self.changelog_paginator: Optional[ChangelogPaginator] = None
@@ -162,7 +161,7 @@ class MapChannel:
         """Setup the changelog paginator."""
         self.changelog_paginator = ChangelogPaginator(self.bot, channel=self._channel)
         await self.changelog_paginator.get_data()
-        self.changelog = await self.changelog_paginator.assign_changelog_message(self.thread)
+        self.changelog = await self.changelog_paginator.assign_changelog_message(thread=self.thread)
         self.bot.add_view(view=self.changelog_paginator, message_id=self.changelog_paginator.changelog.id)
 
     async def get_votes(self) -> list[discord.abc.User]:
@@ -289,7 +288,7 @@ class MapChannel:
         self.changelog_paginator = ChangelogPaginator(isubm.bot, channel=self._channel)
         await self.changelog_paginator.add_changelog(
             self._channel,
-            isubm.author,
+            isubm.approved_by,
             category="MapTesting/CREATION",
             string=f"Channel for \"{self.name}\" successfully created.",
             map_name=self.name
@@ -301,7 +300,7 @@ class MapChannel:
             view=self.changelog_paginator,
             allowed_mentions=discord.AllowedMentions(users=False),
         )
-        await self.changelog_paginator.assign_changelog_message(self.thread)
+        await self.changelog_paginator.assign_changelog_message(message=self.changelog)
 
         # Thread checklist
         view = ChecklistView()

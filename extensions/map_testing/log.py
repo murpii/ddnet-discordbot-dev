@@ -173,7 +173,7 @@ class TestLog:
                     continue
 
                 start = text[: match.start()]
-                end = text[match.end() :]
+                end = text[match.end():]
 
                 try:
                     processed = await maybe_coroutine(handler, *match.groups())
@@ -237,6 +237,13 @@ class TestLog:
 
     async def _process(self):
         async for message in self.map_channel.history(limit=None, oldest_first=True):
+            # video media doesn't seem to work on ddnet.org/testlogs so no reason to include them at the moment
+            if any(
+                    att.filename.lower().endswith((".mp4", ".webm"))
+                    for att in message.attachments
+            ):
+                continue
+
             content_handlers = (
                 (self._handle_text, message.content),
                 (self._handle_attachments, message.attachments),

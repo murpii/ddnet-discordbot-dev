@@ -51,9 +51,9 @@ class ErrorHandler(commands.Cog):
         self.bot = bot
         self.error_message = "An error occurred. Please try again later."
         bot.tree.error(self.dispatch_to_app_command_handler)
-    
+
     async def report_interaction_error(
-        self, interaction: discord.Interaction, error: Exception, note: str = None
+            self, interaction: discord.Interaction, error: Exception, note: str = None
     ):
         trace = "".join(traceback.format_exception(type(error), error, error.__traceback__))
         file = discord.File(io.StringIO(trace), filename="traceback.txt")
@@ -78,7 +78,7 @@ class ErrorHandler(commands.Cog):
                 "An error occurred. I've notified an administrator. Please try again later.",
                 ephemeral=True
             )
-    
+
     async def report_command_error(self, custom_message: str, error: Exception = None, file: discord.File = None):
         """Send a formatted traceback of the error to a specific Discord channel."""
         message = custom_message
@@ -102,9 +102,9 @@ class ErrorHandler(commands.Cog):
                 await channel.send(message)
         except Exception as send_error:
             log_traceback(send_error)
-    
+
     async def dispatch_to_app_command_handler(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+            self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ):
         if interaction.extras.get("error_handled"):
             return
@@ -112,29 +112,32 @@ class ErrorHandler(commands.Cog):
         await self.on_app_command_error(interaction, error)
 
     async def on_app_command_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+            self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ):
-        error_message = error_dict.get(type(error), self.error_message).format(error=error)  # noqa
+        error_message = error_dict.get(type(error), self.error_message).format(error=error)
 
         if type(error) not in error_dict:
             log_traceback(error)
             return
 
-        if interaction.response.is_done():  # noqa
-            await interaction.followup.send(error_message, ephemeral=True)
-        else:
-            await interaction.response.send_message(  # noqa
-                error_message, ephemeral=True
-            )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(error_message, ephemeral=True)
+            else:
+                await interaction.response.send_message(error_message, ephemeral=True)
+        except discord.NotFound:
+            log_traceback(error)
+        except discord.HTTPException:
+            log_traceback(error)
 
     @commands.Cog.listener()
     async def on_command_error(
-        self, ctx: commands.Context[commands.Bot], error: commands.CommandError
+            self, ctx: commands.Context[commands.Bot], error: commands.CommandError
     ):
         if isinstance(error, discord.ext.commands.HybridCommandError):
             error = error.original
 
-        error_message = error_dict.get(type(error), self.error_message).format(error=error, ctx=ctx)  # noqa
+        error_message = error_dict.get(type(error), self.error_message).format(error=error, ctx=ctx)
 
         if isinstance(error, commands.CommandNotFound) and ctx.channel.id == Channels.BOT_CMDS:
             return None

@@ -179,7 +179,7 @@ class Submission:
 
 
 class InitialSubmission(Submission):
-    __slots__ = Submission.__slots__ + ("bot", "name", "mappers", "server", "map_channel", "thumbnail")
+    __slots__ = Submission.__slots__ + ("bot", "name", "mappers", "server", "map_channel", "thumbnail", "approved_by")
 
     _FORMAT_RE = r"^\"(?P<name>.+)\" +by +(?P<mappers>.+) +\[(?P<server>.+)\]$"
 
@@ -195,10 +195,16 @@ class InitialSubmission(Submission):
         "Fun": "🎉",
     }
 
-    def __init__(self, bot, message: discord.Message, *, raw_bytes: Optional[bytes] = None):
+    def __init__(
+            self, bot, message: discord.Message, *, raw_bytes: Optional[bytes] = None, member: discord.Member = None
+    ):
         super().__init__(message, raw_bytes=raw_bytes)
 
         self.bot = bot
+        # This will be the member who has approved the submission
+        # This is going to end up as None, but can be looked up in the changelog
+        self.approved_by = member
+
         self.name = None
         self.mappers = None
         self.server = None
@@ -296,10 +302,7 @@ class InitialSubmission(Submission):
         # DEBUG Map: Runs twmap-check-ddnet on the isubm map file
         if debug_output:
             if len(debug_output) < 1900:
-                await message.reply(
-                    f"Map 🐞:\n```{debug_output}```",
-                    mention_author=False
-                )
+                await message.reply(f"Map 🐞:\n```{debug_output}```", mention_author=False)
             else:
                 file = discord.File(io.StringIO(debug_output), filename="debug_output.txt")  # noqa
                 await message.reply(

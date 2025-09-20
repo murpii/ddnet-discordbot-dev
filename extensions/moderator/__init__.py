@@ -1,6 +1,9 @@
 import asyncio
+import hashlib
 import re
 import contextlib
+import time
+from collections import defaultdict
 from typing import Optional
 
 from requests_cache import CachedSession
@@ -26,6 +29,15 @@ from constants import Emojis
 session = CachedSession(cache_name="data/cache", expire_after=60 * 60 * 2)
 log = logging.getLogger()
 seconds_list = [0, 3600, 21600, 43200, 86400, 259200, 604800]
+
+
+def hash_message(message: discord.Message):
+    """Generate a hash based on content and attachments."""
+    hasher = hashlib.sha256()
+    hasher.update(message.content.encode('utf-8'))
+    for att in message.attachments:
+        hasher.update(att.url.encode('utf-8'))
+    return hasher.hexdigest()
 
 
 def source(url):
@@ -151,6 +163,8 @@ class AutoMod(commands.Cog):
         self.mod_call = []
         self.timeout = datetime.timedelta(minutes=1)
         self.edited_with_mentions = set()
+        self.user_messages = defaultdict(list)
+        self.duplicate_window = 30
 
     async def discord_resp(self, addr: str, channel: discord.TextChannel):
         """|coro|
@@ -221,7 +235,8 @@ class AutoMod(commands.Cog):
         if not addr:
             return
 
-        embed, view, network = await self.discord_resp(addr, message.channel)
+        with contextlib.suppress(discord.Forbidden):
+            embed, view, network = await self.discord_resp(addr, message.channel)
 
         if (
                 message.channel.name.startswith("report-")
@@ -426,6 +441,44 @@ class AutoMod(commands.Cog):
 
         with contextlib.suppress(discord.Forbidden):
             await before.author.timeout(now + datetime.timedelta(minutes=1), reason="Ghost pinging (edit)")
+
+    # TODO: Include attachments
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        """
+        Some shitty attempt to detect the image.png/1.png scams
+        """
+        if message.author.bot:
+            return
+
+        content_hash = hash_message(message)
+        now = time.time()
+
+        channels_sent = {
+            channel_id
+            for old_hash, timestamp, channel_id in self.user_messages[message.author.id]
+            if old_hash == content_hash and now - timestamp <= 20
+        }
+        channels_sent.add(message.channel.id)
+
+        if len(channels_sent) >= 4:
+            if not hasattr(self, "alerted_hashes"):
+                self.alerted_hashes = defaultdict(set)
+
+            if content_hash not in self.alerted_hashes[message.author.id]:
+                self.alerted_hashes[message.author.id].add(content_hash)
+                channel = self.bot.get_channel(Channels.GENERAL)
+                await channel.send(
+                    f"⚠️ User {message.author.mention} sent a duplicate message:\n"
+                    f"**Message:** {message.jump_url}"
+                )
+
+        self.user_messages[message.author.id].append((content_hash, now, message.channel.id))
+        self.user_messages[message.author.id] = [
+            (h, t, c)
+            for h, t, c in self.user_messages[message.author.id]
+            if now - t <= 20
+        ]
 
 
 # TODO: Add changelogs for every command.

@@ -35,15 +35,13 @@ class PlayerfinderManager:
 
     async def load_players(self):
         query = """
-        SELECT 
-            name,
-            expiry_date, 
-            added_by, 
-            reason,
-            link
-        FROM 
-            discordbot_playerfinder
-        """
+                SELECT name,
+                       expiry_date,
+                       added_by,
+                       reason,
+                       link
+                FROM discordbot_playerfinder \
+                """
         rows = await self.bot.fetch(query, fetchall=True)
 
         for row in rows:
@@ -55,22 +53,17 @@ class PlayerfinderManager:
 
     async def add(self, player: Player):
         query = """
-        INSERT INTO 
-            discordbot_playerfinder (
-                name,
-                expiry_date, 
-                added_by, 
-                reason,
-                link
-            )
-        VALUES 
-            (%s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            expiry_date = VALUES(expiry_date),
-            added_by = VALUES(added_by),
-            reason = VALUES(reason),
-            link = VALUES(link)
-        """
+                INSERT INTO discordbot_playerfinder (name,
+                                                     expiry_date,
+                                                     added_by,
+                                                     reason,
+                                                     link)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE expiry_date = VALUES(expiry_date),
+                                        added_by    = VALUES(added_by),
+                                        reason      = VALUES(reason),
+                                        link        = VALUES(link) \
+                """
 
         await self.bot.upsert(
             query, player.name, player.expiry_date, str(player.added_by), player.reason, player.ban_link
@@ -79,14 +72,13 @@ class PlayerfinderManager:
 
     async def delete(self, player: Player):
         query = """
-        DELETE FROM 
-            discordbot_playerfinder
-        WHERE 
-            name = %s
-        """
+                DELETE
+                FROM discordbot_playerfinder
+                WHERE name = %s \
+                """
         await self.bot.upsert(query, player.name)
         self.players.remove(player)
-    
+
     async def update(self, player: Player):
         # Update the player in the database
         query = """
@@ -128,9 +120,11 @@ class PlayerfinderManager:
 
     async def del_player(self, player: Player | str):
         if isinstance(player, str):
-            player = self.find_player(player)
-            if not player:
-                raise ValueError(f"No player found with name '{player}'")
+            original_name = player
+            if found_player := self.find_player(player):
+                player = found_player
+            else:
+                raise ValueError(f"No player found with name '{original_name}'")
         await self.delete(player)
 
     def find_player(self, name) -> Player:

@@ -640,6 +640,7 @@ class MapTesting(commands.Cog):
         else:
             return
 
+        # TODO: use payload.member instead
         user = channel.guild.get_member(payload.user_id)
         if not is_testing_staff(user):
             return
@@ -654,7 +655,7 @@ class MapTesting(commands.Cog):
             if message.id in self._active_submissions:
                 return
 
-            isubm = InitialSubmission(self.bot, message)
+            isubm = InitialSubmission(self.bot, message, member=payload.member)
             try:
                 isubm.validate()
             except ValueError:

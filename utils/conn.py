@@ -36,7 +36,7 @@ async def ddnet_upload(session, asset_type: str, buf: BytesIO, filename: str):
         raise ValueError("Invalid asset type")
 
     data = {"asset_type": asset_type, "file": buf, name: filename}
-
+    log.info(data)
     async with session.post(url, data=data, headers=headers) as resp:
         if resp.status != 200:
             fmt = "Failed uploading %s %r to ddnet.org: %s (status code: %d %s)"

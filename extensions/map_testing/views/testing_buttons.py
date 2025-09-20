@@ -7,7 +7,6 @@ import discord
 from discord.ui import Button
 from discord.ext import commands
 
-# from extensions.map_testing.log import TestLog
 from extensions.map_testing.embeds import MapReleased
 from extensions.map_testing.map_states import MapState
 from extensions.map_testing.cooldown import global_cooldown, cooldown_response
@@ -30,6 +29,7 @@ class ButtonOnCooldown(commands.CommandError):
     Args:
         retry_after (float): The time in seconds until the button can be pressed again.
     """
+
     def __init__(self, retry_after: float):
         self.retry_after = retry_after
 
@@ -48,7 +48,7 @@ class TestingMenu(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(1.0, 3.0, lambda i: i.user.id)
-        self.map_testing = self.bot.get_cog("SubmissionHandler")
+        self.map_testing = self.bot.get_cog("MapTesting")
 
     async def interaction_check(self, interaction: discord.Interaction):
         """|coro|
@@ -202,7 +202,7 @@ class TestingMenu(discord.ui.View):
 
         await map_channel.set_state(state=MapState.RELEASED)
         global_cooldown.update_cooldown(interaction.channel.parent.id)
-        
+
         await map_channel.changelog_paginator.add_changelog(
             map_channel,
             interaction.user,
@@ -213,7 +213,7 @@ class TestingMenu(discord.ui.View):
 
         message = await map_channel.send(
             embed=MapReleased(
-                map_channel, 
+                map_channel,
                 to_discord_timestamp(discord.utils.utcnow() + timedelta(weeks=2), style="F")
             )
         )
@@ -260,7 +260,8 @@ class TestingMenu(discord.ui.View):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
         map_channel = self.bot.map_channels.get(interaction.channel.parent.id)  # noqa
 
-        tlog = ... # await TestLog.from_map_channel(map_channel)
+        from extensions.map_testing.log import TestLog
+        tlog = await TestLog.from_map_channel(map_channel)
         await interaction.edit_original_response(content="Archiving...")
         arch = await self.map_testing.archive_testlog(tlog)
         if arch:

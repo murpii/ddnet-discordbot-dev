@@ -72,14 +72,12 @@ class PlayerFinder(commands.Cog):
 
     @commands.Cog.listener('on_message')
     async def bans_listener(self, message: discord.Message) -> None:
-        if message.author == self.bot.user:
-            return
-
         if message.channel.id != Channels.BANS:
             return
 
         if regex := re.match(BAN_RE, message.content):
             author = message.guild.get_member_named(regex['author'])
+
             await self.manager.add_player(
                 name=regex["banned_user"],
                 expiry_date=datetime.strptime(regex["timestamp"], "%Y-%m-%d %H:%M:%S"),
@@ -284,7 +282,7 @@ class PlayerFinder(commands.Cog):
                                 } | {
                                     f"({i})brainless tee" for i in range(1, 30)
                                 }
-        
+
         if len(player_name) < 4 or player_name in excl_common_names_set:
             return
 
@@ -300,10 +298,12 @@ class PlayerFinder(commands.Cog):
             message = await channel.send(embed=embed)
             self.embed_messages[player_name] = message.id
 
-
     def embed_struct(self, player: Player, servers) -> discord.Embed:
         guild = self.bot.get_guild(Guilds.DDNET)
-        member = guild.get_member_named(player.added_by)
+        if isinstance(player.added_by, discord.Member):
+            member = player.added_by
+        else:
+            member = guild.get_member_named(str(player.added_by))
         author = member.mention if member else player.added_by
         embed = discord.Embed(colour=discord.Colour.blurple())
         embed.title = f"Player: {player.name}"

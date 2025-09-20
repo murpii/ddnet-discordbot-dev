@@ -55,18 +55,24 @@ class Profile(commands.Cog):
             return None
 
     async def map_autocomplete(
-        self, _: discord.Interaction, name: str
+            self, _: discord.Interaction, name: str
     ) -> list[app_commands.Choice[str]]:
-        query = """SELECT map FROM record_maps WHERE map LIKE %s LIMIT 12;"""
+        query = """SELECT map
+                   FROM record_maps
+                   WHERE map LIKE %s
+                   LIMIT 12;"""
         w = f"%{name}%"
         results: list[str] = await self.bot.fetch(query, w, fetchall=True)
         return [app_commands.Choice(name=a, value=a) for a, in results]
 
     # Unsure if this is a good idea to use autocomplete for profiles
     async def profile_autocomplete(
-        self, _: discord.Interaction, name: str
+            self, _: discord.Interaction, name: str
     ) -> list[app_commands.Choice[str]]:
-        query = """SELECT DISTINCT name FROM record_race WHERE name LIKE %s LIMIT 12;"""
+        query = """SELECT DISTINCT name
+                   FROM record_race
+                   WHERE name LIKE %s
+                   LIMIT 12;"""
         w = f"%{name}%"
         results: list[str] = await self.bot.fetch(query, w, fetchall=True)
         return [app_commands.Choice(name=a, value=a) for a, in results]
@@ -82,7 +88,7 @@ class Profile(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
         player = player or interaction.user.display_name
-        json_data = self.source(f"https://ddnet.org/players/?json2={player}", 10)
+        json_data = self.source(f"https://ddnet.org/players/?json2={player}", 30)
 
         if not json_data:
             await interaction.followup.send(content=f"`{player}` does not exist.")
@@ -106,7 +112,7 @@ class Profile(commands.Cog):
             ).month,
         }
 
-        buf = await generate_profile_image(profile)
+        buf = await generate_profile_image(profile)  # noqa
         file = discord.File(buf, filename=f"profile_{player}.png")
         await interaction.followup.send(file=file)
 
@@ -152,18 +158,18 @@ class Profile(commands.Cog):
 
             if json_data is None:  # queries all the relevant data from our mariadb as fallback
                 query = """
-                    SELECT rr.Name, rr.Timestamp, rm.Points
-                    FROM record_race rr
-                    JOIN record_maps rm ON rr.Map = rm.Map
-                    WHERE rr.Name = %s
-                    AND (rr.Map, rr.Timestamp) IN
-                    (SELECT rr.Map, MIN(rr.Timestamp)
-                    FROM record_race rr
-                    WHERE rr.Name = %s
-                    GROUP BY rr.Map)
-                    AND rm.Points > 0
-                    ORDER BY rr.Timestamp;
-                    """
+                        SELECT rr.Name, rr.Timestamp, rm.Points
+                        FROM record_race rr
+                                 JOIN record_maps rm ON rr.Map = rm.Map
+                        WHERE rr.Name = %s
+                          AND (rr.Map, rr.Timestamp) IN
+                              (SELECT rr.Map, MIN(rr.Timestamp)
+                               FROM record_race rr
+                               WHERE rr.Name = %s
+                               GROUP BY rr.Map)
+                          AND rm.Points > 0
+                        ORDER BY rr.Timestamp; \
+                        """
 
                 records = await fetch_db(self.bot.pool, query, player, player)
 
@@ -206,7 +212,7 @@ class Profile(commands.Cog):
     async def map(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
-        json_data = self.source(f"https://ddnet.org/maps/?json={name}", 60)
+        json_data = self.source(f"https://ddnet.org/maps/?json={name}")
         result = {}
 
         if json_data:
@@ -236,35 +242,33 @@ class Profile(commands.Cog):
             ]
 
         if (
-            json_data is None
+                json_data is None
         ):  # queries all the relevant data from our mariadb as fallback
             map_info = """
-            SELECT rm.*, rmi.*, finishers
-            FROM record_maps rm
-            JOIN record_mapinfo rmi ON rm.Map = rmi.Map
-            JOIN (
-                SELECT COUNT(DISTINCT Name) AS finishers
-                FROM record_race
-                WHERE Map = %s
-            ) AS race_stats
-            WHERE rm.Map = %s;
-            """
+                       SELECT rm.*, rmi.*, finishers
+                       FROM record_maps rm
+                                JOIN record_mapinfo rmi ON rm.Map = rmi.Map
+                                JOIN (SELECT COUNT(DISTINCT Name) AS finishers
+                                      FROM record_race
+                                      WHERE Map = %s) AS race_stats
+                       WHERE rm.Map = %s; \
+                       """
 
             record_race = """
-            SELECT l.Name, mintime
-            FROM(
-                SELECT * FROM record_race WHERE Map = %s
-            ) AS l
-            JOIN(
-                SELECT Name, MIN(Time) AS mintime
-                FROM record_race WHERE Map = %s
-                GROUP BY Name
-                ORDER BY mintime ASC LIMIT 10
-            ) AS r
-            ON l.Time = r.mintime AND l.Name = r.Name
-            GROUP BY Name
-            ORDER BY mintime, l.Name;
-            """
+                          SELECT l.Name, mintime
+                          FROM (SELECT *
+                                FROM record_race
+                                WHERE Map = %s) AS l
+                                   JOIN(SELECT Name, MIN(Time) AS mintime
+                                        FROM record_race
+                                        WHERE Map = %s
+                                        GROUP BY Name
+                                        ORDER BY mintime ASC
+                                        LIMIT 10) AS r
+                                       ON l.Time = r.mintime AND l.Name = r.Name
+                          GROUP BY Name
+                          ORDER BY mintime, l.Name; \
+                          """
 
             map_info = await fetch_db(self.bot.pool, map_info, name, name)
 
@@ -328,11 +332,11 @@ class Profile(commands.Cog):
         )
 
         query = """
-        SELECT name, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(*) AS finishes
-        FROM record_race
-        WHERE Name = %s
-        GROUP BY name, hour;
-        """
+                SELECT name, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(*) AS finishes
+                FROM record_race
+                WHERE Name = %s
+                GROUP BY name, hour; \
+                """
 
         data = {}
         not_found = []
@@ -373,23 +377,25 @@ class Profile(commands.Cog):
         description="Display the total time of all finishes by a player")
     @app_commands.describe(
         player="Enter the player name for which you'd like to view the total time.")
-    @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
+    # @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
     @app_commands.autocomplete(player=profile_autocomplete)
     async def total_time(self, interaction: discord.Interaction, player: str = None):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
+        await interaction.response.defer(ephemeral=True, thinking=True)
         player = player or interaction.user.display_name
-
         query = "SELECT SUM(time) AS Time FROM record_race WHERE Name = %s;"
         time = await fetch_db(self.bot.pool, query, player)
 
         if time[0]['Time'] is None:
-            await interaction.followup.send("Could not find that player.")
+            await interaction.followup.send(
+                "Could not find that player.",
+                ephemeral=True
+            )
             return
 
         time = human_timedelta(time[0]["Time"])
         await interaction.followup.send(
-            f"Total time (The sum of all finishes combined) for ``{escape_backticks(player)}``: **{time}**"
+            f"Total time (The sum of all finishes combined) for ``{escape_backticks(player)}``: **{time}**",
+            ephemeral=True
         )
 
 

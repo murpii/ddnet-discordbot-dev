@@ -50,6 +50,7 @@ class ChangelogPaginator(discord.ui.View):
 
     async def assign_changelog_message(
             self,
+            *,
             thread: discord.Thread = None,
             message: discord.Message = None
     ) -> discord.Message:
@@ -109,7 +110,8 @@ class ChangelogPaginator(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return True
 
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="Paginator:testing:prev", disabled=True)
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="Paginator:testing:prev",
+                       disabled=True)
     async def previous_page(self, interaction: discord.Interaction, _: discord.ui.Button):
         if self.page > 0:
             self.page -= 1
@@ -176,11 +178,9 @@ class ChangelogPaginator(discord.ui.View):
             user = user.user  # Get the user from the interaction
 
         query = """
-            INSERT INTO 
-                discordbot_testing_channel_history (channel_name, channel_id, invoked_by, type, action)
-            VALUES 
-                (%s, %s, %s, %s, %s)
-        """
+                INSERT INTO discordbot_testing_channel_history (channel_name, channel_id, invoked_by, type, action)
+                VALUES (%s, %s, %s, %s, %s) \
+                """
 
         await self.bot.upsert(
             query,
