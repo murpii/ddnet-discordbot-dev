@@ -22,6 +22,7 @@ from .checks import (
 
 from constants import Guilds, Channels, Roles, Emojis
 from utils.image import skin_renderer
+from utils.checks import is_staff
 
 log = logging.getLogger("skin_submits")
 
@@ -89,13 +90,6 @@ async def send_to_renderer(message):
     final_image.save(buf, "PNG")
     buf.seek(0)
     return discord.File(buf, filename="final_image.png")
-
-
-def is_staff(member: discord.Member) -> bool:
-    return any(
-        r.id in (Roles.DISCORD_MODERATOR, Roles.SKIN_DB_CREW)
-        for r in member.roles
-    )
 
 
 class SkinDB(commands.Cog):
@@ -193,7 +187,7 @@ class SkinDB(commands.Cog):
         if (
                 message.channel.id != Channels.SKIN_SUBMIT
                 or message.author.bot
-                or is_staff(message.author)
+                or is_staff(message.author, roles=[Roles.DISCORD_MODERATOR, Roles.SKIN_DB_CREW])
         ):
             return
 
@@ -233,12 +227,14 @@ class SkinDB(commands.Cog):
 
         if (
                 payload.message.author.bot
-                or is_staff(payload.message.author)
                 or (datetime.now(timezone.utc) - payload.message.created_at) > timedelta(weeks=1)
         ):
-            # the date check is currently a workaround to the weird discord ratelimit behavior...
+            # The date check is currently a workaround to the weird discord ratelimit behavior...
             # The symptom: The bot is somehow receiving message_edit events for hundreds of messages
             # that are more than a year old in a short timeframe causing Rate limits. Discord could not explain why.
+            return
+
+        if is_staff(payload.message.author, roles=[Roles.DISCORD_MODERATOR, Roles.SKIN_DB_CREW]):
             return
 
         if not await self.checks(payload.message):

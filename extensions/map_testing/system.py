@@ -497,25 +497,26 @@ class MapTesting(commands.Cog):
 
     @commands.Cog.listener("on_raw_message_edit")
     async def handle_submission_edit(self, payload: discord.RawMessageUpdateEvent):
-        # have to work with the raw data here to avoid unnecessary api calls
-        data = payload.data
-        if "author" in data and int(data["author"]["id"]) == self.bot.user.id:
+        if payload.message.author.bot:
             return
 
         if payload.channel_id != Channels.TESTING_SUBMIT:
             return
 
-        if not (
-                "attachments" in data
-                and data["attachments"]
-                and data["attachments"][0]["filename"].endswith(".map")
+        data = payload.data
+        if (
+                "attachments" not in data
+                or not data["attachments"]
+                or not data["attachments"][0]["filename"].endswith(".map")
+                or (datetime.now(timezone.utc) - payload.message.created_at) > timedelta(weeks=2)
+                # The date check is currently a workaround to the weird discord ratelimit behavior...
+                # The symptom: The bot is somehow receiving message_edit events for hundreds of messages
+                # that are more than a year old in a short timeframe causing Rate limits. Discord could not explain why.
         ):
             return
 
         channel = self.bot.get_channel(payload.channel_id)
-        message = self.bot.get_message(
-            payload.message_id
-        ) or await channel.fetch_message(payload.message_id)
+        message = self.bot.get_message(payload.message_id) or await channel.fetch_message(payload.message_id)
 
         if any(
                 str(SubmissionState.PROCESSED) == reaction.emoji
@@ -640,14 +641,10 @@ class MapTesting(commands.Cog):
         else:
             return
 
-        # TODO: use payload.member instead
-        user = channel.guild.get_member(payload.user_id)
-        if not is_testing_staff(user):
+        if not is_testing_staff(payload.member):
             return
 
-        message = self.bot.get_message(
-            payload.message_id
-        ) or await channel.fetch_message(payload.message_id)
+        message = self.bot.get_message(payload.message_id) or await channel.fetch_message(payload.message_id)
         if not has_map(message):
             return
 
@@ -674,5 +671,5 @@ class MapTesting(commands.Cog):
 
         await upload_submission(self.session, subm)
         log.info(
-            "%s approved submission %r in channel #%s", user, subm.filename, channel
+            "%s approved submission %r in channel #%s", payload.member, subm.filename, channel
         )

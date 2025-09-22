@@ -33,10 +33,11 @@ def measure(func):
         duration = end_time - start_time
         logging.info(f"{func.__name__} finished in {duration:.2f} seconds")
         return result
+
     return wrapper
 
 
-def is_staff(member: discord.Member, roles: Iterable[int] = None) -> bool:
+def is_staff(member: discord.abc.User, *, roles: Iterable[int] = None) -> bool:
     """Check if a member has staff roles.
 
     Args:
@@ -54,8 +55,13 @@ def is_staff(member: discord.Member, roles: Iterable[int] = None) -> bool:
         Roles.MODERATOR, Roles.DISCORD_MODERATOR
     ]
 
+    # Users don’t have roles, so immediately return False
+    if not isinstance(member, discord.Member):
+        return False
+
     if roles is None:
         roles = staff
+
     return any(r.id in roles for r in member.roles)
 
 
@@ -85,8 +91,8 @@ def check_public_ip(ip: str) -> (bool, str | None):
         return True, None
     except ValueError:
         return False, "Invalid IP address format."
-    
-    
+
+
 async def check_ip(ip_address, session: aiohttp.ClientSession, api_key: str) -> tuple[str, bool]:
     """|coro|
     Checks if the provided IP address is associated with a Tor network, VPN, or data center.
@@ -105,7 +111,7 @@ async def check_ip(ip_address, session: aiohttp.ClientSession, api_key: str) -> 
     url = f'https://api.ipapi.is/?q={ip_address}&key={api_key}'
     resp = await session.get(url)
     js = await resp.json()
-    
+
     if resp.status == 200:
         if js.get('is_tor') or js.get('is_vpn') or js.get('is_datacenter'):
             datacenter_info = js.get('datacenter')
