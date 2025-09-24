@@ -1,9 +1,10 @@
+import asyncio
 import contextlib
 import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ui import Button
-import asyncio
+from datetime import timedelta
 
 from bot import DDNet, extensions
 from constants import Guilds
@@ -70,38 +71,31 @@ class Admin(commands.Cog):
 
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    @app_commands.command(name="purge", description="Deletes messages up to a specified message ID.")
-    @app_commands.describe(message_id="The ID of the message to delete up to (not included).")
+    @app_commands.command(name="purge", description="Deletes messages after a specified message ID.")
+    @app_commands.describe(message_id="The ID of the message to delete after (not included).")
     async def purge(self, interaction: discord.Interaction, message_id: str):
-        """|coro|
-        Deletes all messages in the current channel up to a given message ID (not included).
-
-        Args:
-            interaction (discord.Interaction): The interaction object.
-            message_id (str): The target message ID to purge up to.
-        """
         await interaction.response.defer(ephemeral=True, thinking=True)
+
         try:
-            target_id = int(message_id)
-        except ValueError:
-            await interaction.followup.send("Invalid message ID provided.", ephemeral=True)
+            target = await interaction.channel.fetch_message(int(message_id))
+        except discord.NotFound:
+            await interaction.followup.send("No message found with that ID.", ephemeral=True)
             return
 
         messages_to_delete = []
-        async for msg in interaction.channel.history(limit=1000, oldest_first=False):
-            if msg.id == target_id:
-                break
+        async for msg in interaction.channel.history(limit=None, after=target, oldest_first=True):
+            if msg.created_at <= target.created_at:
+                continue
             messages_to_delete.append(msg)
 
         if not messages_to_delete:
-            await interaction.followup.send("No messages found before that ID.", ephemeral=True)
+            await interaction.followup.send("No messages found after that ID.", ephemeral=True)
             return
 
         view = ChoiceView(self.bot, len(messages_to_delete))
-
-        msg = await interaction.followup.send(
-            content=f"Are you sure you want to delete {len(messages_to_delete)} "
-                    f"messages before [this message]({discord.Message.jump_url.fget(msg)})?",  # noqa
+        await interaction.followup.send(
+            content=f"Are you sure you want to delete {len(messages_to_delete)} messages "
+                    f"up until [this message]({target.jump_url})?",
             ephemeral=True,
             view=view
         )
@@ -109,25 +103,10 @@ class Admin(commands.Cog):
         await view.wait()
         await interaction.delete_original_response()
 
-        now = discord.utils.utcnow()
-        bulk_deletable = [m for m in messages_to_delete if (now - m.created_at).days < 14]
-        individual_delete = [m for m in messages_to_delete if m not in bulk_deletable]
-
-        with contextlib.suppress(discord.HTTPException):
-            # Bulk delete in chunks of 100
-            for i in range(0, len(bulk_deletable), 100):
-                chunk = bulk_deletable[i:i + 100]
-                await interaction.channel.delete_messages(chunk)
-
-            for msg in individual_delete:
-                await msg.delete()
-                await asyncio.sleep(1)
-
-        await interaction.original_response.edit(content="Done!",ephemeral=True)
 
 class ChoiceView(discord.ui.View):
     def __init__(self, bot, count):
-        super().__init__(timeout=30)
+        super().__init__(timeout=None)
         self.bot = bot
         self.count = count
 
@@ -139,13 +118,14 @@ class ChoiceView(discord.ui.View):
             await interaction.followup.send(
                 "Purging... This might take awhile.",
             )
-            await interaction.channel.purge(limit=self.count)
-            await interaction.edit_original_response(content="Done")
+            await interaction.channel.purge(limit=self.count, reason="Purge")
         except discord.Forbidden:
             await interaction.followup.send(
                 "I don't have the necessary permissions to purge messages."
             )
             return
+
+        await interaction.edit_original_response(content=f"Deleted {self.count} messages.")
 
     @discord.ui.button(label="Abort", style=discord.ButtonStyle.red, custom_id="Abort:purge")
     async def cancel(self, _: discord.Interaction):

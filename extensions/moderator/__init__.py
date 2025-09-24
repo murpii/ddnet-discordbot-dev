@@ -164,7 +164,7 @@ class AutoMod(commands.Cog):
         self.timeout = datetime.timedelta(minutes=1)
         self.edited_with_mentions = set()
         self.user_messages = defaultdict(list)
-        self.duplicate_window = 30
+        self.alerted = defaultdict(set)
 
     async def discord_resp(self, addr: str, channel: discord.TextChannel):
         """|coro|
@@ -442,43 +442,47 @@ class AutoMod(commands.Cog):
         with contextlib.suppress(discord.Forbidden):
             await before.author.timeout(now + datetime.timedelta(minutes=1), reason="Ghost pinging (edit)")
 
-    # TODO: Include attachments
+    # TODO: Include UPLOADED attachments
     @commands.Cog.listener()
-    async def on_message(self, message):
-        """
-        Some shitty attempt to detect the image.png/1.png scams
-        """
+    async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
 
-        content_hash = hash_message(message)
         now = time.time()
+        signature = (message.content,)
 
-        channels_sent = {
-            channel_id
-            for old_hash, timestamp, channel_id in self.user_messages[message.author.id]
-            if old_hash == content_hash and now - timestamp <= 20
-        }
-        channels_sent.add(message.channel.id)
-
-        if len(channels_sent) >= 4:
-            if not hasattr(self, "alerted_hashes"):
-                self.alerted_hashes = defaultdict(set)
-
-            if content_hash not in self.alerted_hashes[message.author.id]:
-                self.alerted_hashes[message.author.id].add(content_hash)
-                channel = self.bot.get_channel(Channels.GENERAL)
-                await channel.send(
-                    f"⚠️ User {message.author.mention} sent a duplicate message:\n"
-                    f"**Message:** {message.jump_url}"
-                )
-
-        self.user_messages[message.author.id].append((content_hash, now, message.channel.id))
         self.user_messages[message.author.id] = [
-            (h, t, c)
-            for h, t, c in self.user_messages[message.author.id]
+            (sig, msg, t) for (sig, msg, t) in self.user_messages.get(message.author.id, [])
             if now - t <= 20
         ]
+        self.user_messages[message.author.id].append((signature, message, now))
+
+        channels = {msg.channel.id for (sig, msg, t) in self.user_messages[message.author.id] if sig == signature}
+
+        if len(channels) >= 4 and signature not in self.alerted[message.author.id]:
+            # try:
+            #     until = datetime.timedelta(hours=1)
+            #     await message.author.timeout(
+            #         until, reason="Spamming identical messages in multiple channels"
+            #     )
+            action = "User has been timed out for 1 hour."
+            # except Exception as e:
+            #     action = f"Failed to timeout user: {e}"
+
+            for sig, msg, t in self.user_messages[message.author.id]:
+                if sig == signature:
+                    try:
+                        await msg.delete()
+                    except Exception as e:
+                        print(f"Failed to delete message {msg.id}: {e}")
+
+            self.alerted[message.author.id].add(signature)
+            mod_channel = self.bot.get_channel(Channels.MODERATOR)
+            await mod_channel.send(
+                f"⚠️ <@&{Roles.DISCORD_MODERATOR}> User {message.author.mention} sent the same message "
+                f"in {len(channels)} channels:\n"
+                f"{action}"
+            )
 
 
 # TODO: Add changelogs for every command.

@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import logging
 import os
@@ -179,6 +180,7 @@ class GuildLog(commands.Cog):
         messages.sort(key=lambda m: m.created_at)
         for message in messages:
             await self.log_message(message)
+            await asyncio.sleep(1)
 
     @staticmethod
     def format_content_diff(before: str, after: str) -> Tuple[str, str]:
