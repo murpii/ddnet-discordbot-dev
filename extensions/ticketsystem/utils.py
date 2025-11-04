@@ -1,45 +1,34 @@
 import aiohttp
+import logging
 import discord
 import re
 
-from constants import Channels
-from extensions.ticketsystem.manager import Ticket
 from utils.misc import get_filename_from_header
 
+log = logging.getLogger(__name__)
 
-async def create_ticket_channel(interaction: discord.Interaction, ticket: Ticket, ticket_manager):
-    default_category = interaction.guild.get_channel(Channels.CAT_TICKETS)
-    ticket_name = f"{ticket.category.value}-{await ticket_manager.ticket_num(category=ticket.category.value)}"
+
+async def find_or_create_category(
+        guild: discord.Guild,
+        category: discord.CategoryChannel
+) -> discord.CategoryChannel | None:
+    """
+    Finds an available category or creates a new one
+    A category is considered available if it has fewer than 50 channels
+    This function will search for categories with the same name as the base_category first
+    """
+    if len(category.channels) < 50:
+        return category
 
     try:
-        return await interaction.guild.create_text_channel(
-            name=ticket_name,
-            category=default_category,
-            overwrites=ticket.get_overwrites(interaction),
-            topic=f"Ticket author: <@{interaction.user.id}>",
-        )
-    except discord.errors.HTTPException as e:
-        if e.code == 50035:
-            ticket_category = None
-            for category in interaction.guild.categories:
-                if category.name == "Tickets" and len(category.channels) < 50:
-                    ticket_category = category
-                    break
-
-            if ticket_category is None:
-                ticket_category = await interaction.guild.create_category(
-                    name="Tickets", 
-                    position=default_category.position
-                )
-
-            return await interaction.guild.create_text_channel(
-                name=ticket_name,
-                category=ticket_category,
-                overwrites=ticket.get_overwrites(interaction),
-                topic=f"Ticket author: <@{interaction.user.id}>",
-            )
-        else:
-            return await interaction.followup.send(f"An unexpected error occurred: {e}")
+        position = category.position + 1 if category else 0
+        return await guild.create_category(name=category.name, position=position)
+    except discord.Forbidden:
+        log.error(f"Failed to create new ticket category in guild {guild.id}. Bot lacks 'Manage Channels' permission.")
+        return None
+    except discord.HTTPException as e:
+        log.error(f"An HTTP error occurred while creating a category in guild {guild.id}: {e}")
+        return None
 
 
 async def fetch_rank_from_demo(bot, message: discord.Message, session: aiohttp.ClientSession):
@@ -48,7 +37,7 @@ async def fetch_rank_from_demo(bot, message: discord.Message, session: aiohttp.C
         if attachment.filename.endswith(".demo"):
             filename = await get_filename_from_header(session, url=attachment.url)
             demo_names.append(filename)
-    
+
     ranks = []
 
     for demo in demo_names:
@@ -62,15 +51,16 @@ async def fetch_rank_from_demo(bot, message: discord.Message, session: aiohttp.C
 
         map_name = f"%{map_name}%"
         query = """
-        SELECT Timestamp FROM record_race
-        WHERE Map LIKE %s
-        AND Time LIKE %s
-        AND Name = %s
-        """
+                SELECT Timestamp
+                FROM record_race
+                WHERE Map LIKE %s
+                  AND Time LIKE %s
+                  AND Name = %s \
+                """
         result = await bot.fetch(query, map_name, time_str, player_name, fetchall=False)
 
         if result:
             timestamp = result[0]
             ranks.append((demo, timestamp))
-    
+
     return ranks

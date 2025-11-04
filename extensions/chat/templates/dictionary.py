@@ -1,6 +1,5 @@
 from constants import Channels, Roles, Emojis
 
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # HOW-TO:                                                                         #
 # 1. Edit the text that needs changing.                                           #
@@ -137,7 +136,6 @@ welcome_community_links = """
 <https://discord.gg/Uz4Th6sFW5> - DDNet Polska 🇵🇱
 """
 
-
 #################################
 #            TESTING            #
 #################################
@@ -175,12 +173,12 @@ To obtain testing powers, open the rcon console (F2), leave "enter username" bla
 
 __Useful testing rcon commands:__
 ```ansi
-[34mSuper[38m, [34mUnsuper [38m(makes you invulnerable, grants you infinite jumps)
+[32mSuper[38m, [31mUnsuper [38m(makes you invulnerable, grants you infinite jumps)
 [34mUp[38m, [34mDown[38m, [34mLeft[38m, [34mRight [38m(helps you move around the map)
 [34mWeapons[38m [38m(gives you all the weapons)
 [34mTele [38m(helps you move around the map)
-[34mDeep[38m, [34mUndeep [38m(puts you into deep/undeep freeze)
-[34mSolo[38m, [34mUnsolo [38m(puts you into solo/unsolo part)
+[32mDeep[38m, [31mUndeep [38m(puts you into deep/undeep freeze)
+[32mSolo[38m, [31mUnsolo [38m(puts you into solo/unsolo part)
 ```
 Find more at <https://ddnet.org/settingscommands/>
 If you wish to test maps locally, visit the following wiki article: <https://wiki.ddnet.org/wiki/LAN_Server>

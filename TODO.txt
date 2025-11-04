@@ -2,10 +2,16 @@
 - Wrap all on_ready calls in try-except blocks and unload the cog if an exception occurs
 - Provide setup instructions for the database, including the schema definitions for all tables
 - Turn the $help command into a app command for less spam
-- Check rating_selection.py and move embeds to embeds package
-- Debug map_channel.votes
 
+Map testing:
+- Disallow forbidden characters in map names
+- Map optimization should rename the map file if it doesn't match the channel name anymore
+- Check rating_selection.py and move embeds to embeds package
 
 Long term:
 - Implement global chat and vote mute functionality for DDNet servers
 - Extend moderation commands by adding several UI views
+
+Tickets:
+- Extend Ticket modals and add selections (if necessary)
+- Block close command calls with optional messages if the ticket author cant be DMed

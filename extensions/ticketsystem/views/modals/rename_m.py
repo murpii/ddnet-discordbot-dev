@@ -5,7 +5,6 @@ import logging
 
 from extensions.ticketsystem import embeds
 from extensions.ticketsystem.queries import check_common_teamranks
-from extensions.ticketsystem.utils import create_ticket_channel
 from extensions.ticketsystem.manager import Ticket, TicketCategory
 from extensions.ticketsystem.views.inner_buttons import RenameTicketButtons
 from utils.checks import check_dm_channel
@@ -102,7 +101,7 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
             rename_data=[self.profile_old, self.profile_new],
             inactivity=0
         )
-        ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
+        ticket.channel = await self.ticket_manager.create_channel(interaction, ticket)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
 
         inner_view = RenameTicketButtons(interaction.client)

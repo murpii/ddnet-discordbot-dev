@@ -445,44 +445,50 @@ class AutoMod(commands.Cog):
     # TODO: Include UPLOADED attachments
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot:
+        if message.author.bot or message.guild.id != Guilds.DDNET:
             return
 
         now = time.time()
-        signature = (message.content,)
+        content = message.content
 
-        self.user_messages[message.author.id] = [
-            (sig, msg, t) for (sig, msg, t) in self.user_messages.get(message.author.id, [])
-            if now - t <= 20
-        ]
-        self.user_messages[message.author.id].append((signature, message, now))
+        messages = self.user_messages.get(message.author.id, [])
+        messages = [(msg, t) for msg, t in messages if now - t <= 20]
+        messages.append((message, now))
+        self.user_messages[message.author.id] = messages
 
-        channels = {msg.channel.id for (sig, msg, t) in self.user_messages[message.author.id] if sig == signature}
+        channels = {msg.channel.id for msg, _ in messages if msg.content == content}
 
-        if len(channels) >= 4 and signature not in self.alerted[message.author.id]:
-            # try:
-            #     until = datetime.timedelta(hours=1)
-            #     await message.author.timeout(
-            #         until, reason="Spamming identical messages in multiple channels"
-            #     )
-            action = "User has been timed out for 1 hour."
-            # except Exception as e:
-            #     action = f"Failed to timeout user: {e}"
+        if len(channels) >= 4 and content not in self.alerted[message.author.id]:
+            try:
+                await message.author.timeout(
+                    datetime.timedelta(hours=1),
+                    reason="Spamming identical messages in multiple channels",
+                )
+                action = "User timed out successfully."
+            except Exception as e:
+                action = f"Failed to timeout user: {e}"
 
-            for sig, msg, t in self.user_messages[message.author.id]:
-                if sig == signature:
+            for msg, _ in messages:
+                if msg.content == content:
                     try:
                         await msg.delete()
                     except Exception as e:
                         print(f"Failed to delete message {msg.id}: {e}")
 
-            self.alerted[message.author.id].add(signature)
-            mod_channel = self.bot.get_channel(Channels.MODERATOR)
-            await mod_channel.send(
-                f"⚠️ <@&{Roles.DISCORD_MODERATOR}> User {message.author.mention} sent the same message "
-                f"in {len(channels)} channels:\n"
-                f"{action}"
+            self.alerted[message.author.id].add(content)
+
+            embed = discord.Embed(
+                title="Spam Alert",
+                color=discord.Color.orange(),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
             )
+            embed.add_field(name="User", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
+            embed.add_field(name="Channels", value=", ".join(f"<#{cid}>" for cid in channels), inline=False)
+            embed.add_field(name="Message Content", value=content[:1024], inline=False)
+            embed.add_field(name="Action Taken", value=action, inline=False)
+
+            log_channel = self.bot.get_channel(Channels.LOGS)
+            await log_channel.send(f"<@&{Roles.DISCORD_MODERATOR}>", embed=embed)
 
 
 # TODO: Add changelogs for every command.

@@ -4,14 +4,15 @@ import logging
 import re
 import json
 from dataclasses import dataclass, field
-from typing import Optional, Any, Coroutine
+from typing import Optional
 from enum import Enum
 import discord
 from discord import PermissionOverwrite
 
 import extensions.ticketsystem.queries as queries
-from constants import Guilds, Channels, Roles
+from constants import Guilds, Channels
 from utils.profile import PlayerProfile
+from .utils import find_or_create_category
 
 log = logging.getLogger("tickets")
 
@@ -141,8 +142,7 @@ class Ticket:
         self.state = state
         prefix = state.value
         if not self.channel.name.startswith(prefix):
-            new_name = f"{prefix}{self.channel.name}"
-            await self.channel.edit(name=new_name)
+            await self.channel.edit(name=f"{prefix}{self.channel.name}")
 
 
 class TicketManager:
@@ -166,6 +166,49 @@ class TicketManager:
         "complaint": TicketCategory.COMPLAINT,
         "admin-mail": TicketCategory.ADMIN_MAIL,
     }
+
+    async def create_channel(self, interaction: discord.Interaction, ticket: Ticket):
+        """
+        Creates a new ticket channel in an appropriate category.
+
+        This function will handle full categories by creating a new category if necessary.
+        """
+        category = interaction.guild.get_channel(Channels.CAT_TICKETS)
+        target_category = await find_or_create_category(interaction.guild, category)
+
+        if not category:
+            await interaction.followup.send(
+                "I could not create a ticket channel because all ticket categories are full "
+                "and I lack permissions to create a new one. Please contact a server administrator.",
+                ephemeral=True
+            )
+            return None
+
+        ticket_name = f"{ticket.category.value}-{await self.ticket_num(category=ticket.category.value)}"
+        channel_params = {
+            "name": ticket_name,
+            "category": target_category,
+            "overwrites": ticket.get_overwrites(interaction),
+            "topic": f"Ticket author: <@{interaction.user.id}> | Category: {ticket.category.value}"
+        }
+
+        try:
+            channel = await interaction.guild.create_text_channel(**channel_params)
+            log.info(f"Successfully created ticket channel #{channel.name} ({channel.id})")
+            return channel
+        except discord.Forbidden:
+            log.error(
+                f"Failed to create ticket channel '{ticket_name}' in guild {interaction.guild.id}. Bot lacks 'Manage Channels' permission.")
+            await interaction.followup.send(
+                "I do not have the required permissions to create a ticket channel. Please contact an administrator.",
+                ephemeral=True
+            )
+        except discord.HTTPException as e:
+            log.error(f"An unexpected HTTP error occurred while creating channel '{ticket_name}': {e}")
+            await interaction.followup.send(
+                "An unexpected error occurred while creating your ticket. Please try again later.",
+                ephemeral=True
+            )
 
     def get_category(self, channel: discord.TextChannel) -> TicketCategory:
         """

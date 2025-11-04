@@ -5,7 +5,6 @@ from typing import Optional
 from extensions.ticketsystem import embeds
 from extensions.ticketsystem.lang.ban_appeal_m import ban_appeal_m, BAN_APPEAL_CLOUDFLARE
 from extensions.ticketsystem.views.inner_buttons import BanAppealTicketButtons
-from extensions.ticketsystem.utils import create_ticket_channel
 from extensions.ticketsystem.manager import Ticket, TicketCategory, AppealData
 from utils.checks import check_dm_channel, check_public_ip, check_ip
 from utils.profile import PlayerProfile
@@ -79,7 +78,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
                 appeal_data=data,
                 inactivity=0
             )
-            ticket.channel = await create_ticket_channel(interaction, ticket, self.ticket_manager)
+            ticket.channel = await self.ticket_manager.create_channel(interaction, ticket)
 
             await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel)
 

@@ -13,6 +13,7 @@ from extensions.map_testing.cooldown import global_cooldown, cooldown_response
 from extensions.map_testing.scores import add_score
 from extensions.map_testing.views.modals.decline_m import DeclineReasonModal
 from extensions.map_testing.views.modals.change_mapper_m import CMappersModal
+from extensions.map_testing.views.modals.change_map_name_m import CMapNameModal
 from extensions.map_testing.views.modals.change_subm_owner_m import CSubmissionOwner
 from extensions.map_testing.views.modals.server_selection_m import CServerSelect
 from extensions.map_testing.views.rating_selection import RatingSelect
