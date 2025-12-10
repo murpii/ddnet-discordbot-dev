@@ -18,6 +18,7 @@ from colorama import Back, Fore, Style
 from constants import Guilds
 from extensions.ticketsystem.manager import TicketManager
 from extensions.player_finder.manager import PlayerfinderManager
+from extensions.moderator.manager import ModeratorDB
 from extensions.help import HelpCommand
 
 config = ConfigParser()
@@ -49,11 +50,11 @@ extensions = [
     ("extensions.misc.guides", True),
     ("extensions.chat.github", True),
     ("extensions.chat.forum", True),
-    ("extensions.chat.templates", True),
-    ("extensions.chat.auto_responses", True),
+    # ("extensions.chat.templates", True),
+    # ("extensions.chat.auto_responses", True),
     # ("extensions.events.map_awards", True),
     # ("extensions.events.teeguesser", False),
-    # ("extensions.events.banner", False),
+    ("extensions.events", True),
     # ("extensions.events", True),
     ("extensions.testing", True),
     ("extensions.debug", True)
@@ -90,6 +91,7 @@ class DDNet(commands.Bot):
         self.session = None
         self.ticket_manager = TicketManager(self)
         self.pfm = PlayerfinderManager(self)
+        self.moddb = ModeratorDB(self)
         self.request_cache = CachedSession(
             cache_name="data/cache", backend="sqlite", expire_after=60 * 60 * 2
         )

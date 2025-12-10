@@ -1,4 +1,3 @@
-- Change all occurrences of Union[discord.User, discord.Member] to discord.abc.User
 - Wrap all on_ready calls in try-except blocks and unload the cog if an exception occurs
 - Provide setup instructions for the database, including the schema definitions for all tables
 - Turn the $help command into a app command for less spam
@@ -10,7 +9,6 @@ Map testing:
 
 Long term:
 - Implement global chat and vote mute functionality for DDNet servers
-- Extend moderation commands by adding several UI views
 
 Tickets:
 - Extend Ticket modals and add selections (if necessary)

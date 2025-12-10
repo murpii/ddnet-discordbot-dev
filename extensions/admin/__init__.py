@@ -1,20 +1,17 @@
-import asyncio
-import contextlib
 import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ui import Button
-from datetime import timedelta
 
-from bot import DDNet, extensions
+from run import extensions
 from constants import Guilds
-from extensions.moderator import session
+from extensions.moderator.automod import session
 
 
 # noinspection PyUnresolvedReferences
 class Admin(commands.Cog):
-    def __init__(self, bot: DDNet):
-        self.bot: DDNet = bot
+    def __init__(self, bot):
+        self.bot = bot
         self.status = discord.Status.online
         self.activity = discord.Activity
 
@@ -136,8 +133,8 @@ class ChoiceView(discord.ui.View):
 @app_commands.guilds(discord.Object(Guilds.DDNET))
 @app_commands.default_permissions(administrator=True)
 class Extensions(commands.GroupCog):
-    def __init__(self, bot: DDNet):
-        self.bot: DDNet = bot
+    def __init__(self, bot):
+        self.bot = bot
 
     # Only up to 25 choices possible
     choices = [
@@ -203,6 +200,6 @@ class Extensions(commands.GroupCog):
             await interaction.followup.send(f"`{extension}` failed to load: {e}")
 
 
-async def setup(bot: DDNet):
+async def setup(bot):
     await bot.add_cog(Admin(bot))
     await bot.add_cog(Extensions(bot))

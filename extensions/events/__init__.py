@@ -1,3 +1,4 @@
+import contextlib
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -16,6 +17,14 @@ class BannerIconEvents(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @staticmethod
+    def parse_datetime_or_unix(value: str) -> int:
+        if value.isdigit():
+            with contextlib.suppress(Exception):
+                return int(value)
+
+        return datetime_to_unix(value)
+
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.default_permissions(administrator=True)
     @app_commands.command(name="contest", description="The Banner menu with buttons")
@@ -26,44 +35,101 @@ class BannerIconEvents(commands.Cog):
     ])
     @app_commands.describe(
         theme="Choose which theme the event is supposed to be.",
-        submission_end="The end date of the submission period. Expected Format: YYYY/MM/DD HH:MM || Example: 2025/04/10 15:21",
-        voting_end="The end date of the voting period. Expected Format: YYYY/MM/DD HH:MM || Example: 2025/04/10 15:21",
+        submission_end="Submission end (date/time, natural language, or unix timestamp).",
+        voting_end="Voting end (date/time, natural language, or unix timestamp).",
     )
     async def art_contest(
             self,
             interaction: discord.Interaction,
             theme: str,
             submission_end: str,
-            voting_end: str = None
+            voting_end: str
     ):
+        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This command can only be used inside a server.",
+                ephemeral=True,
+            )
+            return
+
+        theme_display_names = {
+            "christmas": "Christmas",
+            "halloween": "Halloween",
+            "easter": "Easter",
+        }
+
+        if theme not in theme_display_names:
+            await interaction.response.send_message(
+                "Unknown theme selected.",
+                ephemeral=True,
+            )
+            return
+
         try:
             if theme == "christmas":
                 embed, file = christmas.Christmas(
                     self.bot,
-                    sub_end=datetime_to_unix(submission_end),
-                    vote_end=datetime_to_unix(voting_end)
+                    sub_end=self.parse_datetime_or_unix(submission_end),
+                    vote_end=self.parse_datetime_or_unix(voting_end) if voting_end else None
                 )
 
             elif theme == "halloween":
                 embed, file = halloween.Halloween(
                     self.bot,
-                    sub_end=datetime_to_unix(submission_end),
-                    vote_end=datetime_to_unix(voting_end)
+                    sub_end=self.parse_datetime_or_unix(submission_end),
+                    vote_end=self.parse_datetime_or_unix(voting_end) if voting_end else None
                 )
 
             elif theme == "easter":
                 embed, file = easter.Easter(
                     self.bot,
-                    sub_end=datetime_to_unix(submission_end),
-                    vote_end=datetime_to_unix(voting_end)
+                    sub_end=self.parse_datetime_or_unix(submission_end),
+                    vote_end=self.parse_datetime_or_unix(voting_end) if voting_end else None
                 )
 
         except ValueError as e:
-            await interaction.response.send_message(content=e, ephemeral=True)
+            await interaction.followup.send(content=str(e), ephemeral=True)
             return
 
-        await interaction.channel.send(
-            embed=embed, file=file, view=Submit(self.bot)  # noqa
+        # Create the category: e.g. "Christmas Art Contest"
+        category_name = f"{theme_display_names[theme]} Art Contest"
+        category = await guild.create_category(
+            name=category_name,
+            reason="Art contest setup",
+        )
+
+        # Create the "info" channel inside that category
+        info_channel = await guild.create_text_channel(
+            name="info",
+            category=category,
+            reason="Art contest info channel",
+        )
+
+        # Create the "voting" channel, hidden from @everyone
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        }
+
+        voting_channel = await guild.create_text_channel(
+            name="voting",
+            category=category,
+            overwrites=overwrites,
+            reason="Art contest voting channel",
+        )
+
+        # Send the contest message into the "info" channel
+        await info_channel.send(
+            embed=embed,
+            file=file,
+            view=Submit(self.bot),  # noqa
+        )
+
+        # Acknowledge the command (ephemeral)
+        await interaction.followup.send(
+            f"Created category {category.mention} with channels {info_channel.mention} and {voting_channel.mention}.",
+            ephemeral=True,
         )
 
     @commands.Cog.listener()

@@ -9,6 +9,10 @@ import discord
 
 @dataclass(slots=True, kw_only=True)
 class Player:
+    """
+    Represents a player with ban information and metadata.
+    This class stores details about a player, including their name, ban reason, expiry date, who added them, and an optional ban link.
+    """
     name: str
     reason: str
     expiry_date: datetime

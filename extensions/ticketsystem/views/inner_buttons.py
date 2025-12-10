@@ -244,6 +244,11 @@ class ReportTicketButtons(BaseTicketButtons):
     async def t_moderator_check(self, interaction: discord.Interaction, button: Button):
         if is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]):
             ticket = await self.ticket_manager.get_ticket(interaction.channel)
+
+            if ticket.creator == interaction.user:
+                await interaction.response.send_message("You can't claim your own ticket!", ephemeral=True)
+                return
+
             if ticket.state == TicketState.CLAIMED:
                 await interaction.response.send_message("This ticket has already been claimed.", ephemeral=True)
                 return

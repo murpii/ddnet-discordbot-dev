@@ -1,11 +1,16 @@
 import time
 import discord
+from discord.ext import commands
 import logging
 import functools
 import ipaddress
 import aiohttp
 from typing import Iterable
-from constants import Roles
+from constants import Roles, Guilds
+
+
+def ddnet_only(ctx: commands.Context) -> bool:
+    return ctx.guild.id == Guilds.DDNET
 
 
 def has_map(message: discord.Message) -> bool:
@@ -112,15 +117,15 @@ async def check_ip(ip_address, session: aiohttp.ClientSession, api_key: str) -> 
     resp = await session.get(url)
     js = await resp.json()
 
-    if resp.status == 200:
-        if js.get('is_tor') or js.get('is_vpn') or js.get('is_datacenter'):
-            datacenter_info = js.get('datacenter')
-            is_cloudflare = bool(datacenter_info and 'cloudflare' in datacenter_info.get('datacenter', '').lower())
-            dnsbl = "DNSBL=black"
-            return dnsbl, is_cloudflare
-        else:
-            dnsbl = "DNSBL=white"
-            return dnsbl, False
-    else:
-        dnsbl = "DNSBL=error"
-        return dnsbl, False
+    if resp.status != 200:
+        return "DNSBL=error", False
+    if (
+            not js.get('is_tor')
+            and not js.get('is_vpn')
+            and not js.get('is_datacenter')
+    ):
+        return "DNSBL=white", False
+    datacenter_info = js.get('datacenter')
+    is_cloudflare = bool(datacenter_info and 'cloudflare' in datacenter_info.get('datacenter', '').lower())
+    dnsbl = "DNSBL=black"
+    return dnsbl, is_cloudflare

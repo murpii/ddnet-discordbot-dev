@@ -7,6 +7,16 @@ import os
 from asyncio.subprocess import PIPE
 from typing import Awaitable, Callable, Tuple, Union
 
+from constants import Emojis
+from data.countryflags import COUNTRYFLAGS
+
+
+def resolve_display_name(user: discord.abc.User) -> str:
+    """Return the best-available visible name for nickname history."""
+    if isinstance(user, discord.Member) and user.nick:
+        return user.nick
+    return user.global_name or user.name
+
 
 def parse_content_disposition(header_value: str):
     """Parses the Content-Disposition header using basic logic."""
@@ -123,6 +133,39 @@ def rating() -> list:
     ]
 
 
+def duration() -> list:
+    return [
+        discord.app_commands.Choice(name="For 30 minutes", value=0),
+        discord.app_commands.Choice(name="For 1 hour", value=1),
+        discord.app_commands.Choice(name="For 6 Hours", value=2),
+        discord.app_commands.Choice(name="For 12 Hours", value=3),
+        discord.app_commands.Choice(name="For 24 Hours", value=4),
+        discord.app_commands.Choice(name="For 3 Days", value=5),
+        discord.app_commands.Choice(name="For 7 Days", value=6),
+        discord.app_commands.Choice(name="For 14 Days", value=7),
+        discord.app_commands.Choice(name="For 30 Days", value=8)
+    ]
+
+
+def history() -> list:
+    return [
+        discord.app_commands.Choice(name="Don't Delete Any", value=0),
+        discord.app_commands.Choice(name="Previous Hour", value=1),
+        discord.app_commands.Choice(name="Previous 6 Hours", value=2),
+        discord.app_commands.Choice(name="Previous 12 Hours", value=3),
+        discord.app_commands.Choice(name="Previous 24 Hours", value=4),
+        discord.app_commands.Choice(name="Previous 3 Days", value=5),
+        discord.app_commands.Choice(name="Previous 7 Days", value=6)
+    ]
+
+
+def flag(ident) -> str:
+    return next(
+        (COUNTRYFLAGS[key] for key in COUNTRYFLAGS.keys() if key[0] == ident),
+        f"<:flag_unk:{Emojis.FLAG_UNK}>",
+    )
+
+
 def ip_matches(ip: str, target: str) -> bool:
     ip = ip.strip()
     target = target.strip()
@@ -141,3 +184,12 @@ def ip_matches(ip: str, target: str) -> bool:
             return False
 
     return False
+
+
+def name_filter(player_name: str) -> bool:
+    f = {
+        "nameless tee", "brainless tee", "nameless", "dummy",
+        *{f"({i})nameless tee" for i in range(1, 30)},
+        *{f"({i})brainless tee" for i in range(1, 30)},
+    }
+    return len(player_name) < 4 or player_name.lower() in f

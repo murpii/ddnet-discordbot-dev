@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -28,9 +28,9 @@ from extensions.map_testing.utils import (
 )
 from extensions.ticketsystem.queries import rm_mapinfo_from_db, fetch_map_from_db
 from utils.checks import has_map, is_staff
-from utils.conn import ddnet_upload, ddnet_delete, upload_submission
 from constants import Guilds, Channels, Roles, Emojis
 from utils.text import to_discord_timestamp
+from utils.conn import ddnet_upload, ddnet_delete, upload_submission
 
 log = logging.getLogger("mt")
 

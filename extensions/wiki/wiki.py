@@ -13,6 +13,7 @@ from discord.ext import commands, tasks
 
 from constants import Channels
 
+log = logging.getLogger()
 WIKI_API = "https://wiki.ddnet.org/w/api.php"
 STATE_FILE = "data/wiki/wiki_state.json"
 
@@ -172,7 +173,7 @@ class WikiChanges(commands.Cog):
         async with session.get(WIKI_API, params=params) as resp:
             return await resp.json()
 
-    async def fetch_revision_text(self, session, rev_id):
+    async def fetch_revision(self, session, rev_id):
         """Fetch the raw wikitext of a specific revision."""
         params = {
             "action": "query",
@@ -185,16 +186,16 @@ class WikiChanges(commands.Cog):
         data = await self.fetch_json(session, params)
         pages = data.get("query", {}).get("pages", {})
         for page in pages.values():
-            revisions = page.get("revisions", [])
-            if revisions:
+            if revisions := page.get("revisions", []):
                 return revisions[0].get("slots", {}).get("main", {}).get("*", "")
         return ""
 
     @tasks.loop(seconds=60)
     async def check_changes(self):
         await self.bot.wait_until_ready()
-        channel = self.bot.get_channel(Channels.WIKI)
+        channel = self.bot.get_channel(Channels.WIKI_THREAD)
         if not channel:
+            log.warning(f"No channel found for {self}")
             return
 
         async with aiohttp.ClientSession() as session:
@@ -226,8 +227,8 @@ class WikiChanges(commands.Cog):
                 added_bytes = max(new_size - old_size, 0)
                 removed_bytes = max(old_size - new_size, 0)
 
-                old_text = await self.fetch_revision_text(session, old_rev) if old_rev else ""
-                new_text = await self.fetch_revision_text(session, rev_id)
+                old_text = await self.fetch_revision(session, old_rev) if old_rev else ""
+                new_text = await self.fetch_revision(session, rev_id)
 
                 diff = list(difflib.unified_diff(
                     old_text.splitlines(),

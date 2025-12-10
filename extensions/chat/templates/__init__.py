@@ -6,9 +6,9 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+from utils.checks import ddnet_only
 from . import dictionary
 from constants import Guilds, Channels
-from extensions.moderator import ddnet_only
 
 DIR = "data/assets/graphics"
 
@@ -27,7 +27,7 @@ class Botscribe(commands.Cog):
     @app_commands.guilds(discord.Object(Guilds.DDNET))
     @app_commands.describe(
         text="The new message content",
-        highlight_mentions="Whether to highlight the roles in the text if any exists",)
+        highlight_mentions="Whether to highlight the roles in the text if any exists", )
     async def echo(self, ctx: commands.Context, highlight_mentions: Optional[bool] = False, *, text: str):
         # TODO: Add a way to echo images/attachments
         await ctx.defer(ephemeral=True)

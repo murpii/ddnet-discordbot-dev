@@ -1,10 +1,30 @@
 import discord
 from datetime import datetime, timezone
 from utils.text import to_discord_timestamp
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from extensions.moderator.manager import MemberInfo
+
+
+def full_info(info: "MemberInfo") -> list[discord.Embed]:
+    embeds = [MemberInfoEmbed(info)]
+    empty_labels = []
+    non_empty = []
+
+    for attr, label, embed in [
+        ("timeouts", "Timeouts", TimeoutsEmbed),
+        ("bans", "Bans", BansEmbed),
+        ("kicks", "Kicks", KicksEmbed),
+    ]:
+        (non_empty if getattr(info, attr) else empty_labels.append(label)) \
+            if getattr(info, attr) else None
+        if getattr(info, attr):
+            non_empty.append(embed(info))
+
+    if empty_labels:
+        embeds.append(NoEntries(empty_labels))
+    return embeds + non_empty
 
 
 class NoMemberInfoEmbed(discord.Embed):
@@ -57,6 +77,18 @@ class MemberInfoEmbed(discord.Embed):
             ),
             inline=False
         )
+
+        if member_info.nicknames:
+            lines = [
+                f"{name}: ({to_discord_timestamp(ts, style='R')})"
+                for name, ts in member_info.nicknames
+            ]
+
+            embed.add_field(
+                name="Past Names",
+                value="\n".join(lines),
+                inline=False
+            )
 
         return embed
 

@@ -20,7 +20,7 @@ class CMapNameModal(discord.ui.Modal, title="Change Map Name"):
         style=discord.TextStyle.short)  # type: ignore
 
     async def on_submit(self, interaction: discord.Interaction):
-        map_channel = self.bot.map_channels.get(interaction.channel.parent.id) # noqa
+        map_channel = self.bot.map_channels.get(interaction.channel.parent.id)  # noqa
         old_filename = map_channel.filename
         await map_channel.update(name=self.new_name.value)
         global_cooldown.update_cooldown(interaction.channel.parent.id)

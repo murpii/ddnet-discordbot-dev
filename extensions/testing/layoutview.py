@@ -57,16 +57,16 @@ class LayoutExampleView(LayoutView):
         container = discord.ui.Container(
             discord.ui.TextDisplay("This container has an accent color!"),
             discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
-                discord.MediaGalleryItem("https://i.imgur.com/LWQESh4.mp4"),
-                discord.MediaGalleryItem("https://i.imgur.com/dTXraG9.jpeg"),
-            ),
+            # discord.ui.MediaGallery(
+            #     discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
+            #     discord.MediaGalleryItem("https://i.imgur.com/LWQESh4.mp4"),
+            #     discord.MediaGalleryItem("https://i.imgur.com/dTXraG9.jpeg"),
+            # ),
             discord.ui.TextDisplay("Some text between!"),
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
-                discord.MediaGalleryItem("https://i.imgur.com/LWQESh4.mp4"),
-            ),
+            # discord.ui.MediaGallery(
+            #     discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
+            #     discord.MediaGalleryItem("https://i.imgur.com/LWQESh4.mp4"),
+            # ),
             discord.ui.ActionRow(btn1, btn2, btn3),  # <- btn3 instead of modal here
             accent_colour=discord.Colour.orange(),
         )

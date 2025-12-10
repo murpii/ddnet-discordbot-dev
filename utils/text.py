@@ -45,9 +45,7 @@ def escape_custom_emojis(text: str) -> str:
     )
 
 
-def escape(
-        text: str, markdown: bool = True, mentions: bool = True, custom_emojis: bool = True
-) -> str:
+def escape(text: str, markdown: bool = True, mentions: bool = True, custom_emojis: bool = True) -> str:
     if markdown:
         text = discord.utils.escape_markdown(text)
     if mentions:
@@ -158,7 +156,7 @@ def str_to_timedelta(expiry_date: str) -> timedelta:
         raise ValueError("Invalid expiry date format") from e
 
 
-def str_to_datetime(expiry_date: str) -> datetime:
+def str_to_datetime(expiry_date: str) -> Optional[datetime]:
     pattern = r'^(\d+)(mo|[mhdw])?$'
     match = re.match(pattern, expiry_date.lower())
     if not match:
@@ -188,7 +186,7 @@ def datetime_to_unix(datetime_str: str) -> int:
     try:
         dt = datetime.strptime(datetime_str, "%Y/%m/%d %H:%M")
         return int(dt.timestamp())
-    except ValueError:
+    except ValueError as e:
         dt = dateparser.parse(datetime_str)
         if not dt:
             now = datetime.now().strftime("%Y/%m/%d %H:%M")
@@ -197,8 +195,13 @@ def datetime_to_unix(datetime_str: str) -> int:
                 f"• `YYYY/MM/DD HH:MM` (e.g. `{now}`)\n"
                 f"• or natural language like `next week`, `tomorrow 18:00`, etc.\n\n"
                 f"Got: `{datetime_str}`"
-            )
+            ) from e
         return int(dt.timestamp())
+
+
+def unix_to_datetime_str(unix_ts: int) -> str:
+    dt = datetime.fromtimestamp(unix_ts)
+    return dt.strftime("%Y/%m/%d %H:%M")
 
 
 def to_discord_timestamp(dt: datetime, style: str = 'f') -> str:
@@ -344,3 +347,8 @@ def strip_surrounding_quotes(s):
     if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
         return s[1:-1]
     return s
+
+
+def extract_address(string: str) -> Optional[str]:
+    pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5})"
+    return match.group(1) if (match := re.search(pattern, string)) else None

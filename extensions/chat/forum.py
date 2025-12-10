@@ -6,15 +6,16 @@ from discord.ext import commands
 from typing import Sequence, Union
 
 from constants import Guilds, Forums, ForumTags, Channels
-from extensions.moderator import ddnet_only
+from utils.checks import ddnet_only
 
 
 def is_questions_thread():
     def predicate(ctx: commands.Context) -> bool:
         return (
-            isinstance(ctx.channel, discord.Thread)
-            and ctx.channel.parent_id == Forums.QUESTIONS
+                isinstance(ctx.channel, discord.Thread)
+                and ctx.channel.parent_id == Forums.QUESTIONS
         )
+
     return commands.check(predicate)
 
 
@@ -29,9 +30,9 @@ class SolvedReactionCheck:
 
     def __call__(self, reaction: discord.Reaction, member: Union[discord.Member, discord.User]) -> bool:
         return (
-            reaction.message.id == self.message_id and
-            str(reaction.emoji) == "✅" and
-            member == self.owner
+                reaction.message.id == self.message_id and
+                str(reaction.emoji) == "✅" and
+                member == self.owner
         )
 
 
@@ -39,10 +40,10 @@ class Forum(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.solved_prompts: dict[int, discord.Message] = {}
-    
+
     @staticmethod
     def owner_exempt_channel_cooldown(rate, per):
-        cooldown = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.channel) # type: ignore
+        cooldown = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.channel)  # type: ignore
 
         async def predicate(ctx):
             if not is_thread(ctx):
@@ -53,21 +54,21 @@ class Forum(commands.Cog):
             bucket = cooldown.get_bucket(ctx.message)
             retry_after = bucket.update_rate_limit()
             if retry_after:
-                raise commands.CommandOnCooldown(bucket, retry_after, commands.BucketType.channel) # type: ignore
+                raise commands.CommandOnCooldown(bucket, retry_after, commands.BucketType.channel)  # type: ignore
             return True
 
         return commands.check(predicate)
-    
+
     @commands.Cog.listener("on_thread_create")
     async def pin_initial_message(self, thread: discord.Thread) -> None:
         """Pins the first message sent in any thread."""
         if (
-            thread.guild.id != Guilds.DDNET
-            or thread.category.id in [
-                Channels.CAT_TESTING,
-                Channels.CAT_WAITING,
-                Channels.CAT_EVALUATED,
-            ]
+                thread.guild.id != Guilds.DDNET
+                or thread.category.id in [
+            Channels.CAT_TESTING,
+            Channels.CAT_WAITING,
+            Channels.CAT_EVALUATED,
+        ]
         ):
             return
 
@@ -203,6 +204,7 @@ class Forum(commands.Cog):
             await ctx.send(f'Thread "{thread_name}" created successfully.')
         except Exception as e:
             await ctx.send(f"An error occurred: {str(e)}")
+
 
 async def setup(bot: commands.bot):
     await bot.add_cog(Forum(bot))

@@ -2,13 +2,16 @@ import discord
 import logging
 from io import BytesIO
 
-from bot import config
-from extensions.map_testing.submission import Submission, SubmissionState
-
 log = logging.getLogger("mt")
 
 
-async def upload_submission(session, subm: Submission):
+def source(url, session):
+    resp = session.get(url)
+    return resp.json()
+
+
+async def upload_submission(session, subm):
+    from extensions.map_testing.submission import SubmissionState
     try:
         await ddnet_upload(session, "map", await subm.buffer(), str(subm))
     except RuntimeError:
@@ -23,6 +26,7 @@ async def upload_submission(session, subm: Submission):
 
 
 async def ddnet_upload(session, asset_type: str, buf: BytesIO, filename: str):
+    from main import config
     url = config.get("DDNET", "UPLOAD")
     headers = {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
 
@@ -54,6 +58,7 @@ async def ddnet_upload(session, asset_type: str, buf: BytesIO, filename: str):
 
 
 async def ddnet_delete(session, filename: str):
+    from main import config
     url = config.get("DDNET", "DELETE")
     headers = {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
     data = {"map_name": filename}
