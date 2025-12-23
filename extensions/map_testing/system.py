@@ -1,6 +1,7 @@
 import io
 import logging
 import re
+import shlex
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from typing import List, Optional, TYPE_CHECKING
@@ -358,9 +359,7 @@ class MapTesting(commands.Cog):
 
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.command(name="twmap-edit", description="Edits a map according to the passed arguments")
-    @app_commands.describe(
-        options="Options, separate each option with a comma. Use --help option to see all available options."
-    )
+    @app_commands.describe(options="CLI options, e.g. --scale 2 (use --help for all options)")
     async def twmap_edit(self, interaction: discord.Interaction, options: str):
         map_channel = self.get_map_channel(interaction.channel.id)  # noqa
         if not (is_staff(interaction.user) or map_channel.mapper_mentions == interaction.user.mention):
@@ -371,14 +370,19 @@ class MapTesting(commands.Cog):
             return
 
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-        options = [option.strip() for option in options.split(",")]
-        map_channel = self.get_map_channel(interaction.channel.id)  # noqa
+
+        try:
+            argv = shlex.split(options)
+        except ValueError as e:
+            await interaction.followup.send(f"Invalid options: {e}")
+            return
+
         pins = await map_channel.pins()
 
         try:
-            stdout, file = await Submission(pins[0]).edit_map(*options)
+            stdout, file = await Submission(pins[0]).edit_map(*argv)
         except RuntimeError as e:
-            await interaction.followup.send(f"{e}")
+            await interaction.followup.send(str(e))
             return
 
         if stdout:

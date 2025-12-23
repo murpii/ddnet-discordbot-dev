@@ -13,10 +13,12 @@ log = logging.getLogger("tickets")
 
 
 class BaseConfirmView(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot, closing: bool = True, message: Optional[str] = None):
         super().__init__(timeout=None)
         self.bot = bot
         self.ticket_manager = bot.ticket_manager
+        self.closing = closing
+        self.message = message
 
     async def transcript(self, interaction: discord.Interaction, ticket, message: Optional[str] = None):
         """|coro|
@@ -38,10 +40,14 @@ class BaseConfirmView(discord.ui.View):
             ticket: Ticket,
             message: Optional[str] = None
     ):
+        if message:
+            self.message = message
         async with ticket.lock:
             ticket.being_closed = True
             try:
                 await interaction.response.defer(ephemeral=True, thinking=True)
+                if self.message:
+                    await ticket.channel.send(self.message)
                 await self.transcript(interaction, ticket, message)
                 await self.ticket_manager.del_ticket(ticket=ticket)
 
@@ -59,7 +65,8 @@ class BaseConfirmView(discord.ui.View):
             except Exception as e:
                 log.exception(f"{ticket.channel.name}: Error during ticket closure: {e}")
                 if not interaction.response.is_done():
-                    await interaction.response.send_message("An error occurred while closing the ticket.", ephemeral=True)
+                    await interaction.response.send_message("An error occurred while closing the ticket.",
+                                                            ephemeral=True)
                 else:
                     await interaction.followup.send("An error occurred while closing the ticket.", ephemeral=True)
             finally:
@@ -72,11 +79,11 @@ class ConfirmView(BaseConfirmView):
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
 
         if (
-            interaction.user != ticket.creator
-            and not is_staff(
-                interaction.user,
-                roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
-            )
+                interaction.user != ticket.creator
+                and not is_staff(
+            interaction.user,
+            roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
+        )
         ):
             await interaction.response.send_message(content="This ticket does not belong to you.", ephemeral=True)
             return
@@ -88,7 +95,8 @@ class ConfirmView(BaseConfirmView):
         if ticket is None:
             return
 
-        await self.handle_ticket_closure(interaction, ticket)
+        if self.closing:
+            await self.handle_ticket_closure(interaction, ticket)
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancel:close_ticket")
     async def cancel(self, interaction: discord.Interaction, _: Button):
@@ -102,11 +110,11 @@ class ConfirmViewStaff(BaseConfirmView):
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
 
         if (
-            interaction.user != ticket.creator
-            and not is_staff(
-                interaction.user,
-                roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
-            )
+                interaction.user != ticket.creator
+                and not is_staff(
+            interaction.user,
+            roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
+        )
         ):
             await interaction.response.send_message(content="This ticket does not belong to you.", ephemeral=True)
             return
@@ -120,15 +128,16 @@ class ConfirmViewStaff(BaseConfirmView):
 
         await self.handle_ticket_closure(interaction, ticket)
 
-    @discord.ui.button(label="Confirm, due to Inactivity.", style=discord.ButtonStyle.green, custom_id="confirm:close_inactivity")
+    @discord.ui.button(label="Confirm, due to Inactivity.", style=discord.ButtonStyle.green,
+                       custom_id="confirm:close_inactivity")
     async def close_inactivity(self, interaction: discord.Interaction, _: Button):
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
         if (
-            interaction.user != ticket.creator
-            and not is_staff(
-                interaction.user,
-                roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
-            )
+                interaction.user != ticket.creator
+                and not is_staff(
+            interaction.user,
+            roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
+        )
         ):
             await interaction.response.send_message(content="This ticket does not belong to you.", ephemeral=True)
             return
@@ -143,15 +152,16 @@ class ConfirmViewStaff(BaseConfirmView):
         message = "Your ticket has been closed due to inactivity."
         await self.handle_ticket_closure(interaction, ticket, message)
 
-    @discord.ui.button(label="Confirm, due to neglect.", style=discord.ButtonStyle.green, custom_id="confirm:close_neglected")
+    @discord.ui.button(label="Confirm, due to neglect.", style=discord.ButtonStyle.green,
+                       custom_id="confirm:close_neglected")
     async def close_neglect(self, interaction: discord.Interaction, _: Button):
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
         if (
-            interaction.user != ticket.creator
-            and not is_staff(
-                interaction.user,
-                roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
-            )
+                interaction.user != ticket.creator
+                and not is_staff(
+            interaction.user,
+            roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
+        )
         ):
             await interaction.response.send_message(content="This ticket does not belong to you.", ephemeral=True)
             return

@@ -1,5 +1,6 @@
 import discord
 
+
 class ComplaintEmbed(discord.Embed):
     def __new__(cls, user):
         embed = discord.Embed(title="Complaint", colour=2210995)
@@ -20,3 +21,13 @@ class ComplaintEmbed(discord.Embed):
             inline=False,
         )
         return embed
+
+
+class ComplaintInfoEmbed(discord.Embed):
+    def __new__(cls, user):
+        return discord.Embed(
+            title="Requirements",
+            description="Upload relevant evidence or supporting information that can strengthen your complaint. "
+                        "This may include screenshots, message logs or in-game demos.",
+            colour=2210995,
+        )

@@ -9,7 +9,6 @@ from .manager import Ticket, TicketCategory
 from utils.checks import is_staff
 from constants import Channels, Roles
 
-
 log = logging.getLogger("tickets")
 MAX_ZIP_SIZE = 24 * 1024 * 1024
 
@@ -44,7 +43,6 @@ class TicketTranscript:
 
         messages = []
         attachments = []
-        channel = await self.bot.fetch_channel(self.ticket.channel.id)
 
         # Interaction update event
         await self.send_or_edit(interaction, content="Collecting messages...")
@@ -81,10 +79,9 @@ class TicketTranscript:
                     "Missing data. Ticket was most likely converted from a different category.\n"
                 )
 
-        messages_in_channel = [message async for message in channel.history(limit=None, oldest_first=True)]
-        messages_to_process = messages_in_channel[1:]
-        if messages_to_process and messages_to_process[0].author.bot:
-            messages_to_process = messages_to_process[1:]
+        messages_in_channel = [message async for message in self.ticket.channel.history(limit=None, oldest_first=True)]
+        messages_to_process = messages_in_channel[3:]  # skip first 3 messages
+
         for message in messages_to_process:
             content, attachment_data = await self.process_message(message)  # noqa
             messages.append(content)
@@ -269,7 +266,7 @@ class TicketTranscript:
         }
 
         target_channel = self.bot.get_channel(targets.get(self.ticket.category))
-        
+
         # TODO: Expand the info messages with all the attached ticket data.
         if interaction:
             msg = (
@@ -324,10 +321,9 @@ class TicketTranscript:
             await self.ticket.channel.send(content)
 
     async def notify_ticket_creator(
-        self,
-        interaction: Optional[discord.Interaction],
-        postscript: str = None,
-        inactive: bool = False,
+            self,
+            interaction: Optional[discord.Interaction],
+            postscript: str = None,
     ):
         """
         Notifies the ticket creator about the status of their ticket.
@@ -339,8 +335,6 @@ class TicketTranscript:
         """
         if interaction and is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]):
             response = f"**Your \"{self.ticket.category.value.lower()}\" ticket has been closed by staff.**"
-        elif inactive:
-            response = f"**Your \"{self.ticket.category.value.lower()}\" ticket has been closed due to inactivity.**"
         elif not self.transcript_file:
             return
         else:

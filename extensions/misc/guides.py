@@ -7,6 +7,7 @@ import numpy as np
 
 from discord.utils import utcnow
 from constants import Channels
+from extensions.misc.embeds.configdir import configdir_embed
 
 URL = "https://ddnet.org/settingscommands/"
 
@@ -100,26 +101,9 @@ class HelperCommands(commands.Cog, name="Help Commands"):
 
     @commands.command()
     async def configdir(self, ctx: commands.Context):
-        file = discord.File("data/avatar.png", filename="avatar.png")
-        url = "https://wiki.ddnet.org/wiki/FAQ#Where_is_the_DDNet_config,_config_directory_or_save_directory?"
-        embed = discord.Embed(
-            description=f"""
-                        ### [DDNet config directory:]({url})
-                        __**On Windows:**__
-                        Old: `%appdata%\\Teeworlds`
-                        New: `%appdata%\\DDNet`
-                        __**On Linux:**__
-                        Old: `~/.teeworlds`
-                        New: `~/.local/share/ddnet`
-                        __**On macOS:**__
-                        Old: `~/Library/Application Support/Teeworlds`
-                        New: `~/Library/Application Support/DDNet`
-                        """,
-            colour=discord.Colour.blurple(),
-        )
-        embed.set_thumbnail(url="attachment://avatar.png")
+        embed, file = configdir_embed()
         with contextlib.suppress(discord.Forbidden):
-            await self.bot.reply(message=ctx.message, file=file, embed=embed)
+            await self.bot.reply(message=ctx.message, embed=embed, file=file)
 
     @commands.command()
     async def deepfly(self, ctx: commands.Context):
@@ -141,7 +125,7 @@ class HelperCommands(commands.Cog, name="Help Commands"):
         )
         embed.set_thumbnail(url="attachment://avatar.png")
         with contextlib.suppress(discord.Forbidden):
-            await self.bot.reply( message=ctx.message, file=file, embed=embed)
+            await self.bot.reply(message=ctx.message, file=file, embed=embed)
             await ctx.send(file=bindconfig)
 
     @commands.command()
@@ -150,11 +134,11 @@ class HelperCommands(commands.Cog, name="Help Commands"):
         embed = discord.Embed(
             title="How can I get other players to see the skin that I created?",
             description="There are two ways to get other players to see your custom skin: \n\n"
-            "**Method 1:** \nThey need to manually add your skin to their game files by "
-            "pasting it in the skins folder in the config directory. \n\n"
-            "**Method 2:** \nYour skin gets added to the official SkinDB. \n\n"
-            "For more info on how to get your skin uploaded to the SkinDB, "
-            f"visit this channel: <#{Channels.SKIN_INFO}>",
+                        "**Method 1:** \nThey need to manually add your skin to their game files by "
+                        "pasting it in the skins folder in the config directory. \n\n"
+                        "**Method 2:** \nYour skin gets added to the official SkinDB. \n\n"
+                        "For more info on how to get your skin uploaded to the SkinDB, "
+                        f"visit this channel: <#{Channels.SKIN_INFO}>",
             colour=discord.Colour.blurple(),
         )
         embed.set_thumbnail(url="attachment://avatar.png")
@@ -170,14 +154,14 @@ class HelperCommands(commands.Cog, name="Help Commands"):
         embed.add_field(
             name="wiki.ddnet.org",
             value="Content: \nThorough explanation how binds work, Deepfly, 45° Aim bind, Rainbow Tee \n\n"
-            "**URL:** \n"
-            "[wiki.ddnet.org](https://wiki.ddnet.org/wiki/Binds)",
+                  "**URL:** \n"
+                  "[wiki.ddnet.org](https://wiki.ddnet.org/wiki/Binds)",
         )
         embed.add_field(
             name="DDNet Forums",
             value="Content: \nClient-, Chat-, Dummy-, Mouse-, Player- and RCON settings \n\n"
-            "**URL:** \n"
-            "[forum.ddnet.org](https://forum.ddnet.org/viewtopic.php?f=16&t=2537)",
+                  "**URL:** \n"
+                  "[forum.ddnet.org](https://forum.ddnet.org/viewtopic.php?f=16&t=2537)",
         )
         embed.set_thumbnail(url="attachment://avatar.png")
         with contextlib.suppress(discord.Forbidden):
@@ -189,15 +173,15 @@ class HelperCommands(commands.Cog, name="Help Commands"):
         embed = discord.Embed(
             title="Crash Logs",
             description="To help us debug the cause for your crash, "
-            "provide the following information: \n"
-            "* Operating System \n"
-            " - Windows, Linux or macOS? \n"
-            " - 32Bit or 64Bit? \n"
-            "* Client version \n"
-            "* Steam or Standalone? \n"
-            " - Steam: Stable, Nightly or releasecandidate beta? \n"
-            "* Upload the most recent crash log file from your dumps "
-            "folder in the config directory (drag and drop it here).",
+                        "provide the following information: \n"
+                        "* Operating System \n"
+                        " - Windows, Linux or macOS? \n"
+                        " - 32Bit or 64Bit? \n"
+                        "* Client version \n"
+                        "* Steam or Standalone? \n"
+                        " - Steam: Stable, Nightly or releasecandidate beta? \n"
+                        "* Upload the most recent crash log file from your dumps "
+                        "folder in the config directory (drag and drop it here).",
             colour=discord.Colour.blurple(),
         )
         embed.set_thumbnail(url="attachment://avatar.png")
@@ -210,8 +194,8 @@ class HelperCommands(commands.Cog, name="Help Commands"):
         embed = discord.Embed(
             title=f'{"KoG affiliation" if ctx.invoked_with == "kog" else "KoG Account Registration and Migration"}',
             description="First and foremost: DDNet and KoG aren't affiliated.\n\n"
-            "If you need help on a server related to KoG, "
-            "join their Discord server by clicking on the link below.",
+                        "If you need help on a server related to KoG, "
+                        "join their Discord server by clicking on the link below.",
             colour=discord.Colour.blurple(),
         )
         embed.add_field(name="URL:", value="https://discord.kog.tw/", inline=False)
@@ -244,31 +228,31 @@ class HelperCommands(commands.Cog, name="Help Commands"):
     @commands.command(aliases=["translator", "english"])
     async def deepl(self, ctx: commands.Context):
         await self.bot.reply(message=ctx.message, content=
-            "Hi! Most of us communicate in English. "
-            "If you’re having trouble with English, use <https://www.deepl.com/en/translator> to help you out."
-        )
+        "Hi! Most of us communicate in English. "
+        "If you’re having trouble with English, use <https://www.deepl.com/en/translator> to help you out."
+                             )
 
     @commands.command(aliases=["failed-inserts", "missing-rank", "missing-save"])
     async def failed_inserts(self, ctx: commands.Context):
         await self.bot.reply(message=ctx.message, content=
-            "In-game Ranks and saves may occasionally fail to be inserted in our database. "
-            "This can happen for various reasons, including poor connectivity to our "
-            "main database due to lag or hoster issues. "
-            "However, there's no need to worry! The ranks and saves are stored locally "
-            "and will be attempted to be inserted again within the next 24 hours."
-        )
+        "In-game Ranks and saves may occasionally fail to be inserted in our database. "
+        "This can happen for various reasons, including poor connectivity to our "
+        "main database due to lag or hoster issues. "
+        "However, there's no need to worry! The ranks and saves are stored locally "
+        "and will be attempted to be inserted again within the next 24 hours."
+                             )
 
     @commands.command(aliases=["gfx", "missing-text", "no-text", "missing-ui", "no-ui"])
     async def gfx_troubleshoot(self, ctx: commands.Context):
         await self.bot.reply(message=ctx.message, content=
-            "https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Some_text_is_invisible_with_the_Vulkan_backend"
-        )
+        "https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Some_text_is_invisible_with_the_Vulkan_backend"
+                             )
 
     @commands.command(aliases=["utc", "utc-time", "utc-now"])
     async def utc_now(self, ctx: commands.Context):
         await self.bot.reply(message=ctx.message, content=
-            f"Current UTC Time: `{utcnow().strftime('%YY-%mM-%dD %HH:%MM')}`"
-        )
+        f"Current UTC Time: `{utcnow().strftime('%YY-%mM-%dD %HH:%MM')}`"
+                             )
 
 
 async def setup(bot: commands.bot):

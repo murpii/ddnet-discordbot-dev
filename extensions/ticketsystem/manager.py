@@ -4,10 +4,11 @@ import logging
 import re
 import json
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple, Union
 from enum import Enum
 import discord
 from discord import PermissionOverwrite
+from discord.ext import commands
 
 import extensions.ticketsystem.queries as queries
 from constants import Guilds, Channels
@@ -23,6 +24,7 @@ class TicketCategory(Enum):
     BAN_APPEAL = "ban-appeal"
     COMPLAINT = "complaint"
     ADMIN_MAIL = "admin-mail"
+    COMMUNITY_APP = "community-app"
 
 
 class TicketState(Enum):
@@ -70,14 +72,14 @@ class RenameData:
 @dataclass(slots=True, kw_only=True)
 class Ticket:
     channel: Optional[discord.TextChannel] = None
-    creator: discord.abc.User
+    creator: Union[discord.Member, discord.User] = None
     category: TicketCategory
     state: TicketState = TicketState.UNCLAIMED
-    start_message: Optional[
-        discord.Message] = None  # Stores the initial message sent in a ticket to rebuild the view if necessary
+    start_message: Optional[discord.Message] = None  # Ticket initial message
+    info_message: Optional[discord.Message] = None  # Ticket info message
+    close_message: Optional[discord.Message] = None  # Ticket closing message
     rename_data: list[PlayerProfile] = field(default_factory=list, init=True)  # TODO use RenameData dataclass
-    appeal_data: AppealData = None
-    inactivity: int  # Set to 0 initially by the create_ticket method # TODO: Just remove this function entirely
+    appeal_data: AppealData | None = None
     being_closed: bool = False
     locked: bool = False
     lock: asyncio.Lock = field(init=False, repr=False)
@@ -92,14 +94,15 @@ class Ticket:
         return json.dumps(
             {
                 "name": str(self.channel),
-                "channel-id": str(self.channel.id) if self.channel else None,
+                "channel": self.channel or None,
                 "creator": str(self.creator),
                 "start_message": str(self.start_message),
+                "info_message": str(self.info_message),
+                "close_message": str(self.close_message),
                 "category": str(self.category),
                 "state": str(self.state),
                 "rename_data": player_repr,
                 "appeal_data": self.appeal_data,
-                "inactivity_count": self.inactivity,
                 "locked": self.locked,
                 "being_closed": self.being_closed,
             },
@@ -158,13 +161,16 @@ class TicketManager:
         self.bot = bot
         self.tickets = {}
         self.lock = asyncio.Lock()
+        self.cooldown = commands.CooldownMapping.from_cooldown(1.0, 3.0, lambda i: i.user.id)
 
+    # TODO: Remove this...
     category_mapping = {
         "report": TicketCategory.REPORT,
         "rename": TicketCategory.RENAME,
         "ban-appeal": TicketCategory.BAN_APPEAL,
         "complaint": TicketCategory.COMPLAINT,
         "admin-mail": TicketCategory.ADMIN_MAIL,
+        "community-app": TicketCategory.COMMUNITY_APP,
     }
 
     async def create_channel(self, interaction: discord.Interaction, ticket: Ticket):
@@ -284,14 +290,24 @@ class TicketManager:
 
         # Lock Status
         result = await self.bot.fetch(queries.get_ticket_status, channel.id)
-        inactivity, locked = (result or (0, False))
+        locked = (result or (0, False))
 
         # Fetch initial messages
-        messages = [m async for m in channel.history(limit=2, oldest_first=True)]
+        messages = [
+            m async for m in channel.history(limit=3, oldest_first=True)
+            if m.author and m.author.id == channel.guild.me.id
+        ]
         if not messages:
             raise ValueError(f"No messages found in ticket channel: {channel.name}")
 
         start_message = messages[0]
+        if len(messages) > 2:
+            info_message = messages[1]
+            close_message = messages[2]
+        else:
+            info_message = None
+            close_message = messages[1]
+
         profiles, appeal_data = [], None
 
         # Extract embed data for rename and ban appeal tickets
@@ -321,16 +337,17 @@ class TicketManager:
                 creator=creator,
                 category=category,
                 start_message=start_message,
+                info_message=info_message,
+                close_message=close_message,
                 state=state,
                 rename_data=profiles,
                 appeal_data=appeal_data,
-                inactivity=inactivity,
                 locked=locked,
             )
             self.add_ticket(channel=channel, ticket=ticket)
             return ticket
 
-    async def change_ticket(self, ticket: Ticket, category: str) -> None:
+    async def change_ticket(self, ticket: Ticket, category: TicketCategory) -> None:
         """|coro|
         Change the category of an existing ticket.
         The change is also reflected in the database.
@@ -341,7 +358,6 @@ class TicketManager:
         """
 
         ticket = await self.get_ticket(ticket.channel)
-        category = self.category_mapping.get(category.lower())
         ticket.category = category
         await self.bot.upsert(queries.change_category, category, ticket.channel.id, ticket.creator.id)
 
@@ -417,17 +433,37 @@ class TicketManager:
         await self.bot.upsert(query, locked, ticket.channel.id)
         ticket.locked = locked
 
-    async def lock_or_unlock_ticket(
+    async def toggle_ticket_lock(
             self,
             ticket: Ticket,
-            locked: bool,
-    ):
-        await ticket.channel.set_permissions(ticket.creator, send_messages=not locked)  # type: ignore
-        ticket.locked = locked
-        await self.set_lock(ticket, locked)
-        await ticket.channel.send(
-            content=f"The ticket has been {'locked' if locked else 'unlocked'}."
-        )
+            send_msg: bool = True,
+            force_state: Optional[bool] = None
+    ) -> Optional[discord.Message]:
+        """Toggle or force the locked state of a ticket channel and update permissions.
+
+        Args:
+            ticket (Ticket): The ticket whose lock state should be toggled or set.
+            send_msg: Whether the lock message should be sent or not.
+            force_state: If True/False, forces the ticket to that lock state. If None, toggles.
+
+        Returns:
+            Optional[discord.Message]: The message sent to the channel indicating the new lock state.
+        """
+        lock_state = force_state if force_state is not None else not ticket.locked  # toggle if force not provided
+
+        overwrite = ticket.channel.overwrites_for(ticket.creator)  # type: ignore
+        overwrite.send_messages = not lock_state
+
+        await ticket.channel.set_permissions(ticket.creator, overwrite=overwrite)  # type: ignore
+
+        ticket.locked = lock_state
+        await self.set_lock(ticket, lock_state)
+
+        if send_msg:
+            return await ticket.channel.send(
+                content=f"The ticket has been {'locked' if ticket.locked else 'unlocked'}."
+            )
+        return None
 
     def check_for_open_ticket(self, user: discord.User, category: Ticket.category) -> discord.TextChannel | None:
         """Returns ticket channels from a specific user and category."""

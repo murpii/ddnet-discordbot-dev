@@ -5,7 +5,7 @@ import logging
 import functools
 import ipaddress
 import aiohttp
-from typing import Iterable
+from typing import Iterable, Any, Coroutine
 from constants import Roles, Guilds
 
 
@@ -20,7 +20,7 @@ def has_map(message: discord.Message) -> bool:
     )
 
 
-async def check_dm_channel(user: discord.Member) -> bool:
+async def check_dm_channel(user: discord.Member) -> bool | None:
     try:
         await user.send()
     except discord.Forbidden:

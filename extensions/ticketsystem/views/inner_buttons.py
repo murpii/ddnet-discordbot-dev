@@ -57,28 +57,17 @@ class BaseTicketButtons(discord.ui.View):
     @discord.ui.button(label="🔒 Lock Ticket", style=discord.ButtonStyle.gray, custom_id="LockButton")
     async def t_lock(self, interaction: discord.Interaction, button: Button):
         if not is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]):
-            await interaction.response.send_message(content="Only staff members can use this button.", ephemeral=True)
+            await interaction.response.send_message(
+                content="Only staff members can use this button.",
+                ephemeral=True
+            )
             return
 
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
-        overwrite = interaction.channel.overwrites_for(ticket.creator)
-
-        if ticket.locked:
-            overwrite.send_messages = True
-            await interaction.channel.set_permissions(ticket.creator, overwrite=overwrite)
-            button.label = "🔒 Lock Ticket"
-            ticket.locked = False
-            await interaction.response.send_message(content="This ticket has been unlocked.")
-        else:
-            overwrite.send_messages = False
-            await interaction.channel.set_permissions(ticket.creator, overwrite=overwrite)
-            button.label = "🔓 Unlock Ticket"
-            ticket.locked = True
-            await interaction.response.send_message(content="This ticket has been locked.")
-
+        await self.ticket_manager.toggle_ticket_lock(ticket)
+        button.label = "🔓 Unlock Ticket" if ticket.locked else "🔒 Lock Ticket"
         view = create_ticket_buttons(self.bot, ticket)
-        await interaction.message.edit(view=view)
-        await self.bot.ticket_manager.set_lock(ticket, ticket.locked)
+        await interaction.response.edit_message(view=view)
 
 
 class RenameTicketButtons(BaseTicketButtons):

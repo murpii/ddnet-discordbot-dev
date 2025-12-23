@@ -1,10 +1,11 @@
 import discord
 from constants import Channels
 
+
 class MainMenuEmbed(discord.Embed):
     def __new__(cls):
         embed = discord.Embed(
-            title="🎫  Welcome to our ticket system!",
+            title="🎫 Welcome to our ticket system!",
             description="If you've been banned and want to appeal the decision, need to request a "
                         "rename, or have a complaint about the behavior of other users or moderators, "
                         "you can create a ticket using the buttons below.",
@@ -60,7 +61,7 @@ class MainMenuFollowUp(discord.Embed):
     def __new__(cls):
         return discord.Embed(
             title="If you create tickets with no valid reason or solely to troll, "
-            "you will be given a timeout.",
+                  "you will be given a timeout.",
             description="",
             colour=16776960,
         )

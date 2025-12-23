@@ -2,6 +2,9 @@
 - Provide setup instructions for the database, including the schema definitions for all tables
 - Turn the $help command into a app command for less spam
 
+Guides:
+- Move Embeds to their own files
+
 Map testing:
 - Disallow forbidden characters in map names
 - Map optimization should rename the map file if it doesn't match the channel name anymore
@@ -11,5 +14,11 @@ Long term:
 - Implement global chat and vote mute functionality for DDNet servers
 
 Tickets:
+- Archive threads found within tickets
+- Allow renaming of tickets
 - Extend Ticket modals and add selections (if necessary)
 - Block close command calls with optional messages if the ticket author cant be DMed
+- Use ViewContainers whereever applicable for better formatting
+
+
+It's possible to do image slideshows with a paginator

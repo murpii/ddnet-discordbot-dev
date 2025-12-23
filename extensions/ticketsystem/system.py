@@ -9,8 +9,15 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from extensions.ticketsystem import embeds
+from utils.checks import check_dm_channel, is_staff
 from .manager import TicketCategory
-from .views import categories, inner_buttons, confirm, subscribe
+from .views import buttons, inner_buttons, confirm, subscribe
+from .views.buttons import (
+    ReportButton, ComplaintButton, AdminMailButton,
+    RenameButton, BanAppealButton, CommunityAppButton
+)
+from .views.confirm import ConfirmView
+from .views.containers.MainMenu import MainMenuContainer
 from .views.modals import ban_appeal_m
 from .transcript import TicketTranscript
 from extensions.ticketsystem.views.subscribe import SubscribeMenu
@@ -18,13 +25,6 @@ from extensions.ticketsystem.utils import fetch_rank_from_demo
 from constants import Guilds, Channels, Roles
 
 log = logging.getLogger("tickets")
-
-
-def is_staff(member: discord.Member) -> bool:
-    return any(
-        role.id in (Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
-        for role in member.roles
-    )
 
 
 # TODO: Check self.ticket_manager.tickets instead
@@ -36,7 +36,6 @@ class TicketSystem(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.session = None
-        self.check_inactive_tickets.start()
         self.update_scores_topic.start()
         self.mentions = set()
         self.message_cache = {}
@@ -44,7 +43,7 @@ class TicketSystem(commands.Cog):
 
     async def cog_load(self):
         session = await self.bot.session_manager.get_session(self.__class__.__name__)
-        self.session = categories.MainMenu.session = ban_appeal_m.BanAppealModal.session = session
+        self.session = buttons.BanAppealButton.session = ban_appeal_m.BanAppealModal.session = session
 
     async def cog_unload(self):
         await self.bot.session_manager.close_session(self.__class__.__name__)
@@ -53,8 +52,7 @@ class TicketSystem(commands.Cog):
             self,
             ticket,
             interaction: Optional[discord.Interaction] = None,
-            ps: Optional[str] = None,
-            inactive: bool = False,
+            postscript: Optional[str] = None,
     ):
         """
         Creates a transcript for the specified ticket and notifies the ticket creator.
@@ -62,12 +60,12 @@ class TicketSystem(commands.Cog):
         Args:
             ticket: The ticket object for which the transcript is created.
             interaction (Optional[discord.Interaction]): The interaction associated with the request, if any.
-            ps (Optional[str]): The message sent to the ticket author.
+            postscript (Optional[str]): The message sent to the ticket author.
             inactive (bool): True/False if the ticket is closed due to inactivity.
         """
         transcript = TicketTranscript(self.bot, ticket)
         await transcript.create_transcript(interaction)
-        await transcript.notify_ticket_creator(interaction, ps, inactive)
+        await transcript.notify_ticket_creator(interaction, postscript)
         transcript.cleanup()
 
     @app_commands.guilds(Guilds.DDNET)
@@ -81,10 +79,7 @@ class TicketSystem(commands.Cog):
             interaction (discord.Interaction): The interaction object representing the user's action.
         """
         await interaction.channel.send(
-            embeds=[
-                embeds.MainMenuEmbed(), embeds.MainMenuFollowUp()
-            ],
-            view=categories.MainMenu(self.bot)
+            view=MainMenuContainer(self.bot)
         )
         await interaction.response.send_message(content="Done!", ephemeral=True)
 
@@ -121,7 +116,7 @@ class TicketSystem(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
         # technically not required
-        if not is_staff(interaction.user):
+        if not is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]):
             await interaction.followup.send("Only moderators are allowed to invite.")
             return
         if (
@@ -159,7 +154,14 @@ class TicketSystem(commands.Cog):
         """
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
 
-        if not is_staff(interaction.user) and interaction.user != ticket.creator:
+        if (
+                not is_staff(interaction.user, roles=[
+                    Roles.ADMIN,
+                    Roles.DISCORD_MODERATOR,
+                    Roles.MODERATOR
+                ])
+                and interaction.user != ticket.creator
+        ):
             await interaction.response.send_message(  # noqa
                 content="This ticket does not belong to you.",
                 ephemeral=True
@@ -180,6 +182,14 @@ class TicketSystem(commands.Cog):
             ticket.being_closed = True
             try:
                 if message:
+                    if not await check_dm_channel(ticket.creator):
+                        await interaction.response.send_message(
+                            content="The ticket author **cannot** be DMed, "
+                                    "meaning they wont receive your message. Continue?",
+                            ephemeral=True,
+                            view=ConfirmView(self.bot, closing=True, message=message)
+                        )
+                        return
                     await ticket.channel.send(message)
 
                 await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
@@ -200,8 +210,9 @@ class TicketSystem(commands.Cog):
             except Exception as e:
                 log.exception(f"{ticket.channel.name}: Error during ticket closure: {e}")
                 if not interaction.response.is_done():
-                    await interaction.response.send_message("An error occurred while closing the ticket.",
-                                                            ephemeral=True)
+                    await interaction.response.send_message(
+                        "An error occurred while closing the ticket.", ephemeral=True
+                    )
                 else:
                     await interaction.followup.send("An error occurred while closing the ticket.", ephemeral=True)
             finally:
@@ -216,6 +227,7 @@ class TicketSystem(commands.Cog):
         app_commands.Choice(name="Ban Appeal", value=TicketCategory.BAN_APPEAL.value),
         app_commands.Choice(name="Complaint", value=TicketCategory.COMPLAINT.value),
         app_commands.Choice(name="Admin-Mail", value=TicketCategory.ADMIN_MAIL.value),
+        app_commands.Choice(name="Community Application", value=TicketCategory.COMMUNITY_APP.value),
     ])
     async def change_category(self, interaction: discord.Interaction, category: app_commands.Choice[str]):
         """|coro|
@@ -226,64 +238,51 @@ class TicketSystem(commands.Cog):
             category (app_commands.Choice[str]): The new category to assign to the ticket.
         """
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
-
-        if category.value == TicketCategory.RENAME.value:
-            await interaction.response.send_message(
-                "Tickets can't be changed to the **Rename** category. "
-                "Rename tickets require specific checks that only run during ticket creation. "
-                "Please ask the ticket creator to open a new ticket instead.",
-                ephemeral=True
-            )
-            return
-
         if ticket.category == TicketCategory(category.value):
             await interaction.response.send_message(
                 f"This ticket is already a **{category.name}** ticket.", ephemeral=True
             )
             return
 
-        await self.ticket_manager.change_ticket(ticket, category=category.value)
+        if category.value == TicketCategory.REPORT.value:
+            await ReportButton(self.bot, ticket=ticket).callback(interaction)
+            return
 
-        embed_map = {
-            "report": embeds.ReportEmbed,
-            "rename": [embeds.RenameEmbed, embeds.RenameInfoEmbed],
-            "ban-appeal": [embeds.BanAppealEmbed, embeds.BanAppealInfoEmbed],
-            "complaint": embeds.ComplaintEmbed,
-            "admin-mail": embeds.AdminMailEmbed,
-        }
+        if category.value == TicketCategory.COMPLAINT.value:
+            await ComplaintButton(self.bot, ticket=ticket).callback(interaction)
+            return
 
-        embed_entry = embed_map.get(category.value)
-        if isinstance(embed_entry, list):
-            em = [cls(ticket.creator) for cls in embed_entry]
-        else:
-            em = [embed_entry(ticket.creator)]
+        if category.value == TicketCategory.ADMIN_MAIL.value:
+            await AdminMailButton(self.bot, ticket=ticket).callback(interaction)
+            return
 
-        messages = []
-        async for message in ticket.channel.history(limit=3, oldest_first=True):
-            messages.append(message)
+        if category.value == TicketCategory.COMMUNITY_APP.value:
+            await CommunityAppButton(self.bot, ticket=ticket).callback(interaction)
+            return
 
-        close = inner_buttons.BaseTicketButtons(interaction.client)
-        close.update_buttons(ticket)
+        if category.value == TicketCategory.RENAME.value:
+            content = (
+                "Changing a ticket to the **Rename** category is currently not supported. "
+                "Rename tickets rely on validation that only runs during ticket creation. "
+                "Ask the ticket author to open a new ticket instead.",
+            )
+            view = RenameButton(self.bot, label="Submit", ticket=ticket)
+            await interaction.response.send_message(content=content, view=view)
+            if not ticket.locked:
+                await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False)
+            return
 
-        await ticket.start_message.edit(embeds=em, view=close)
+        if category.value == TicketCategory.BAN_APPEAL.value:
+            content = (
+                "In order to for you to appeal a ban, "
+                "we need a couple of infos first. Click the submit button to start the process."
+            )
+            view = BanAppealButton(self.bot, label="Submit", ticket=ticket)
+            await interaction.response.send_message(content=content, view=view)
 
-        for message in messages[1:]:
-            if message.author.bot:
-                await message.delete()
-
-        # Alternative, but takes longer for some reason
-        # pins = await ticket.channel.pins()
-        # await pins[0].edit(embed=embed, view=close)
-
-        overwrites = ticket.get_overwrites(interaction)
-        await ticket.channel.edit(
-            name=f"{category.value}-{await self.ticket_manager.ticket_num(category=category.value)}",
-            overwrites=overwrites
-        )
-        await interaction.response.send_message(
-            f"{ticket.creator.mention} ticket channel category changed to **{category.name}**. "
-            f"Kindly review {ticket.start_message.jump_url}.",
-        )
+            if not ticket.locked:
+                await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False)
+            return
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.TextChannel, after: discord.TextChannel):
@@ -360,77 +359,6 @@ class TicketSystem(commands.Cog):
             else:
                 await interaction.response.send_message(content=msg, ephemeral=True)  # noqa
             interaction.extras["error_handled"] = True
-
-    @tasks.loop(hours=1)
-    async def check_inactive_tickets(self):
-        """|asyncio.task|
-        Checks for inactive tickets every hour and closes them if necessary.
-        """
-        await self.bot.wait_until_ready()
-        channels_to_remove = []
-        async with self.ticket_manager.lock:
-            for channel_id, ticket in self.ticket_manager.tickets.items():
-
-                if ticket.category in [
-                    TicketCategory.RENAME, TicketCategory.ADMIN_MAIL,
-                    TicketCategory.COMPLAINT, TicketCategory.BAN_APPEAL
-                ]:
-                    continue
-
-                recent_messages = []
-
-                try:
-                    async for msg in ticket.channel.history(limit=3, oldest_first=False):
-                        if not msg.author.bot:
-                            recent_messages.append(msg)
-                # I don't remember why I have this, lets just keep this for now
-                # probably if the channel doesn't exist anymore
-                except (AttributeError, discord.Forbidden, discord.HTTPException):
-                    channels_to_remove.append(ticket.channel)
-                    continue
-
-                now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
-                if recent_messages and recent_messages[0].created_at.astimezone(
-                        timezone.utc
-                ) > now - timedelta(days=3):  # Duration can be configured here. Default: 1 day
-                    ticket.inactivity = 0
-                else:
-                    ticket.inactivity += 1
-                    query = """
-                            UPDATE discordbot_tickets
-                            SET inactivity_count = %s
-                            WHERE channel_id = %s; \
-                            """
-                    await self.bot.upsert(query, ticket.inactivity, ticket.channel.id)
-
-                if ticket.inactivity == 2:
-                    await ticket.channel.send(
-                        f"<@{ticket.creator.id}>, this ticket is about to be closed due to inactivity. \n"
-                        f"If your report or question has been resolved, consider closing "
-                        f"this ticket yourself by typing `/close`. \n"
-                        f"**To keep this ticket active, please reply in this channel.**"
-                    )
-
-                if ticket.inactivity >= 6:
-                    channels_to_remove.append(ticket.channel)
-
-        if channels_to_remove:
-            for channel in channels_to_remove:
-                ticket = await self.ticket_manager.get_ticket(channel)
-                await self.transcript(ticket, inactive=True)
-                await self.ticket_manager.del_ticket(ticket=ticket)
-
-                with contextlib.suppress(discord.NotFound, AttributeError):
-                    await ticket.channel.send("Closing Ticket...")
-                    await ticket.channel.delete()
-                    log.info(
-                        f"Removed ticket channel named {ticket.channel.name} "
-                        f"(ID: {ticket.channel.id}), due to inactivity."
-                    )
-
-    @check_inactive_tickets.before_loop
-    async def before_check_inactive_tickets(self):
-        await self.bot.wait_until_ready()
 
     @tasks.loop(hours=1)
     async def update_scores_topic(self):

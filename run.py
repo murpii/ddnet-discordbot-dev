@@ -129,7 +129,7 @@ class DDNet(commands.Bot):
                 await cursor.execute(query, args)
                 return await cursor.fetchall() if fetchall else await cursor.fetchone()
 
-    async def upsert(self, query, *args):
+    async def upsert(self, query, *args) -> int:
         """|coro|
         Executes an SQL query and commits the changes to the database.
 
@@ -138,7 +138,7 @@ class DDNet(commands.Bot):
             *args: The arguments to be passed to the SQL query.
 
         Returns:
-            cursor: The cursor object used to execute the query.
+            int: The number of rows affected by the query (rowcount).
         """
 
         async with self.pool.acquire() as connection:
@@ -166,7 +166,7 @@ class DDNet(commands.Bot):
                     logging.error("Failed to load extension:\n%s", traceback.format_exc())
 
         log.info(f"Python version: {sys.version}")
-        log.info(f"Discord version: {discord.__version__}")
+        log.info(f"Discord.py version: {discord.__version__}")
 
         if self.pool is None:
             await self.close()

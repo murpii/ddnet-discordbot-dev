@@ -90,8 +90,7 @@ class Submission:
     async def visualize_size(self) -> discord.File:
         buf = await self.buffer()
         out_buf = map_visualize_size.visualize_from_bytes(buf.getvalue())
-        file = discord.File(out_buf, filename=f"FileSizeStats.png")
-        return file
+        return discord.File(out_buf, filename="FileSizeStats.png")
 
     async def debug_map(self) -> Optional[str]:
         _, ext = check_os()

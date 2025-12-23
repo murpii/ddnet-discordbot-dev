@@ -6,6 +6,7 @@ import logging
 from extensions.ticketsystem import embeds
 from extensions.ticketsystem.queries import check_common_teamranks
 from extensions.ticketsystem.manager import Ticket, TicketCategory
+from extensions.ticketsystem.views.containers.rename import RenameContainer
 from extensions.ticketsystem.views.inner_buttons import RenameTicketButtons
 from utils.checks import check_dm_channel
 from utils.profile import PlayerProfile
@@ -14,12 +15,16 @@ log = logging.getLogger("tickets")
 
 
 class RenameModal(discord.ui.Modal, title="Rename Ticket"):
-    def __init__(self, bot):
+    def __init__(self, bot, ticket: Ticket | None = None):
         super().__init__(timeout=None)
         self.bot = bot
         self.ticket_manager = bot.ticket_manager
         self.profile_old: PlayerProfile = ...
         self.profile_new: PlayerProfile = ...
+
+        # Change ticket category related
+        self.ticket: Ticket | None = ticket
+        self.button: discord.ui.Button | None = None
 
     old_name = discord.ui.TextInput(
         label="Your in-game name",
@@ -52,7 +57,8 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
                 f'- "{self.profile_old.name}" doesn\'t have any points. Make sure you typed your in-game name correctly.')
         elif self.profile_old.points < 3000:
             errors.append("- Your old name doesn't have enough points. Please read the rename requirements above.")
-        if self.profile_new.points and self.profile_new.points > 200:
+        if self.profile_new.points and self.profile_new.points > 1000:
+            # TODO: if new name has more than 500 points: ask for demos
             errors.append("- The name you'd like to change to is already in use. Please choose a different name.")
 
         # Check for common team ranks
@@ -79,10 +85,6 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
 
     async def on_submit(self, interaction: discord.Interaction):
         """|coro|
-
-        Handles the submission of a rename ticket interaction.
-        It processes the rename request, creates a ticket, and sends relevant information to the user.
-
         This function checks if the rename operation is successful. If it fails, an error message is sent to the user.
         If successful, it creates a ticket channel, sends information about the old and new names, and notifies the user of the ticket creation.
         """
@@ -94,12 +96,41 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
 
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
+        if self.ticket:
+            ticket = self.ticket
+            ticket.rename_data = [self.profile_old, self.profile_new]
+            await self.ticket_manager.change_ticket(ticket, category=TicketCategory.RENAME)
+
+            inner_view = RenameTicketButtons(interaction.client)
+            inner_view.update_buttons(ticket)
+
+            await ticket.start_message.edit(content=None, embeds=[], view=RenameContainer())
+            await ticket.info_message.edit(embed=embeds.RenameInfoEmbed(self.profile_old, self.profile_new))
+            await ticket.close_message.edit(embed=embeds.FollowUpEmbed(), view=inner_view)
+
+            await self.ticket_manager.set_lock(ticket, ticket.locked)
+            overwrites = ticket.get_overwrites(interaction)
+            await ticket.channel.edit(
+                name=f"{ticket.category.value}-{await self.ticket_manager.ticket_num(category=ticket.category.value)}",
+                overwrites=overwrites
+            )
+
+            self.button.disabled = True
+            await interaction.message.edit(view=self.button.view)
+
+            await interaction.channel.send(
+                f"{ticket.creator.mention} ticket channel category changed to **{ticket.category.name}**. "
+                f"Kindly review {ticket.start_message.jump_url}.",
+            )
+            await interaction.delete_original_response()
+            await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False, force_state=False)
+            return
+
         ticket = Ticket(
             channel=None,
             creator=interaction.user,
             category=TicketCategory.RENAME,
             rename_data=[self.profile_old, self.profile_new],
-            inactivity=0
         )
         ticket.channel = await self.ticket_manager.create_channel(interaction, ticket)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel, init=True)
@@ -107,17 +138,10 @@ class RenameModal(discord.ui.Modal, title="Rename Ticket"):
         inner_view = RenameTicketButtons(interaction.client)
         inner_view.update_buttons(ticket)
 
-        ticket.start_message = await ticket.channel.send(
-            content=f"Alerts:{await self.ticket_manager.mentions(interaction, ticket.category)}",
-            embed=embeds.RenameEmbed(ticket.creator)
-        )
-
-        await ticket.channel.send(
-            embeds=[
-                embeds.RenameInfoEmbed(self.profile_old, self.profile_new),
-                embeds.FollowUpEmbed()
-            ],
-            view=inner_view)
+        ticket.start_message = await ticket.channel.send(view=RenameContainer())
+        ticket.info_message = await ticket.channel.send(
+            embed=embeds.RenameInfoEmbed(self.profile_old, self.profile_new))
+        ticket.close_message = await ticket.channel.send(embed=embeds.FollowUpEmbed(), view=inner_view)
 
         await ticket.start_message.pin()
 

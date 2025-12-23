@@ -110,8 +110,9 @@ class ChangelogPaginator(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return True
 
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="Paginator:testing:prev",
-                       disabled=True)
+    @discord.ui.button(
+        label="Previous", style=discord.ButtonStyle.secondary, custom_id="Paginator:testing:prev", disabled=True
+    )
     async def previous_page(self, interaction: discord.Interaction, _: discord.ui.Button):
         if self.page > 0:
             self.page -= 1

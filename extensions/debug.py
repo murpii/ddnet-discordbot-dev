@@ -20,7 +20,7 @@ class Debug(commands.Cog):
     @commands.command()
     async def map_channels(self, ctx: commands.Context):
         print(self.bot.map_channels)
-    
+
     @commands.command()
     async def tickets(self, ctx: commands.Context):
         print(self.ticket_manager.tickets)

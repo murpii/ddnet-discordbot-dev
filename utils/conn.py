@@ -26,7 +26,7 @@ async def upload_submission(session, subm):
 
 
 async def ddnet_upload(session, asset_type: str, buf: BytesIO, filename: str):
-    from main import config
+    from run import config
     url = config.get("DDNET", "UPLOAD")
     headers = {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
 
@@ -58,7 +58,7 @@ async def ddnet_upload(session, asset_type: str, buf: BytesIO, filename: str):
 
 
 async def ddnet_delete(session, filename: str):
-    from main import config
+    from run import config
     url = config.get("DDNET", "DELETE")
     headers = {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
     data = {"map_name": filename}

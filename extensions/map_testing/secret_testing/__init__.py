@@ -1,9 +1,9 @@
 import discord
-from discord import DMChannel
 from discord.ext import commands
 import logging
 import os
 
+import shlex
 
 from extensions.map_testing.submission import Submission
 from constants import Guilds, Channels, Roles
@@ -14,6 +14,7 @@ from io import BytesIO
 from typing import Optional
 
 log = logging.getLogger()
+
 
 class Secret(commands.Cog):
     def __init__(self, bot):
@@ -61,15 +62,19 @@ class Secret(commands.Cog):
         )
 
     @commands.command(name="twmap-edit")
-    async def twmap_edit(self, ctx: commands.Context, options: str):
-        options = [option.strip() for option in options.split(",")]
+    async def twmap_edit(self, ctx: commands.Context, *, options: str):
+        try:
+            options = shlex.split(options)
+        except ValueError as e:
+            await ctx.send(f"Invalid arguments: {e}")
+            return
 
         pins = await ctx.channel.pins()
-
+        print(options)
         try:
             stdout, file = await Submission(pins[0]).edit_map(*options)
         except RuntimeError as e:
-            await ctx.channel.send(f"{e}")
+            await ctx.channel.send(str(e))
             return
 
         if stdout:
@@ -131,6 +136,7 @@ class Secret(commands.Cog):
         await ctx.send(file=discord.File(image_buf, filename=f'{pins[0].id}.png'))
         os.remove(tmp)
         os.remove(image_filename)
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Secret(bot))

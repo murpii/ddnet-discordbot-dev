@@ -122,7 +122,11 @@ Webhooks = _Webhooks()
 
 
 class _URLs:
-    GITHUB_URL: str = "https://github.com/ddnet/ddnet-discordbot"
+    GITHUB_URL: str = 'https://github.com/ddnet/ddnet-discordbot'
+    DDNET_MAPPING_RULES: str = "https://ddnet.org/mapping/rules/"
+    DDNET_MAPPING_GUIDELINES: str = "https://ddnet.org/mapping/guidelines/"
+    DDNET_MASTER_RULES: str = "https://ddnet.org/rules/master/"
+    DDNET_COMMUNITY_RULES: str = "https://ddnet.org/rules/community/"
 
 
 URLs = _URLs()
