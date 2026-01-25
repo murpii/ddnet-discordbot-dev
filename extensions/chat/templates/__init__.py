@@ -106,24 +106,24 @@ class Template(commands.GroupCog):
         self.bot = bot
 
     async def send_messages(self, channel_id, messages):
-        channel = self.bot.get_channel(channel_id)
+        channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
         await channel.purge()
 
-        description = None
+        for item in messages:
+            if not item:
+                continue
+            filename, *message_attrs = item
 
-        for filename, message_attr in messages:
-            if filename is not None:
+            if filename:
                 path = os.path.join(DIR, filename)
                 await channel.send(file=discord.File(path, filename=filename))
 
-            if message_attr is not None:
-                description = getattr(dictionary, message_attr, None)
-
-            if description is not None:
-                await channel.send(
-                    content=description,
-                    allowed_mentions=discord.AllowedMentions(roles=False)
-                )
+            for attr in message_attrs:
+                if attr and (description := getattr(dictionary, attr, None)):
+                    await channel.send(
+                        content=description,
+                        allowed_mentions=discord.AllowedMentions(roles=False)
+                    )
 
     @app_commands.command(
         name="welcome",
@@ -134,12 +134,12 @@ class Template(commands.GroupCog):
         await self.send_messages(
             Channels.WELCOME,
             [
-                ("welcome_main.png", "welcome_main"),
-                ("welcome_rules.png", "welcome_rules"),
-                ("welcome_channels.png", "welcome_channel_listing"),
-                ("welcome_links.png", "welcome_ddnet_links"),
-                ("welcome_roles.png", "welcome_ddnet_roles"),
-                ("welcome_communities.png", "welcome_community_links"),
+                ["welcome_main.png", "welcome_main"],
+                ["welcome_rules.png", "welcome_rules"],
+                ["welcome_channels.png", "welcome_channels", "welcome_channels2"],
+                ["welcome_links.png", "welcome_ddnet_links"],
+                ["welcome_roles.png", "welcome_ddnet_roles"],
+                ["welcome_communities.png", "welcome_community_links"],
             ],
         )
         await interaction.followup.send("Done")

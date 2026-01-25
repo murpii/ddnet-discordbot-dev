@@ -5,8 +5,8 @@ from typing import Optional
 from extensions.ticketsystem import embeds
 from extensions.ticketsystem.lang.ban_appeal_m import ban_appeal_m
 from extensions.ticketsystem.views.containers.ban_appeal import BanAppealContainer
-from extensions.ticketsystem.views.inner_buttons import BanAppealTicketButtons
-from extensions.ticketsystem.manager import Ticket, TicketCategory, AppealData
+from extensions.ticketsystem.views.containers.close import CloseContainer
+from extensions.ticketsystem.ticket import Ticket, AppealData, TicketCategory
 from utils.checks import check_public_ip, check_ip
 from utils.profile import PlayerProfile
 
@@ -34,7 +34,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             label=modal["ip_label"],
             placeholder=modal["ip_placeholder"],
             max_length=15,
-            style=discord.TextStyle.short,
+            style=discord.TextStyle.short,  # type: ignore
         )
         self.add_item(self.public_ip)
 
@@ -42,7 +42,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             label=modal["name_label"],
             placeholder=modal["name_label"],
             max_length=15,
-            style=discord.TextStyle.short,
+            style=discord.TextStyle.short,  # type: ignore
         )
         self.add_item(self.ingame_name)
 
@@ -50,7 +50,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             label=modal["reason_label"],
             placeholder=modal["reason_placeholder"],
             max_length=20,
-            style=discord.TextStyle.short,
+            style=discord.TextStyle.short,  # type: ignore
         )
         self.add_item(self.ban_reason)
 
@@ -58,7 +58,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
             label=modal["appeal_label"],
             placeholder=modal["appeal_placeholder"],
             max_length=500,
-            style=discord.TextStyle.long,
+            style=discord.TextStyle.long,  # type: ignore
         )
         self.add_item(self.appeal)
 
@@ -75,47 +75,27 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         dnsbl, cloudflare = await check_ip(self.public_ip.value, self.session, self.api_key)
+        profile = await PlayerProfile.from_database(self.bot, self.ingame_name.value)
         data = AppealData(
             address=self.public_ip.value,
             dnsbl=dnsbl,
             name=self.ingame_name.value,
             reason=self.ban_reason.value,
             appeal=self.appeal.value,
+            profile=profile
         )
 
         # This runs if a ticket has changed to a different ticket category.
         if self.ticket:
-            ticket = self.ticket
-            ticket.appeal_data = data  # update stored data
-            ticket.rename_data = []
-            await self.ticket_manager.change_ticket(ticket, category=TicketCategory.BAN_APPEAL)
-
-            close = BanAppealTicketButtons(interaction.client)
-            close.update_buttons(ticket)
-
-            profile = await PlayerProfile.from_database(self.bot, self.ingame_name.value)
-
-            await ticket.start_message.edit(view=BanAppealContainer(ticket))
-            await ticket.info_message.edit(embed=embeds.BanAppealInfoEmbed(ticket, profile))
-            await ticket.close_message.edit(embed=embeds.FollowUpEmbed(), view=close)
-
-            await self.ticket_manager.set_lock(ticket, ticket.locked)
-
-            overwrites = ticket.get_overwrites(interaction)
-            await ticket.channel.edit(
-                name=f"{ticket.category.value}-{await self.ticket_manager.ticket_num(category=ticket.category.value)}",
-                overwrites=overwrites
+            await self.ticket_manager.update_ticket(
+                interaction,
+                ticket=self.ticket,
+                category=TicketCategory.BAN_APPEAL,
+                appeal_data=data,
+                # close_view=close_view,
+                # close_view=CloseContainer(interaction.client, self.ticket),
+                button=self.button
             )
-
-            self.button.disabled = True
-            await interaction.message.edit(view=self.button.view)
-
-            await interaction.channel.send(
-                f"{ticket.creator.mention} ticket channel category changed to **{ticket.category.name}**. "
-                f"Kindly review {ticket.start_message.jump_url}.",
-            )
-            await interaction.delete_original_response()
-            await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False, force_state=False)
             return
 
         ticket = Ticket(
@@ -128,17 +108,17 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         ticket.channel = await self.ticket_manager.create_channel(interaction, ticket)
         await self.ticket_manager.create_ticket(ticket=ticket, channel=ticket.channel)
 
-        close = BanAppealTicketButtons(interaction.client)
-        close.update_buttons(ticket)
-        profile = await PlayerProfile.from_database(self.bot, self.ingame_name.value)
-
         ticket.start_message = await ticket.channel.send(
             # content=f"Alerts:{await self.ticket_manager.mentions(interaction, ticket.category)}",
             # embed=embeds.BanAppealEmbed(interaction.user),
             view=BanAppealContainer(ticket),
         )
         ticket.info_message = await ticket.channel.send(embed=embeds.BanAppealInfoEmbed(ticket, profile))
-        ticket.close_message = await ticket.channel.send(embed=embeds.FollowUpEmbed(), view=close)
+        ticket.close_message = await ticket.channel.send(
+            # embed=embeds.FollowUpEmbed(),
+            # view=close
+            view=CloseContainer.for_category(TicketCategory.BAN_APPEAL)
+        )
         await ticket.start_message.pin()
 
         await interaction.followup.send(

@@ -9,6 +9,18 @@ from typing import Awaitable, Callable, Tuple, Union
 
 from constants import Emojis
 from data.countryflags import COUNTRYFLAGS
+from utils.text import slugify2
+
+
+def get_mapper_urls(maps_data, map_name):
+    for info in maps_data:
+        if info["Map"] == map_name:
+            mappers = info["Mapper"].replace(" & ", ", ").split(", ")
+            return [
+                f"[{m}](https://ddnet.org/mappers/{slugify2(m)})"
+                for m in mappers
+            ]
+    return []
 
 
 def resolve_display_name(user: discord.abc.User) -> str:

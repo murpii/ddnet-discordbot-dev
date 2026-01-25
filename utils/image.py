@@ -1,6 +1,9 @@
+import os
 from typing import Callable, Union
 from io import BytesIO
 from typing import Dict, List, Tuple
+
+import discord
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from colorthief import ColorThief
 import datetime as dtt
@@ -10,10 +13,20 @@ import re
 from utils.color import clamp_luminance
 from utils.color import pack_rgb
 from utils.misc import executor
-from utils.text import plural, humanize_points
-
+from utils.text import plural, humanize_points, sanitize
 
 DIR = "data/assets"
+
+
+def get_map_thumbnail(map_name: str):
+    safe = sanitize(map_name)
+    path = os.path.join("data/assets/map_backgrounds", f"{safe}.png")
+
+    if not os.path.exists(path):
+        return None
+
+    filename = f"map_{safe}.png"
+    return discord.File(path, filename=filename), filename
 
 
 def save(img: Image.Image) -> BytesIO:
@@ -28,7 +41,7 @@ def center(size: int, area_size: int = 0) -> int:
 
 
 def round_rectangle(
-    size: Tuple[int, int], radius: int, *, color: Tuple[int, int, int, int]
+        size: Tuple[int, int], radius: int, *, color: Tuple[int, int, int, int]
 ) -> Image.Image:
     width, height = size
 
@@ -51,11 +64,11 @@ def round_rectangle(
 
 
 def auto_font(
-    font: Union[ImageFont.FreeTypeFont, Tuple[str, int]],
-    text: str,
-    max_width: int,
-    *,
-    check: Callable = lambda w, _: w,
+        font: Union[ImageFont.FreeTypeFont, Tuple[str, int]],
+        text: str,
+        max_width: int,
+        *,
+        check: Callable = lambda w, _: w,
 ) -> ImageFont.FreeTypeFont:
     if isinstance(font, tuple):
         font = ImageFont.truetype(*font)
@@ -67,11 +80,11 @@ def auto_font(
 
 
 def wrap_new(
-    canv: ImageDraw.Draw,
-    box: Tuple[Tuple[int, int], Tuple[int, int]],
-    text: str,
-    *,
-    font: ImageFont.FreeTypeFont,
+        canv: ImageDraw.Draw,
+        box: Tuple[Tuple[int, int], Tuple[int, int]],
+        text: str,
+        *,
+        font: ImageFont.FreeTypeFont,
 ):
     left, top, right, bottom = font.getbbox("yA")
     _, h = right - left, bottom

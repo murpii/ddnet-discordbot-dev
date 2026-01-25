@@ -70,7 +70,7 @@ class Secret(commands.Cog):
             return
 
         pins = await ctx.channel.pins()
-        print(options)
+
         try:
             stdout, file = await Submission(pins[0]).edit_map(*options)
         except RuntimeError as e:

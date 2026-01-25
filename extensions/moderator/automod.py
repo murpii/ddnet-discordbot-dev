@@ -392,7 +392,7 @@ class AutoMod(commands.Cog):
     # TODO: Include UPLOADED attachments
     @commands.Cog.listener('on_message')
     async def spam_protection(self, message: discord.Message):
-        if message.author.bot or message.guild.id != Guilds.DDNET:
+        if not message.guild or message.author.bot or message.guild.id != Guilds.DDNET:
             return
 
         now = time.time()
@@ -417,11 +417,8 @@ class AutoMod(commands.Cog):
 
             for msg, _ in messages:
                 if msg.content == content:
-                    try:
+                    with contextlib.suppress(Exception):
                         await msg.delete()
-                    except Exception as e:
-                        print(f"Failed to delete message {msg.id}: {e}")
-
             self.alerted[message.author.id].add(content)
 
             embed = discord.Embed(

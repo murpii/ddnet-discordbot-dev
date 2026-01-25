@@ -1,23 +1,25 @@
-import contextlib
 import json
 import logging
-from datetime import datetime, timedelta, timezone
 from typing import Union, Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from extensions.ticketsystem import embeds
 from utils.checks import check_dm_channel, is_staff
-from .manager import TicketCategory
-from .views import buttons, inner_buttons, confirm, subscribe
+from . import embeds
+from .ticket import TicketCategory
+from .views import buttons
 from .views.buttons import (
     ReportButton, ComplaintButton, AdminMailButton,
     RenameButton, BanAppealButton, CommunityAppButton
 )
 from .views.confirm import ConfirmView
 from .views.containers.MainMenu import MainMenuContainer
+from .views.containers.admin_mail import AdminMailContainer
+from .views.containers.community_app import CommunityAppContainer
+from .views.containers.complaint import ComplaintContainer
+from .views.containers.report import ReportContainer
 from .views.modals import ban_appeal_m
 from .transcript import TicketTranscript
 from extensions.ticketsystem.views.subscribe import SubscribeMenu
@@ -27,9 +29,8 @@ from constants import Guilds, Channels, Roles
 log = logging.getLogger("tickets")
 
 
-# TODO: Check self.ticket_manager.tickets instead
 def predicate(interaction: discord.Interaction) -> bool:
-    return interaction.channel.topic and interaction.channel.topic.startswith("Ticket author:")
+    return interaction.channel.id in interaction.client.ticket_manager.tickets
 
 
 class TicketSystem(commands.Cog):
@@ -208,13 +209,14 @@ class TicketSystem(commands.Cog):
                         await interaction.channel.category.delete()
 
             except Exception as e:
-                log.exception(f"{ticket.channel.name}: Error during ticket closure: {e}")
+                log.exception(f"{ticket.channel.name}: Error during ticket closure:\n{e}")
                 if not interaction.response.is_done():
                     await interaction.response.send_message(
-                        "An error occurred while closing the ticket.", ephemeral=True
+                        content=f"An error occurred while closing the ticket:\n{e}",
+                        ephemeral=True
                     )
                 else:
-                    await interaction.followup.send("An error occurred while closing the ticket.", ephemeral=True)
+                    await interaction.followup.send(f"An error occurred while closing the ticket: {e}", ephemeral=True)
             finally:
                 ticket.being_closed = False
 
@@ -229,60 +231,57 @@ class TicketSystem(commands.Cog):
         app_commands.Choice(name="Admin-Mail", value=TicketCategory.ADMIN_MAIL.value),
         app_commands.Choice(name="Community Application", value=TicketCategory.COMMUNITY_APP.value),
     ])
-    async def change_category(self, interaction: discord.Interaction, category: app_commands.Choice[str]):
-        """|coro|
-        Changes the category of a ticket to a specified category.
-
-        Args:
-            interaction (discord.Interaction): The interaction object representing the user's action.
-            category (app_commands.Choice[str]): The new category to assign to the ticket.
-        """
+    async def change_category(
+            self,
+            interaction: discord.Interaction,
+            category: app_commands.Choice[str]
+    ):
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
-        if ticket.category == TicketCategory(category.value):
+        if not ticket:
             await interaction.response.send_message(
-                f"This ticket is already a **{category.name}** ticket.", ephemeral=True
+                "This is not a ticket channel.",
+                ephemeral=True,
             )
             return
 
-        if category.value == TicketCategory.REPORT.value:
-            await ReportButton(self.bot, ticket=ticket).callback(interaction)
+        category_enum = TicketCategory(category.value)
+
+        if ticket.category == category_enum:
+            await interaction.response.send_message(
+                f"This ticket is already a **{category.name}** ticket.",
+                ephemeral=True,
+            )
             return
 
-        if category.value == TicketCategory.COMPLAINT.value:
-            await ComplaintButton(self.bot, ticket=ticket).callback(interaction)
-            return
-
-        if category.value == TicketCategory.ADMIN_MAIL.value:
-            await AdminMailButton(self.bot, ticket=ticket).callback(interaction)
-            return
-
-        if category.value == TicketCategory.COMMUNITY_APP.value:
-            await CommunityAppButton(self.bot, ticket=ticket).callback(interaction)
-            return
-
-        if category.value == TicketCategory.RENAME.value:
+        # Special-case categories that need validation or start flows
+        if category_enum == TicketCategory.RENAME:
             content = (
-                "Changing a ticket to the **Rename** category is currently not supported. "
-                "Rename tickets rely on validation that only runs during ticket creation. "
-                "Ask the ticket author to open a new ticket instead.",
+                "..."
             )
-            view = RenameButton(self.bot, label="Submit", ticket=ticket)
+            view = discord.ui.View()
+            view.add_item(RenameButton(self.bot, label="Submit", ticket=ticket))
             await interaction.response.send_message(content=content, view=view)
             if not ticket.locked:
                 await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False)
             return
 
-        if category.value == TicketCategory.BAN_APPEAL.value:
+        if category_enum == TicketCategory.BAN_APPEAL:
             content = (
-                "In order to for you to appeal a ban, "
-                "we need a couple of infos first. Click the submit button to start the process."
+                "In order to appeal a ban, we need a couple of infos first. "
+                "Click the submit button to start the process."
             )
-            view = BanAppealButton(self.bot, label="Submit", ticket=ticket)
+            view = discord.ui.View()
+            view.add_item(BanAppealButton(self.bot, label="Submit", ticket=ticket))
             await interaction.response.send_message(content=content, view=view)
-
             if not ticket.locked:
                 await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False)
             return
+
+        await self.ticket_manager.update_ticket(
+            interaction,
+            ticket=ticket,
+            category=category_enum,
+        )
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.TextChannel, after: discord.TextChannel):

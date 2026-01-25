@@ -1,4 +1,6 @@
 import discord
+
+from extensions.ticketsystem.ticket import Ticket
 from utils.text import slugify2
 from utils.profile import PlayerProfile
 
@@ -51,36 +53,27 @@ class RenameInfoEmbed(discord.Embed):
     This embed summarizes the old and new player profiles if provided, or prompts the user to supply the required names.
     """
 
-    def __new__(cls, profile_old: PlayerProfile = None, profile_new: PlayerProfile = None):
-        if profile_old and profile_new:
-            embed = discord.Embed(title="Provided Infos", colour=2210995)
-            embed.add_field(
-                name="",
-                value=f"**[Current Name](https://ddnet.org/players/{slugify2(profile_old.name)})**\n"
-                      f"```{profile_old.name}```"
-                      f"Points: `{profile_old.points or 0}` \n"
-                      f"Last Finish: `{profile_old.latest_finish or 'None'}` \n"
-                      f"First Finish: `{profile_old.first_finish or 'None'}`",
-                inline=True
-            )
-            embed.add_field(
-                name="",
-                value=f"**[New Name](https://ddnet.org/players/{slugify2(profile_new.name)})**\n"
-                      f"```{profile_new.name}```"
-                      f"Points: `{profile_new.points or 0}`\n"
-                      + (
-                          f"\tLast Finish: `{profile_new.latest_finish or 'None'}`\n"
-                          f"First Finish: `{profile_new.first_finish or 'None'}`\n"
-                          if profile_new.points else ''
-                      ),
-                inline=True
-            )
-            return embed
-        else:
-            return discord.Embed(
-                title="Additional Infos Required:",
-                description="In addition to the required infos above we need to know:\n"
-                            "- Your old name \n"
-                            "- Your desired new name \n",
-                colour=2210995
-            )
+    def __new__(cls, ticket: Ticket):
+        embed = discord.Embed(title="Provided Infos", colour=2210995)
+        embed.add_field(
+            name="",
+            value=f"**[Current Name](https://ddnet.org/players/{slugify2(ticket.rename_data.old_profile.name)})**\n"
+                  f"```{ticket.rename_data.old_profile.name}```"
+                  f"Points: `{ticket.rename_data.old_profile.points or 0}` \n"
+                  f"Last Finish: `{ticket.rename_data.old_profile.latest_finish or 'None'}` \n"
+                  f"First Finish: `{ticket.rename_data.old_profile.first_finish or 'None'}`",
+            inline=True
+        )
+        embed.add_field(
+            name="",
+            value=f"**[New Name](https://ddnet.org/players/{slugify2(ticket.rename_data.new_profile.name)})**\n"
+                  f"```{ticket.rename_data.new_profile.name}```"
+                  f"Points: `{ticket.rename_data.new_profile.points or 0}`\n"
+                  + (
+                      f"\tLast Finish: `{ticket.rename_data.new_profile.latest_finish or 'None'}`\n"
+                      f"First Finish: `{ticket.rename_data.new_profile.first_finish or 'None'}`\n"
+                      if ticket.rename_data.new_profile.points else ''
+                  ),
+            inline=True
+        )
+        return embed

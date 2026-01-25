@@ -331,7 +331,8 @@ class ModAppCommands(commands.Cog):
             await ctx.send(embed=NoMemberInfoEmbed())
             return
 
-        await ctx.send(embeds=full_info(info))
+        from extensions.moderator.views.info import MemberModerationView
+        await ctx.send(embeds=await full_info(info), view=MemberModerationView(self.bot, info, can_remove_entries=True))
 
     @commands.command()
     @commands.check(ddnet_only)

@@ -15,7 +15,7 @@ from utils.text import choice_to_datetime, to_discord_timestamp
 from utils.checks import is_staff
 from utils.misc import duration, name_filter
 from .utils import filter, players, group_players_by_server
-from .layoutview import PlayerfinderView
+from .layoutview import PlayerfinderView, CopycatView
 
 log = logging.getLogger()
 
@@ -128,7 +128,7 @@ class Overseer(commands.Cog):
         pages = self.build_pages()
         channel = self.bot.get_channel(Channels.PLAYERFINDER)
 
-        # NEW: fetch current copycat summary text
+        # Fetch current copycat summary text
         copycat_cog = self.bot.get_cog("Copycat")
         if copycat_cog is not None and hasattr(copycat_cog, "build_summary"):
             copycat_summary = copycat_cog.build_summary()
@@ -138,50 +138,46 @@ class Overseer(commands.Cog):
         desired_count = len(pages)
         current_count = len(self.playerfinder_messages)
 
+        # Delete extra old player pages
         if current_count > desired_count:
             for msg in self.playerfinder_messages[desired_count:]:
                 with contextlib.suppress(discord.NotFound, discord.HTTPException):
                     await msg.delete()
-            del self.playerfinder_messages[desired_count:]
-            self.page_cache.clear()
+            self.playerfinder_messages = self.playerfinder_messages[:desired_count]
+            self.page_cache = {i: self.page_cache[i] for i in range(desired_count)}
 
+        # Update existing player pages
         for index in range(min(current_count, desired_count)):
             msg = self.playerfinder_messages[index]
             page_content = pages[index]
 
-            if self.page_cache.get(index) == page_content:
-                # content for first TextDisplay is unchanged; still update the copycat panel
-                view = PlayerfinderView()
-                view.container.children[0].content = page_content
-                view.container.children[2].content = copycat_summary
+            if self.page_cache.get(index) != page_content:
+                view = PlayerfinderView(page_content=page_content)
                 try:
                     await msg.edit(view=view)
                 except discord.NotFound:
                     sent = await channel.send(view=view)
                     self.playerfinder_messages[index] = sent
-                continue
-
-            view = PlayerfinderView()
-            view.container.children[0].content = page_content
-            view.container.children[2].content = copycat_summary
-
-            try:
-                await msg.edit(view=view)
-            except discord.NotFound:
-                sent = await channel.send(view=view)
-                self.playerfinder_messages[index] = sent
-            finally:
                 self.page_cache[index] = page_content
 
+        # Send new player pages if needed
         for index in range(current_count, desired_count):
             page_content = pages[index]
-            view = PlayerfinderView()
-            view.container.children[0].content = page_content
-            view.container.children[2].content = copycat_summary
-
+            view = PlayerfinderView(page_content=page_content)
             sent = await channel.send(view=view)
             self.playerfinder_messages.append(sent)
             self.page_cache[index] = page_content
+
+        # Send/update separate copycat summary view
+        if not hasattr(self, "copycat_message") or self.copycat_message is None:
+            copycat_view = CopycatView(copycat_summary)
+            self.copycat_message = await channel.send(view=copycat_view)
+        else:
+            copycat_view = CopycatView(copycat_summary)
+            try:
+                await self.copycat_message.edit(view=copycat_view)
+            except discord.NotFound:
+                self.copycat_message = await channel.send(view=copycat_view)
 
     def author_label(self, player: "Player") -> str:
         # I tried muting @mentions, but doesn't seem to work with ui.containers yet
@@ -221,12 +217,6 @@ class Overseer(commands.Cog):
         )
 
     def build_pages(self) -> list[str]:
-        """
-        Build paginated text content from self.manager.players + self.players_online.
-
-        Returns:
-            List of page strings to be used as TextDisplay content.
-        """
         tracked = [p for p in self.manager.players if not name_filter(p.name)]
         online = [
             (p.name, p, self.players_online[p.name])
@@ -235,21 +225,20 @@ class Overseer(commands.Cog):
         ]
 
         if not online:
-            return ["*No tracked players online.*"]
+            return ["*No tracked players online.*"]  # fallback text
 
         pages: list[str] = []
         lines_per_page = 8
 
         for start in range(0, len(online), lines_per_page):
             page = online[start:start + lines_per_page]
-
             lines = [
                 self.format_player_line(player, entries)
                 for name, player, entries in page
             ]
             header = "" if pages else "# **Playerfinder**\n"
             page_content = header + "\n".join(lines)
-            pages.append(page_content)
+            pages.append(page_content or "*No tracked players online.*")  # ensure non-empty
 
         return pages
 

@@ -98,7 +98,7 @@ class ModeratorInfoButtons(discord.ui.View):
         )
 
         await interaction.response.send_message(
-            embeds=full_info(info),
+            embeds=await full_info(info),
             view=view,
             ephemeral=True,
         )

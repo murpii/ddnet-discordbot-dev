@@ -21,4 +21,9 @@ Tickets:
 - Use ViewContainers whereever applicable for better formatting
 
 
+Moderator stuff:
+- The changelog lines don't arrive in time when executing any of the buttons in the full_info embed (info app command)
+  This happens because I listen to the discord audit log to write logs to the DB which has a delay.
+  Found out by sleeping inbetween timeout + fetching info.
+
 It's possible to do image slideshows with a paginator

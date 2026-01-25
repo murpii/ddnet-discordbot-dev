@@ -4,7 +4,7 @@ from typing import Optional
 import discord
 from discord.ui import Button
 
-from extensions.ticketsystem.manager import Ticket
+from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.transcript import TicketTranscript
 from constants import Roles, Emojis
 from utils.checks import is_staff, check_dm_channel
@@ -63,12 +63,14 @@ class BaseConfirmView(discord.ui.View):
                     if len(interaction.channel.category.channels) == 0:
                         await interaction.channel.category.delete()
             except Exception as e:
-                log.exception(f"{ticket.channel.name}: Error during ticket closure: {e}")
+                log.exception(f"{ticket.channel.name}: Error during ticket closure:\n{e}")
                 if not interaction.response.is_done():
-                    await interaction.response.send_message("An error occurred while closing the ticket.",
-                                                            ephemeral=True)
+                    await interaction.response.send_message(
+                        f"An error occurred while closing the ticket:\n{e}",
+                        ephemeral=True
+                    ),
                 else:
-                    await interaction.followup.send("An error occurred while closing the ticket.", ephemeral=True)
+                    await interaction.followup.send(f"An error occurred while closing the ticket:\n{e}", ephemeral=True)
             finally:
                 ticket.being_closed = False
 

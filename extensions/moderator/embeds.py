@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from extensions.moderator.manager import MemberInfo
 
 
-def full_info(info: "MemberInfo") -> list[discord.Embed]:
+async def full_info(info: "MemberInfo") -> list[discord.Embed]:
     embeds = [MemberInfoEmbed(info)]
     empty_labels = []
     non_empty = []

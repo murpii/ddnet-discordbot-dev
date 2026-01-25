@@ -1,7 +1,7 @@
 import discord
 from discord import SeparatorSpacing
 
-from extensions.ticketsystem.manager import Ticket
+from extensions.ticketsystem.ticket import Ticket
 
 
 class ComplaintContainer(discord.ui.LayoutView):

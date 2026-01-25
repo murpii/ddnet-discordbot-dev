@@ -72,21 +72,19 @@ class LayoutExampleView(LayoutView):
         container = discord.ui.Container(
             discord.ui.TextDisplay("This container has an accent color!"),
             discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),
-            discord.ui.File("attachment://deepfly.txt"),
-            discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),
+            # discord.ui.File("attachment://deepfly.txt"),
+            # discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),
             discord.ui.MediaGallery(
-                discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
-                discord.MediaGalleryItem("https://i.imgur.com/LWQESh4.mp4"),
-                discord.MediaGalleryItem("https://i.imgur.com/dTXraG9.jpeg"),
+                discord.MediaGalleryItem("attachment://file.mp4"),
+                # discord.MediaGalleryItem("https://i.imgur.com/dTXraG9.jpeg"),
             ),
             discord.ui.TextDisplay("Some text between!"),
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
-                discord.MediaGalleryItem("https://i.imgur.com/LWQESh4.mp4"),
-            ),
+            # discord.ui.MediaGallery(
+            #     discord.MediaGalleryItem("https://i.imgur.com/MSZF3ly.png"),
+            # ),
             discord.ui.ActionRow(btn1, btn2, btn3),  # <- btn3 instead of modal here
             discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),
-            accent_colour=discord.Colour.orange(),
+            accent_colour=discord.Colour.ash_embed(),
         )
 
         self.add_item(container)
@@ -115,7 +113,7 @@ class Layout(commands.Cog):
 
     @commands.command()
     async def layout(self, ctx: commands.Context):
-        file = discord.File("data/deepfly.txt", filename="deepfly.txt")
+        file = discord.File("data/file.mp4", filename="file.mp4")
         await ctx.send(
             view=LayoutExampleView(),
             file=file

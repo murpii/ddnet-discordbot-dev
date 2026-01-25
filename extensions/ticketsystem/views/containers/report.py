@@ -1,7 +1,7 @@
 import discord
 from discord import SeparatorSpacing
 
-from extensions.ticketsystem.manager import Ticket
+from extensions.ticketsystem.ticket import Ticket
 
 
 class ReportContainer(discord.ui.LayoutView):
@@ -13,14 +13,14 @@ class ReportContainer(discord.ui.LayoutView):
                 "# [Report Ticket](https://-/)\n"
                 f"Hello {ticket.creator.mention}, thanks for reaching out!"
             ),
-            discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),
+            discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True),  # type: ignore
             discord.ui.TextDisplay(
                 "Please follow the steps below so we can handle your report efficiently."
                 "```prolog\n1. ESC -> Server Info -> Copy Info (in-game).```"
                 "```prolog\n2. Paste the copied text into this chat.```"
                 "```prolog\n3. Describe the Problem you are having.```",
             ),
-            discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True, ),
+            discord.ui.Separator(spacing=SeparatorSpacing.large, visible=True, ),  # type: ignore
             discord.ui.TextDisplay(
                 "-# **Important notes**\n"
                 "-# Do NOT file reports about server lag or DoS attacks.\n"

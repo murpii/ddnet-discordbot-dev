@@ -46,7 +46,7 @@ async def fetch_rank_from_demo(bot, message: discord.Message, session: aiohttp.C
             continue
 
         map_name, time_str, player_name = match.groups()
-        print(player_name)
+
         if '.' in time_str:
             time_str = time_str.rstrip('0').rstrip('.')
 

@@ -126,7 +126,7 @@ class KickModal(discord.ui.Modal, title="Kick member"):
                 info=info,
                 can_remove_entries=has_any_entries,
             )
-            updated_embeds = full_info(info)
+            updated_embeds = await full_info(info)
 
             await interaction.edit_original_response(
                 content=f"User {member.mention} has been kicked. Reason: {reason}",
@@ -179,7 +179,7 @@ class KickModal(discord.ui.Modal, title="Kick member"):
             info=info,
             can_remove_entries=has_any_entries,
         )
-        updated_embeds = full_info(info)
+        updated_embeds = await full_info(info)
 
         await interaction.edit_original_response(
             content=f"User {member.mention} has been kicked. Reason: {reason}",

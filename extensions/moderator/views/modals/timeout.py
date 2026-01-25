@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 from typing import Optional, List
 
@@ -118,7 +119,7 @@ class TimeoutModal(discord.ui.Modal, title="Timeout member"):
             info=info,
             can_remove_entries=has_any_entries,
         )
-        updated_embeds = full_info(info)
+        updated_embeds = await full_info(info)
 
         await interaction.edit_original_response(
             content=(

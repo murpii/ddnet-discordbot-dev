@@ -49,7 +49,7 @@ class Wiki(commands.Cog):
         title_formatted = title.replace(" ", "_")
         section_formatted = section.replace(" ", "_")
         link = f"https://wiki.ddnet.org/wiki/{title_formatted}#{section_formatted}"
-        print(link)
+
         if section:
             return f"[`{title} - {section}`]({link})"
         else:

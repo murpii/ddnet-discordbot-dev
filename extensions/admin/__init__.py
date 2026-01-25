@@ -3,9 +3,86 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ui import Button
 
-from run import extensions
+from bot import extensions
 from constants import Guilds
 from extensions.moderator.automod import session
+
+
+def chunked(iterable, size):
+    for i in range(0, len(iterable), size):
+        yield iterable[i:i + size]
+
+
+class ExtensionSelect(discord.ui.Select):
+    def __init__(self, bot, action, extensions, index):
+        self.bot = bot
+        self.action = action
+
+        options = [
+            discord.SelectOption(
+                label=ext.split(".")[-1],
+                value=ext,
+            )
+            for ext in extensions
+        ]
+
+        super().__init__(
+            placeholder=f"Select extension ({index})",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id=f"ext:{action}:{index}",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        extension = self.values[0]
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        try:
+            if self.action == "load":
+                await self.bot.load_extension(extension)
+            elif self.action == "unload":
+                await self.bot.unload_extension(extension)
+            elif self.action == "reload":
+                await self.bot.reload_extension(extension)
+
+            await self.bot.tree.sync(guild=interaction.guild)
+
+            await interaction.edit_original_response(
+                content=f"{self.action.capitalize()}ed `{extension}` successfully."
+            )
+
+        except commands.ExtensionAlreadyLoaded:
+            await interaction.edit_original_response(
+                content=f"`{extension}` is already loaded."
+            )
+        except commands.ExtensionNotLoaded:
+            await interaction.edit_original_response(
+                content=f"`{extension}` is not loaded."
+            )
+        except commands.ExtensionNotFound:
+            await interaction.edit_original_response(
+                content=f"`{extension}` not found."
+            )
+        except commands.ExtensionFailed as e:
+            await interaction.edit_original_response(
+                content=f"`{extension}` failed: {e}"
+            )
+
+
+class ExtensionSelectView(discord.ui.View):
+    def __init__(self, bot, action):
+        super().__init__(timeout=120)
+        self.bot = bot
+        self.action = action
+
+        all_extensions = [cog for cog, _ in extensions]
+
+        for idx, chunk in enumerate(chunked(all_extensions, 25), start=1):
+            self.add_item(
+                ExtensionSelect(bot, action, chunk, idx)
+            )
 
 
 # noinspection PyUnresolvedReferences
@@ -150,54 +227,28 @@ class Extensions(commands.GroupCog):
         )  # noqa
 
     @app_commands.command(name="load", description="Loads a cog extension")
-    @app_commands.describe(extension="The name of the extension to load")
-    @app_commands.choices(extension=choices)
-    async def load(self, interaction: discord.Interaction, extension: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-        try:
-            await self.bot.load_extension(extension)
-            await interaction.edit_original_response(
-                content=f"Loaded {extension} successfully. Syncing app commands... This might take awhile."
-            )
-            await self.sync_guild(interaction)
-        except commands.ExtensionAlreadyLoaded:
-            await interaction.followup.send(f"`{extension}` is already loaded!")
-        except commands.ExtensionNotFound:
-            await interaction.followup.send(f"`{extension}` not found!")
-        except commands.ExtensionFailed as e:
-            await interaction.followup.send(f"`{extension}` failed to load: {e}")
+    async def load(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "Select an extension to load:",
+            view=ExtensionSelectView(self.bot, "load"),
+            ephemeral=True,
+        )
 
     @app_commands.command(name="unload", description="Unloads a cog extension")
-    @app_commands.describe(extension="The name of the extension to unload")
-    @app_commands.choices(extension=choices)
-    async def unload(self, interaction: discord.Interaction, extension: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-        try:
-            await self.bot.unload_extension(extension)
-            await interaction.edit_original_response(
-                content=f"Unloaded {extension} successfully. Syncing app commands... This might take awhile."
-            )
-            await self.sync_guild(interaction)
-        except (commands.ExtensionNotFound, commands.ExtensionNotLoaded):
-            await interaction.followup.send(f"`{extension}` not found!")
+    async def unload(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "Select an extension to unload:",
+            view=ExtensionSelectView(self.bot, "unload"),
+            ephemeral=True,
+        )
 
-    @app_commands.command(name="reload", description="Reload a cog extension")
-    @app_commands.describe(extension="The name of the extension to reload")
-    @app_commands.choices(extension=choices)
-    async def reload(self, interaction: discord.Interaction, extension: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-        try:
-            await self.bot.reload_extension(extension)
-            await interaction.edit_original_response(
-                content=f"Reloaded {extension} successfully. Syncing app commands... This might take awhile."
-            )
-            await self.sync_guild(interaction)
-        except commands.ExtensionNotLoaded:
-            await interaction.followup.send(f"`{extension}` is not loaded!")
-        except commands.ExtensionNotFound:
-            await interaction.followup.send(f"`{extension}` not found!")
-        except commands.ExtensionFailed as e:
-            await interaction.followup.send(f"`{extension}` failed to load: {e}")
+    @app_commands.command(name="reload", description="Reloads a cog extension")
+    async def reload(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "Select an extension to reload:",
+            view=ExtensionSelectView(self.bot, "reload"),
+            ephemeral=True,
+        )
 
 
 async def setup(bot):

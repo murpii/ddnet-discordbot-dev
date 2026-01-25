@@ -63,7 +63,7 @@ class UnbanButton(discord.ui.Button):
             info=info,
             can_remove_entries=has_any_entries,
         )
-        updated_embeds = full_info(info)
+        updated_embeds = await full_info(info)
 
         await interaction.response.edit_message(
             content=f"User {self.member.mention} has been unbanned.",

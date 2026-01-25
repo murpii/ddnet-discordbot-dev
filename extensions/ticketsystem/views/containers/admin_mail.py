@@ -2,7 +2,7 @@ import discord
 from discord import SeparatorSpacing
 
 from constants import URLs
-from extensions.ticketsystem.manager import Ticket
+from extensions.ticketsystem.ticket import Ticket
 
 
 class AdminMailContainer(discord.ui.LayoutView):

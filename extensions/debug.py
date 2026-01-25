@@ -1,5 +1,7 @@
+import json
 from datetime import datetime
 import sqlite3
+from pprint import pprint, pformat
 
 import discord
 from discord.ext import commands
@@ -23,7 +25,9 @@ class Debug(commands.Cog):
 
     @commands.command()
     async def tickets(self, ctx: commands.Context):
-        print(self.ticket_manager.tickets)
+        data = self.ticket_manager.dump()
+        pretty = json.dumps(data, indent=2)
+        await ctx.send(f"```json\n{pretty}\n```")
 
     @commands.command()
     async def fix_tags(self, ctx):

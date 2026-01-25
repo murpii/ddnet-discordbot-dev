@@ -1,4 +1,6 @@
+import random
 import discord
+from constants import Roles
 
 
 # THIS IS NO LONGER USED -- REPLACED BY views/containers/report.py
@@ -29,15 +31,17 @@ class ReportEmbed(discord.Embed):
 
 
 class ReportInfoEmbed(discord.Embed):
-    def __new__(cls):
-        embed = discord.Embed(title="Example", color=2210995)
-        embed.add_field(
-            name="Here's an example of how your report should look like:",
-            value="```DDNet GER10 [ger10.ddnet.org whitelist] - Moderate \n"
-                  "Address: ddnet://37.230.210.231:8320 \n"
-                  "My IGN: nameless tee\n\n"
-                  'A player named Learath2 keeps blocking our group! '
-                  'We have tried ban-voting him but vote never succeeds.```',
-            inline=False,
+    def __new__(cls, guild: discord.Guild):
+        staff_members = [
+            member for member in guild.members
+            if any(role.id in {Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR} for role in member.roles)
+        ]
+        return discord.Embed(
+            title="Example",
+            description="```DDNet GER10 [ger10.ddnet.org whitelist] - Moderate \n"
+                        "Address: ddnet://37.230.210.231:8320 \n"
+                        f"My IGN: {random.choice(staff_members).display_name}\n\n"
+                        f"A player named {random.choice(staff_members).display_name} keeps blocking our group! "
+                        "We have tried ban-voting him but vote never succeeds.```",
+            color=2210995,
         )
-        return embed

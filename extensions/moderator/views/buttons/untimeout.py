@@ -7,7 +7,7 @@ from extensions.moderator.embeds import NoMemberInfoEmbed, full_info
 
 class UntimeoutButton(discord.ui.Button):
     def __init__(self, bot, member: discord.abc.User):
-        super().__init__(label="Untimeout", style=discord.ButtonStyle.success)  # noqa
+        super().__init__(label="Remove Timeout", style=discord.ButtonStyle.success)  # noqa
         self.bot = bot
         self.db = bot.moddb
         self.member = member
@@ -64,7 +64,7 @@ class UntimeoutButton(discord.ui.Button):
             info=info,
             can_remove_entries=has_any_entries,
         )
-        updated_embeds = full_info(info)
+        updated_embeds = await full_info(info)
 
         await interaction.response.edit_message(
             content=f"Timeout for {member.mention} has been cleared.",

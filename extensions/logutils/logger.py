@@ -124,7 +124,7 @@ class GuildLog(commands.Cog):
                 not message.guild
                 or message.guild.id != Guilds.DDNET
                 or message.is_system()
-                or message.channel.id in (Channels.LOGS, Channels.PLAYERFINDER, Channels.ALERTS)
+                or message.channel.id in (Channels.LOGS, Channels.PLAYERFINDER)
                 or message.channel.category.id == Channels.CAT_INTERNAL
                 or message.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
         ):
@@ -229,7 +229,7 @@ class GuildLog(commands.Cog):
                 not before.guild
                 or before.guild.id != Guilds.DDNET
                 or before.is_system()
-                or before.channel.id in (Channels.LOGS, Channels.PLAYERFINDER, Channels.ALERTS)
+                or before.channel.id in (Channels.LOGS, Channels.PLAYERFINDER)
                 or before.channel.category.id == Channels.CAT_INTERNAL
                 or before.author.bot
                 or before.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
