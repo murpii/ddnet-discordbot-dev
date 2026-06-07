@@ -66,16 +66,17 @@ class Profile(commands.Cog):
         return [app_commands.Choice(name=a, value=a) for a, in results]
 
     # Unsure if this is a good idea to use autocomplete for profiles
-    async def profile_autocomplete(
-            self, _: discord.Interaction, name: str
-    ) -> list[app_commands.Choice[str]]:
-        query = """SELECT DISTINCT name
-                   FROM record_race
-                   WHERE name LIKE %s
-                   LIMIT 12;"""
-        w = f"%{name}%"
-        results: list[str] = await self.bot.fetch(query, w, fetchall=True)
-        return [app_commands.Choice(name=a, value=a) for a, in results]
+    # Update: Bad idea...
+    # async def profile_autocomplete(
+    #         self, _: discord.Interaction, name: str
+    # ) -> list[app_commands.Choice[str]]:
+    #     query = """SELECT DISTINCT name
+    #                FROM record_race
+    #                WHERE name LIKE %s
+    #                LIMIT 12;"""
+    #     w = f"%{name}%"
+    #     results: list[str] = await self.bot.fetch(query, w, fetchall=True)
+    #     return [app_commands.Choice(name=a, value=a) for a, in results]
 
     @app_commands.command(
         name="profile",
@@ -83,7 +84,7 @@ class Profile(commands.Cog):
     @app_commands.describe(
         player="Enter the player name for which you'd like to view the details.")
     @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
-    @app_commands.autocomplete(player=profile_autocomplete)
+    # @app_commands.autocomplete(player=profile_autocomplete)
     async def profile(self, interaction: discord.Interaction, player: str = None):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
@@ -93,6 +94,31 @@ class Profile(commands.Cog):
         if not json_data:
             await interaction.followup.send(content=f"`{player}` does not exist.")
             return
+
+        last_finishes = json_data.get("last_finishes") or []
+
+        categories = []
+        ddmax = None
+        for category, cdata in (json_data.get("types") or {}).items():
+            pts = (cdata.get("points") or {}).get("points", 0)
+            tot = (cdata.get("points") or {}).get("total", 0)
+            # json2 lists every map of the type; finished ones carry first_finish.
+            maps = cdata.get("maps") or {}
+            done = sum(1 for m in maps.values() if "first_finish" in m)
+            count = len(maps)
+            if category.startswith("DDmaX"):
+                if ddmax is None:
+                    ddmax = {"name": "DDmaX", "points": 0, "total": 0, "maps": 0, "maps_total": 0}
+                    categories.append(ddmax)
+                ddmax["points"] += pts
+                ddmax["total"] += tot
+                ddmax["maps"] += done
+                ddmax["maps_total"] += count
+            else:
+                categories.append({
+                    "name": category, "points": pts, "total": tot,
+                    "maps": done, "maps_total": count,
+                })
 
         profile = {
             "name": json_data["player"],
@@ -110,6 +136,13 @@ class Profile(commands.Cog):
             "month": datetime.fromtimestamp(
                 json_data["first_finish"]["timestamp"]
             ).month,
+
+            # extended stats for the lower half of the profile card.
+            "first_finish": json_data["first_finish"],  # {timestamp, map, time}
+            "last_finish": last_finishes[0] if last_finishes else None,  # {timestamp, map, type}
+            "points_last_year": (json_data.get("points_last_year") or {}).get("points"),
+            "partners": (json_data.get("favorite_partners") or [])[:3],  # {name, finishes}
+            "categories": categories,
         }
 
         buf = await generate_profile_image(profile)  # noqa
@@ -377,8 +410,8 @@ class Profile(commands.Cog):
         description="Display the total time of all finishes by a player")
     @app_commands.describe(
         player="Enter the player name for which you'd like to view the total time.")
-    # @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
-    @app_commands.autocomplete(player=profile_autocomplete)
+    @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
+    # @app_commands.autocomplete(player=profile_autocomplete)
     async def total_time(self, interaction: discord.Interaction, player: str = None):
         await interaction.response.defer(ephemeral=True, thinking=True)
         player = player or interaction.user.display_name

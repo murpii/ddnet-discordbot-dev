@@ -1,23 +1,33 @@
+import logging
 import re
 import dateparser
-from typing import List, Optional, Union, Iterable
+from typing import Optional
 from datetime import datetime, timedelta
 
 import discord
-from discord.ext import commands
+
+import constants
+
+log = logging.getLogger(__name__)
 
 
-class CleanContent(commands.clean_content):
-    def __init__(self):
-        super().__init__(fix_channel_mentions=True)
+def render_constants(text: str) -> str:
+    """
+    Replace {Channels.X} / {Roles.X} / {Emojis.X} placeholders with the real
+    IDs from constants.py, so e.g. "<#{Channels.WELCOME}>" becomes a working
+    channel link.
+    """
 
-    async def convert(self, ctx: commands.Context, argument: str) -> str:
-        if argument[0] == '"' and argument[-1] == '"':
-            argument = argument[1:-1]  # strip quotes
+    def replace(match: re.Match) -> str:
+        group = getattr(constants, match[1], None)
+        value = getattr(group, match[2], None) if group else None
+        if value is None:
+            log.warning("render_constants: unknown placeholder %s", match[0])
+            return match[0]
+        # Emojis/Channels/Roles are IntEnums, format as the plain ID
+        return str(int(value)) if isinstance(value, int) else str(value)
 
-        argument = argument.replace("\ufe0f", "")  # remove VS16
-        argument = re.sub(r"<a?(:[a-zA-Z0-9_]+:)[0-9]{17,21}>", r"\1", argument)
-        return await super().convert(ctx, argument)
+    return re.compile(r"\{(Channels|Roles|Emojis)\.([A-Za-z0-9_]+)\}").sub(replace, text)
 
 
 def humanize_points(points: int) -> str:
@@ -39,6 +49,24 @@ def escape_backticks(text: str) -> str:
     return text.replace("`", "`\u200b")
 
 
+def inline_code(text: str) -> str:
+    if not text:
+        return "` `"
+
+    longest_run = 0
+    current_run = 0
+    for char in text:
+        if char == "`":
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+
+    fence = "`" * (longest_run + 1)
+    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
 def escape_custom_emojis(text: str) -> str:
     return re.sub(
         r"<(a)?:([a-zA-Z0-9_]+):([0-9]{17,21})>", r"<%s\1:\2:\3>" % "\u200b", text
@@ -56,55 +84,14 @@ def escape(text: str, markdown: bool = True, mentions: bool = True, custom_emoji
     return text
 
 
-def truncate(text: str, *, length: int) -> str:
-    return f"{text[:length - 3]}..." if len(text) > length else text
-
-
-def human_join(seq: List[str], delim: str = ", ", final: str = " & ") -> str:
-    size = len(seq)
-    if size == 0:
-        return ""
-    elif size == 1:
-        return seq[0]
-    elif size == 2:
-        return seq[0] + final + seq[1]
-    else:
-        return delim.join(seq[:-1]) + final + seq[-1]
-
-
-def sanitize(text: str) -> str:
-    return re.sub(r'[\^<>{}"/|;:,.~!?@#$%=&*\]\\()\[+]', "", text.replace(" ", "_"))
-
-
-def normalize(text: str) -> str:
-    return re.sub(rb"[^a-zA-Z0-9]", rb"_", text.encode()).decode()
+def escape_link_label(text: str) -> str:
+    for char in ("\\", "[", "]", "*", "_", "~", "`", "|"):
+        text = text.replace(char, "\\" + char)
+    return discord.utils.escape_mentions(text)
 
 
 def plural(value: int, singular: str) -> str:
     return singular if abs(value) == 1 else f"{singular}s"
-
-
-def render_table(header: List[str], rows: List[List[str]]) -> str:
-    widths = [max(len(r[i]) for r in rows + [header]) for i in range(len(header))]
-
-    out = [
-        " | ".join(c.center(w) for c, w in zip(header, widths)),
-        "-+-".join("-" * w for w in widths),
-    ]
-
-    for row in rows:
-        columns = []
-        for column, width in zip(row, widths):
-            try:
-                float(column)
-            except ValueError:
-                columns.append(column.ljust(width))
-            else:
-                columns.append(column.rjust(width))
-
-        out.append(" | ".join(columns))
-
-    return "\n".join(out)
 
 
 def human_timedelta(seconds: float, brief: bool = False) -> str:
@@ -128,60 +115,6 @@ def human_timedelta(seconds: float, brief: bool = False) -> str:
         return "0s" if brief else "0 seconds"
 
 
-def str_to_timedelta(expiry_date: str) -> timedelta:
-    pattern = r'^(\d+)(mo|[mhdw])?$'
-    match = re.match(pattern, expiry_date.lower())
-    if not match:
-        raise ValueError("Invalid expiry date format")
-
-    amount = int(match[1])
-    unit = match[2]
-
-    try:
-        if unit == "m":
-            return timedelta(minutes=amount)
-        elif unit == "h":
-            return timedelta(hours=amount)
-        elif unit == "d":
-            return timedelta(days=amount)
-        elif unit == "w":
-            return timedelta(weeks=amount)
-        elif unit == "mo":
-            return timedelta(days=amount * 30)
-        else:
-            # If unit is None or not specified, assume days? Or raise error?
-            # Let's assume days if missing:
-            return timedelta(days=amount)
-    except Exception as e:
-        raise ValueError("Invalid expiry date format") from e
-
-
-def str_to_datetime(expiry_date: str) -> Optional[datetime]:
-    pattern = r'^(\d+)(mo|[mhdw])?$'
-    match = re.match(pattern, expiry_date.lower())
-    if not match:
-        raise ValueError("Invalid expiry date format")
-
-    amount = int(match[1])
-    unit = match[2]
-    now = datetime.now()
-
-    try:
-        if unit == "m":
-            return now + timedelta(minutes=amount)
-        elif unit == "h":
-            return now + timedelta(hours=amount)
-        elif unit == "d":
-            return now + timedelta(days=amount)
-        elif unit == "w":
-            return now + timedelta(weeks=amount)
-        elif unit == "mo":
-            return now + timedelta(days=amount * 30)
-        return None
-    except ValueError as e:
-        raise ValueError("Invalid expiry date format") from e
-
-
 def datetime_to_unix(datetime_str: str) -> int:
     try:
         dt = datetime.strptime(datetime_str, "%Y/%m/%d %H:%M")
@@ -197,11 +130,6 @@ def datetime_to_unix(datetime_str: str) -> int:
                 f"Got: `{datetime_str}`"
             ) from e
         return int(dt.timestamp())
-
-
-def unix_to_datetime_str(unix_ts: int) -> str:
-    dt = datetime.fromtimestamp(unix_ts)
-    return dt.strftime("%Y/%m/%d %H:%M")
 
 
 def to_discord_timestamp(dt: datetime, style: str = 'f') -> str:
@@ -267,82 +195,6 @@ def choice_to_timedelta(duration_choice: int) -> tuple:
         raise ValueError("Invalid choice for auto-disable duration.")
 
 
-def star_rating(r: int) -> str:
-    r = max(1, min(r, 5))
-    return "★" * r + "☆" * (5 - r)
-
-
-def get_embed_from_interaction(interaction: discord.Interaction) -> Optional[discord.Embed]:
-    """
-    Get the existing embed from the interaction message.
-
-    Args:
-        interaction: The Discord interaction
-
-    Returns:
-        The first embed if present, None otherwise
-    """
-    if interaction.message and interaction.message.embeds:
-        return interaction.message.embeds[0]
-    return None
-
-
-def extract_ids_from_mentions(mentions_line: str, prefix: str = None) -> List[int]:
-    """
-    Extract user IDs from a line containing Discord mentions.
-
-    Args:
-        mentions_line: Line containing Discord user mentions
-        prefix: Optional prefix to use
-
-    Returns:
-        List of extracted user IDs
-    """
-    mention_text = mentions_line.strip(prefix).strip()
-    mention_tokens = mention_text.split()
-
-    extracted_user_ids = []
-    for token in mention_tokens:
-        if token.startswith("<@") and token.endswith(">"):
-            try:
-                clean_id = token.strip("<@!>")
-                user_id = int(clean_id)
-                extracted_user_ids.append(user_id)
-            except ValueError:
-                continue
-
-    return extracted_user_ids
-
-
-def user_ids_to_mentions(
-        users: Union[int, discord.User, discord.Member, Iterable[Union[int, discord.User, discord.Member]]]
-) -> str:
-    """
-    Format user IDs or user objects into Discord mention strings.
-
-    Args:
-        users: A single user ID, user object, or an iterable of those.
-
-    Returns:
-        Space-separated string of user mentions.
-    """
-    if not isinstance(users, (list, set, tuple)):
-        users = [users]
-
-    mentions = []
-    for user in users:
-        if isinstance(user, int):
-            user_id = user
-        elif hasattr(user, "id"):
-            user_id = user.id
-        else:
-            raise TypeError(f"Unsupported type {type(user)} in users input")
-
-        mentions.append(f"<@{user_id}>")
-
-    return " ".join(mentions)
-
-
 def strip_surrounding_quotes(s):
     if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
         return s[1:-1]
@@ -352,3 +204,50 @@ def strip_surrounding_quotes(s):
 def extract_address(string: str) -> Optional[str]:
     pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5})"
     return match.group(1) if (match := re.search(pattern, string)) else None
+
+
+def clip(text: str, limit: int = 150) -> str:
+    """
+    Collapse text onto one line and cap its length. Used by the container
+    views, where all text shares one 4000 character budget per message
+    """
+    text = " ".join(text.split())
+    return text if len(text) <= limit else f"{text[:limit - 3]}..."
+
+
+def resolve_role_mentions(content: str, guild: Optional[discord.Guild]) -> str:
+    """Replace plain text @RoleName strings with real role mentions"""
+    if guild is None or "@" not in content:
+        return content
+    for role in guild.roles:
+        content = content.replace(f"@{role.name}", f"<@&{role.id}>")
+    return content
+
+
+def resolve_user_mentions(content: str, guild: Optional[discord.Guild]) -> tuple:
+    """Replace plain-text @username tokens with real user mentions"""
+    if guild is None or "@" not in content:
+        return content, []
+
+    lookup = {}
+    for member in guild.members:
+        for name in (member.name, member.nick, member.global_name):
+            if name:
+                lookup.setdefault(name.lower(), member)
+    mentioned = []
+
+    def substitute(match: re.Match) -> str:
+        member = lookup.get(match[1].lower())
+        if member is None:
+            return match[0]
+        if member not in mentioned:
+            mentioned.append(member)
+        return member.mention
+
+    return re.compile(r"@([\w.]{2,32})").sub(substitute, content), mentioned
+
+
+def parse_message_url(url: str) -> Optional[tuple]:
+    url_re = re.compile(r"https?://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)")
+    match = url_re.search(url.strip())
+    return tuple(int(group) for group in match.groups()) if match else None

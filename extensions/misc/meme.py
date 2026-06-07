@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 from discord import app_commands
 from discord.ext import commands
 
-from utils.image import save, wrap_new
+from utils.image import save, wrap_new, TEXT_LAYOUT
 from constants import Emojis, Channels
 
 DIR = "data/assets"
@@ -53,7 +53,7 @@ def check_text_length(text1: str, text2: str = None, max_chars: int = 110) -> Li
 async def render(name: str, text1: str, text2: str = None) -> BytesIO:
     base = Image.open(f"{DIR}/memes/{name}.png")
     canv = ImageDraw.Draw(base)
-    font = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 46)
+    font = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 46, layout_engine=TEXT_LAYOUT)
 
     canv.text((570, 70), wrap(font, text1, 400), fill="black", font=font)
     if text2 is not None:
@@ -65,7 +65,7 @@ async def render(name: str, text1: str, text2: str = None) -> BytesIO:
 async def render_teebob(text: str) -> BytesIO:
     base = Image.open(f"{DIR}/memes/teebob.png")
     canv = ImageDraw.Draw(base)
-    font = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 40)
+    font = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 40, layout_engine=TEXT_LAYOUT)
 
     box = ((100, 110), (360, 370))
     wrap_new(canv, box, text, font=font)
@@ -76,7 +76,7 @@ async def render_teebob(text: str) -> BytesIO:
 async def render_clown(text1: str, text2: str, text3: str, text4: str) -> BytesIO:
     base = Image.open(f"{DIR}/memes/clown.png")
     canv = ImageDraw.Draw(base)
-    font = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 30)
+    font = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 30, layout_engine=TEXT_LAYOUT)
 
     canv.text((10, 10), wrap(font, text1, 310), fill="black", font=font)
     canv.text((10, 180), wrap(font, text2, 310), fill="black", font=font)

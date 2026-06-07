@@ -4,20 +4,14 @@ import logging
 import re
 from typing import Optional
 import discord
-from discord.ext import commands
 
 import extensions.ticketsystem.queries as queries
 from constants import Guilds, Channels
 from utils.profile import PlayerProfile
-from . import embeds
+from .mappings import START_CONTAINERS
 from .ticket import Ticket, AppealData, TicketCategory, TicketState, RenameData
-from .utils import find_or_create_category
-from .views.containers.admin_mail import AdminMailContainer
-from .views.containers.ban_appeal import BanAppealContainer
-from .views.containers.community_app import CommunityAppContainer
-from .views.containers.complaint import ComplaintContainer
-from .views.containers.rename import RenameContainer
-from .views.containers.report import ReportContainer
+from .transcript import TicketTranscript
+from .views.containers.close import CloseContainer
 
 log = logging.getLogger("tickets")
 
@@ -34,7 +28,6 @@ class TicketManager:
         self.bot = bot
         self.tickets = {}
         self.lock = asyncio.Lock()
-        self.cooldown = commands.CooldownMapping.from_cooldown(1.0, 3.0, lambda i: i.user.id)
 
     def dump(self):
         return {
@@ -69,85 +62,84 @@ class TicketManager:
 
     @staticmethod
     def parse_ticket_topic(topic: str) -> dict[str, str]:
-        """Parse a ticket topic into a dictionary of fields."""
+        """Parse a ticket topic into a dictionary of fields"""
         data = {}
         for line in topic.splitlines():
             if ':' not in line:
                 continue
             key, value = line.split(':', 1)
             data[key.strip()] = value.strip()
-        print(data)
         return data
 
-    async def create_channel(self, interaction: discord.Interaction, ticket: Ticket):
-        """
-        Creates a new ticket channel in an appropriate category.
-        Uses the channel topic to store ticket metadata (author, category, etc.).
-        """
-        category = interaction.guild.get_channel(Channels.CAT_TICKETS)
-        target_category = await find_or_create_category(interaction.guild, category)
+    @staticmethod
+    def is_ticket_category(category: Optional[discord.CategoryChannel]) -> bool:
+        """Whether a Discord category holds ticket channels"""
+        if category is None:
+            return False
+        if category.name.startswith("Tickets") or category.name == "Community Applications":
+            return True
+        return bool(Channels.CAT_COMMUNITY_APPS) and category.id == Channels.CAT_COMMUNITY_APPS
 
-        if not category:
-            await interaction.followup.send(
-                "I could not create a ticket channel because all channel categories are full "
-                "and I lack permissions to create a new one. Please contact a server administrator.",
-                ephemeral=True
-            )
+    async def get_community_app_category(
+            self, guild: discord.Guild
+    ) -> Optional[discord.CategoryChannel]:
+        """Resolve the Community Applications category: configured id, else by name, else create it"""
+        if Channels.CAT_COMMUNITY_APPS:
+            category = guild.get_channel(Channels.CAT_COMMUNITY_APPS)
+            if isinstance(category, discord.CategoryChannel):
+                return category
+
+        category = discord.utils.get(guild.categories, name="Community Applications")
+        if category is not None:
+            return category
+
+        tickets_cat = guild.get_channel(Channels.CAT_TICKETS)
+        overwrites = tickets_cat.overwrites if isinstance(tickets_cat, discord.CategoryChannel) else None
+        try:
+            new_category = await guild.create_category(name="Community Applications", overwrites=overwrites)
+        except (discord.Forbidden, discord.HTTPException) as e:
+            log.error("Failed to create '%s' category: %s", "Community Applications", e)
             return None
 
-        ticket_name = f"{ticket.category.value}-{await self.ticket_num(category=ticket.category.value)}"
-        topic = await self.topic_metadata(ticket)
-        channel_params = {
-            "name": ticket_name,
-            "category": target_category,
-            "overwrites": ticket.get_overwrites(interaction),
-            "topic": topic
-        }
+        # place it right below the main ticket category
+        if isinstance(tickets_cat, discord.CategoryChannel):
+            with contextlib.suppress(discord.HTTPException):
+                await new_category.move(after=tickets_cat, reason="Keep community apps below tickets")
 
-        try:
-            channel = await interaction.guild.create_text_channel(**channel_params)
-            log.info(f"Successfully created ticket channel #{channel.name} ({channel.id})")
-            return channel
-        except discord.Forbidden:
-            log.error(
-                f"Failed to create ticket channel '{ticket_name}' in guild {interaction.guild.id}. "
-                f"Bot lacks 'Manage Channels' permission."
-            )
-            await interaction.followup.send(
-                "I do not have the required permissions to create a ticket channel. Please contact an administrator.",
-                ephemeral=True
-            )
-        except discord.HTTPException as e:
-            log.error(f"An unexpected HTTP error occurred while creating channel '{ticket_name}': {e}")
-            await interaction.followup.send(
-                "An unexpected error occurred while creating your ticket. Please try again later.",
-                ephemeral=True
-            )
-
-    def get_category(self, channel: discord.TextChannel) -> TicketCategory:
-        """
-        Extracts the ticket category from the channel topic.
-        Falls back to None if no valid category is found.
-        """
-        if not channel.topic:
-            raise ValueError(f"Tickets: {channel.name} topic is empty.")
-        topic_data = self.parse_ticket_topic(channel.topic)
-        category_str = topic_data.get("ticket category", "").lower()
-        try:
-            return TicketCategory(category_str)
-        except ValueError as e:
-            raise ValueError(
-                f"{channel.name}[ID:{channel.id}]: Unknown 'Ticket Category' in topic: {category_str}"
-            ) from e
+        return new_category
 
     async def load_tickets(self) -> None:
         guild = self.bot.get_guild(Guilds.DDNET)
-        for category in guild.categories:
-            if category.name == "Tickets":
-                for channel in category.text_channels:
-                    if channel.id in (Channels.TICKETS_TRANSCRIPTS, Channels.TICKETS_INFO):
-                        continue
-                    await self.create_ticket(channel=channel)
+        channels = [
+            channel
+            for category in guild.categories if self.is_ticket_category(category)
+            for channel in category.text_channels
+            if channel.id not in (Channels.TICKETS_TRANSCRIPTS, Channels.TICKETS_INFO)
+        ]
+
+        for i in range(0, len(channels), 10):
+            batch = channels[i:i + 10]
+            results = await asyncio.gather(
+                *(self.create_ticket(channel=ch) for ch in batch),
+                return_exceptions=True,
+            )
+            for ch, result in zip(batch, results):
+                if isinstance(result, Exception):
+                    log.error("Failed to load ticket %s: %s", ch.name, result)
+
+    async def cleanup_database(self) -> str:
+        """Removes ticket rows whose channels no longer exist"""
+        rows = await self.bot.fetch("SELECT channel_id FROM discordbot_tickets", fetchall=True)
+        orphans = [row[0] for row in rows if int(row[0]) not in self.tickets]
+
+        if not orphans:
+            return "No orphaned tickets found, nothing was deleted."
+
+        placeholders = ", ".join(["%s"] * len(orphans))
+        await self.bot.upsert(
+            f"DELETE FROM discordbot_tickets WHERE channel_id IN ({placeholders})", *orphans
+        )
+        return "Deleted tickets:\n" + "\n".join(f"Channel ID: {cid}" for cid in orphans)
 
     async def create_ticket(
             self,
@@ -159,7 +151,7 @@ class TicketManager:
         Create or register a ticket from a Discord text channel or from a new Ticket object.
         Uses the channel.topic to determine creator, category, and other metadata.
         """
-        # Case: Ticket object already exists
+        # Case: A ticket object already exists
         if ticket:
             self.add_ticket(channel=ticket.channel, ticket=ticket)
             if init:
@@ -198,12 +190,7 @@ class TicketManager:
         state = next((s for s in TicketState if s.value == channel.name[0]), TicketState.UNCLAIMED)
 
         result = await self.bot.fetch(queries.get_ticket_status, channel.id)
-        if not result:
-            locked = False
-        elif isinstance(result, tuple):
-            locked = bool(result[1]) if len(result) == 2 else bool(result[0])
-        else:
-            locked = bool(result)
+        locked = bool(result[0]) if result else False
 
         messages = [
             m async for m in channel.history(limit=10, oldest_first=True)
@@ -212,7 +199,7 @@ class TicketManager:
         if not messages:
             raise ValueError(f"No bot messages found in ticket channel: {channel.name}")
 
-        start_message, info_message, close_message = messages[:3]
+        start_message, close_message = messages[:2]
 
         profiles = []
         appeal_data = None
@@ -220,7 +207,7 @@ class TicketManager:
         try:
             if category == TicketCategory.RENAME:
                 profiles = await self.extract_rename_data_from_topic(topic_metadata)
-            elif category == TicketCategory.BAN_APPEAL:
+            elif category in (TicketCategory.BAN_APPEAL, TicketCategory.VPN_BAN_APPEAL):
                 appeal_data = self.extract_appeal_data_from_topic(topic_metadata)
         except ValueError as e:
             log.warning(f"{channel.name}[ID:{channel.id}]: {e}")
@@ -232,7 +219,6 @@ class TicketManager:
                 creator=creator,
                 category=category,
                 start_message=start_message,
-                info_message=info_message,
                 close_message=close_message,
                 state=state,
                 rename_data=profiles,
@@ -266,8 +252,11 @@ class TicketManager:
             appeal_data: AppealData | None = None,
             button: discord.ui.Button | None = None,
     ):
-        # await interaction.response.defer(ephemeral=True)
-        from .views.containers.close import CloseContainer
+        # the modal flows defer before calling this whereas the `/change_category` command
+        # path does not, so ensure there's an original response to clean up at the end
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
         category_changed = category is not None and ticket.category != category
 
         if rename_data is not None:
@@ -279,26 +268,7 @@ class TicketManager:
         if category_changed:
             ticket.category = category
 
-        container_map = {
-            TicketCategory.REPORT: lambda ticket: ReportContainer(ticket),
-            TicketCategory.BAN_APPEAL: lambda ticket: BanAppealContainer(ticket),
-            TicketCategory.COMPLAINT: lambda ticket: ComplaintContainer(ticket),
-            TicketCategory.ADMIN_MAIL: lambda ticket: AdminMailContainer(ticket),
-            TicketCategory.COMMUNITY_APP: lambda ticket: CommunityAppContainer(ticket),
-            TicketCategory.RENAME: lambda _: RenameContainer(),
-        }
-
-        embed_map = {
-            TicketCategory.REPORT: embeds.ReportInfoEmbed(interaction.guild),
-            TicketCategory.RENAME: embeds.RenameInfoEmbed(ticket) if ticket.rename_data else None,
-            TicketCategory.BAN_APPEAL: embeds.BanAppealInfoEmbed(ticket) if ticket.appeal_data else None,
-            TicketCategory.COMPLAINT: embeds.ComplaintInfoEmbed(interaction.user),
-            TicketCategory.ADMIN_MAIL: embeds.AdminMailInfoEmbed(),
-            TicketCategory.COMMUNITY_APP: embeds.AdminMailInfoEmbed(),
-        }
-
-        await ticket.start_message.edit(view=container_map[ticket.category](ticket))
-        await ticket.info_message.edit(embed=embed_map[ticket.category])
+        await ticket.start_message.edit(view=START_CONTAINERS[ticket.category](ticket))
         await ticket.close_message.edit(view=CloseContainer.for_category(ticket.category))
 
         if button is not None:
@@ -306,8 +276,7 @@ class TicketManager:
             await interaction.message.edit(view=button.view)
 
         overwrites = ticket.get_overwrites(interaction)
-
-        topic = await self.topic_metadata(ticket)
+        topic = self.topic_metadata(ticket)
 
         await ticket.channel.edit(
             name=f"{ticket.category.value}-{await self.ticket_num(category=ticket.category.value)}",
@@ -320,11 +289,11 @@ class TicketManager:
             f"**{ticket.category.name}**. Kindly review {ticket.start_message.jump_url}."
         )
 
-        await interaction.delete_original_response()
-        # await interaction.response.send_message("abc")
+        with contextlib.suppress(discord.NotFound):
+            await interaction.delete_original_response()
         await self.toggle_ticket_lock(ticket=ticket, send_msg=False, force_state=False)
 
-    async def topic_metadata(self, ticket: Ticket):
+    def topic_metadata(self, ticket: Ticket) -> str:
         base_lines = [
             f"Ticket Author: <@{ticket.creator.id}>",
             f"Ticket Category: {ticket.category.value}",
@@ -338,7 +307,7 @@ class TicketManager:
                 f"New Name: {ticket.rename_data.new_profile.name}",
             ])
 
-        if ticket.category == TicketCategory.BAN_APPEAL and ticket.appeal_data:
+        if ticket.category in (TicketCategory.BAN_APPEAL, TicketCategory.VPN_BAN_APPEAL) and ticket.appeal_data:
             extra.extend([
                 f"Appeal Name: {ticket.appeal_data.name}",
                 f"Appeal Address: {ticket.appeal_data.address}",
@@ -453,6 +422,55 @@ class TicketManager:
             )
         return None
 
+    async def close_ticket(
+            self,
+            interaction: discord.Interaction,
+            ticket: Ticket,
+            *,
+            message: Optional[str] = None,
+    ) -> None:
+        """Run the full close lifecycle, shared by /close and the confirm buttons:
+        post the closing message, build + DM the transcript, drop the ticket, then
+        delete the channel (and its category if it is now empty).
+        """
+        async with ticket.lock:
+            ticket.being_closed = True
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True, thinking=True)
+                if message:
+                    await ticket.channel.send(message)
+
+                await TicketTranscript(self.bot, ticket).run(interaction, message)
+                await self.del_ticket(ticket=ticket)
+
+                log.info(
+                    f"{interaction.user} [ID: {interaction.user.id}] closed a "
+                    f"{ticket.category.value.title()} ticket made by {ticket.creator} "
+                    f"[ID: {ticket.creator.id}]. Removed channel {ticket.channel.name} "
+                    f"[ID: {ticket.channel.id}]"
+                )
+
+                with contextlib.suppress(discord.NotFound):
+                    await interaction.edit_original_response(content="Closing Ticket...")
+
+                category = ticket.channel.category
+                await ticket.channel.delete()
+                if category and len(category.channels) == 0:
+                    await category.delete()
+            except Exception as e:
+                log.exception(f"{ticket.channel.name}: Error during ticket closure:\n{e}")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        f"An error occurred while closing the ticket:\n{e}", ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        f"An error occurred while closing the ticket:\n{e}", ephemeral=True
+                    )
+            finally:
+                ticket.being_closed = False
+
     async def check_for_open_ticket(
             self,
             interaction: discord.Interaction | None,
@@ -479,28 +497,6 @@ class TicketManager:
             )
 
         return channel
-
-    async def mentions(self, interaction: discord.Interaction, category):
-        """|coro|
-        Generate a mention string for users subscribed to a specific category.
-
-        Args:
-            interaction (discord.Interaction): The discord interaction object
-            category: The category for which to retrieve subscriber user IDs.
-
-        Returns:
-            str: A string containing mentions of all subscribers and the interaction user.
-        """
-
-        fetch_query = """
-                      SELECT user_id
-                      FROM discordbot_subscriptions
-                      WHERE category = %s;
-                      """
-        user_ids = await self.bot.fetch(fetch_query, category, fetchall=True)
-
-        mention_subscribers = [f"<@{user_id[0]}>" for user_id in user_ids]
-        return " ".join(mention_subscribers) + f" {interaction.user.mention}"
 
     async def ticket_num(self, category) -> int:
         """|coro|

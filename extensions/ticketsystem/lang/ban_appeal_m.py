@@ -36,6 +36,37 @@ ban_appeal_m = {
     },
 }
 
+# Messages shown by the ban-appeal gate (before a ticket is opened).
+# Only "en" is filled in for now; other languages fall back to English.
+BAN_APPEAL_GATE = {
+    "en": {
+        "not_banned_title": "No active ban found",
+        "not_banned": (
+            "We couldn't find an active ban for the IP `{ip}`.\n\n"
+            "- Double-check your public IP at https://ipinfo.io/ip -- it can change over time.\n"
+            "- If you were banned, the ban may have already expired.\n\n"
+            "If you still believe this is a mistake, create an Admin-Mail ticket."
+        ),
+        "dnsbl_white_title": "IP not flagged",
+        "dnsbl_white": (
+            "Our checks didn't flag the IP `{ip}` (no VPN, proxy or datacenter detected), "
+            "so a ban appeal can't be opened for it here.\n\n"
+            "If you were banned on a different connection, re-check your public IP at "
+            "https://ipinfo.io/ip, or contact staff directly."
+        ),
+        "near_expiry_title": "Your ban is about to expire",
+        "near_expiry": (
+            "Heads up — the ban on `{ip}` is set to expire {expires}.\n"
+            "**Reason:** {reason}\n\n"
+            "It may be quicker to simply wait it out. Do you still want to open a ban appeal?"
+        ),
+        "near_expiry_continue": "Continue appeal",
+        "near_expiry_cancel": "Never mind",
+        "cancelled": "No problem — no ban appeal was opened. You can start one again any time.",
+        "opening": "Opening your ban appeal…",
+    },
+}
+
 BAN_APPEAL_CLOUDFLARE = {
     "en": {
         "description": "the IP address you provided belongs to Cloudflare. "
@@ -53,8 +84,8 @@ BAN_APPEAL_CLOUDFLARE = {
     },
     "ru": {
         "description": "IP-адрес, который вы предоставили, относится к Cloudflare. "
-		               "Чтобы играть на оффициальных серверах DDNet Вам необходимо отключить или удалить Cloudflare WARP "
-		               "с вашего устройства, т.к. их предоставляемые IP-адреса помечаются как VPN-ы в нашей системе.",
+                       "Чтобы играть на оффициальных серверах DDNet Вам необходимо отключить или удалить Cloudflare WARP "
+                       "с вашего устройства, т.к. их предоставляемые IP-адреса помечаются как VPN-ы в нашей системе.",
         "title": "Как удалить Cloudflare WARP:",
         "value": "Документация"
     }

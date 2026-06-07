@@ -1,15 +1,54 @@
+import contextlib
 import ipaddress
+import logging
 import urllib
 import discord
 import asyncio
 import functools
 import os
 from asyncio.subprocess import PIPE
-from typing import Awaitable, Callable, Tuple, Union
+from typing import Callable, Tuple
 
-from constants import Emojis
-from data.countryflags import COUNTRYFLAGS
+from constants import Emojis, Channels
+from utils.countryflags import COUNTRYFLAGS
 from utils.text import slugify2
+
+log = logging.getLogger(__name__)
+
+# Seconds of message history to delete on ban/kick. Used in a lot of modules, don't delete
+DELETE_HISTORY_SECONDS = [0, 3600, 21600, 43200, 86400, 259200, 604800]
+
+
+async def resolve_active_thread(bot, channel_id):
+    """Resolve a channel or thread by id, even if it's an archived thread"""
+    if channel_id is None:
+        return None
+
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(channel_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+            log.warning("Could not fetch channel %s: %s", channel_id, e)
+            return None
+
+    if isinstance(channel, discord.Thread) and channel.archived:
+        with contextlib.suppress(discord.HTTPException):
+            # auto_archive_duration is in minutes; 10080 == 7 days (the max).
+            await channel.edit(archived=False, auto_archive_duration=10080)
+
+    return channel
+
+
+async def log_to(bot, thread_id, **send_kwargs):
+    """
+    Send a staff-log message to one of the LOGS sub-threads
+    Falls back to the main LOGS channel when the id is unset (0) or can't be resolved
+    """
+    target = await resolve_active_thread(bot, thread_id) if thread_id else None
+    if target is None:
+        target = await resolve_active_thread(bot, Channels.LOGS)
+    return None if target is None else await target.send(**send_kwargs)
 
 
 def get_mapper_urls(maps_data, map_name):
@@ -24,14 +63,14 @@ def get_mapper_urls(maps_data, map_name):
 
 
 def resolve_display_name(user: discord.abc.User) -> str:
-    """Return the best-available visible name for nickname history."""
+    """Return the best available visible name for nickname history."""
     if isinstance(user, discord.Member) and user.nick:
         return user.nick
     return user.global_name or user.name
 
 
 def parse_content_disposition(header_value: str):
-    """Parses the Content-Disposition header using basic logic."""
+    """Parses the Content-Disposition header using basic logic"""
     parts = header_value.split(";")
     params = {}
 
@@ -102,22 +141,6 @@ async def run_process_shell(cmd: str, timeout: float = 90.0) -> Tuple[str, str]:
         return stdout.decode(), stderr.decode()
 
 
-async def run_process_exec(
-        program: str, *args: str, timeout: float = 90.0
-) -> Tuple[str, str]:
-    proc = await asyncio.create_subprocess_exec(
-        program, *args, stdout=PIPE, stderr=PIPE
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError as e:
-        proc.kill()
-        await proc.wait()
-        raise RuntimeError("Process timed out") from e
-    else:
-        return stdout.decode(), stderr.decode()
-
-
 def executor(func: Callable):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
@@ -126,13 +149,6 @@ def executor(func: Callable):
         return await loop.run_in_executor(None, fn)
 
     return wrapper
-
-
-async def maybe_coroutine(func: Union[Awaitable, Callable], *args, **kwargs):
-    if asyncio.iscoroutinefunction(func):
-        return await func(*args, **kwargs)
-    else:
-        return func(*args, **kwargs)
 
 
 def rating() -> list:

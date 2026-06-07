@@ -6,8 +6,10 @@ from collections import namedtuple
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from data.countryflags import COUNTRYFLAGS
 from constants import Emojis
+from utils.countryflags import COUNTRYFLAGS
+from utils.containers import NoticeView
+from utils.text import to_discord_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +40,9 @@ class ServerInfo:
 
     def is_under_attack(self) -> bool:
         return (
-            self.packets.rx > self.PPS_THRESHOLD
-            or self.packets.rx > self.PPS_RATIO_MIN
-            and self.packets.rx / self.packets.tx > self.PPS_RATIO_THRESHOLD
+                self.packets.rx > self.PPS_THRESHOLD
+                or self.packets.rx > self.PPS_RATIO_MIN
+                and self.packets.rx / self.packets.tx > self.PPS_RATIO_THRESHOLD
         )
 
     @property
@@ -76,8 +78,7 @@ class ServerStatus:
         self.servers = [ServerInfo(**s) for s in servers]
         self.timestamp = datetime.fromtimestamp(float(updated), timezone.utc)
 
-    @property
-    def embed(self) -> discord.Embed:
+    def build_view(self) -> NoticeView:
         def humanize_pps(pps: int) -> str:
             if pps < 0:
                 return ""
@@ -88,20 +89,19 @@ class ServerStatus:
 
                 pps = round(pps / 1000, 2)
 
-        rows = [f"<:flag_unk:{Emojis.FLAG_UNK}> `server| +- | ▲ pps | ▼ pps `"]
+        rows = [
+            f"## [Server Status]({self.URL})",
+            f"<:flag_unk:{Emojis.FLAG_UNK}> `server| +- | ▲ pps | ▼ pps `",
+        ]
         for server in self.servers:
             if server.host:
                 rows.append(
                     f"{server.flag} `{str(server):<6}|{server.status:^4}|"
                     f"{humanize_pps(server.packets.rx):>7}|{humanize_pps(server.packets.tx):>7}`"
                 )
+        rows.append(f"-# Updated {to_discord_timestamp(self.timestamp, 'R')}")
 
-        return discord.Embed(
-            title="Server Status",
-            description="\n".join(rows),
-            url=self.URL,
-            timestamp=self.timestamp,
-        )
+        return NoticeView("\n".join(rows))
 
 
 class Status(commands.Cog, name="DDNet Status"):
@@ -139,7 +139,7 @@ class Status(commands.Cog, name="DDNet Status"):
         except RuntimeError as exc:
             await interaction.followup.send(exc)
         else:
-            await interaction.followup.send(embed=status.embed)
+            await interaction.followup.send(view=status.build_view())
 
         if interaction.response.is_done():  # noqa
             return

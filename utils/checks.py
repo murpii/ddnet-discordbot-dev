@@ -1,23 +1,13 @@
-import time
 import discord
 from discord.ext import commands
-import logging
-import functools
 import ipaddress
 import aiohttp
-from typing import Iterable, Any, Coroutine
+from typing import Iterable
 from constants import Roles, Guilds
 
 
 def ddnet_only(ctx: commands.Context) -> bool:
     return ctx.guild.id == Guilds.DDNET
-
-
-def has_map(message: discord.Message) -> bool:
-    return any(
-        attachment.filename.endswith(".map")
-        for attachment in message.attachments
-    )
 
 
 async def check_dm_channel(user: discord.Member) -> bool | None:
@@ -27,19 +17,6 @@ async def check_dm_channel(user: discord.Member) -> bool | None:
         return False
     except discord.HTTPException:
         return True
-
-
-def measure(func):
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = await func(*args, **kwargs)
-        end_time = time.time()
-        duration = end_time - start_time
-        logging.info(f"{func.__name__} finished in {duration:.2f} seconds")
-        return result
-
-    return wrapper
 
 
 def is_staff(member: discord.abc.User, *, roles: Iterable[int] = None) -> bool:

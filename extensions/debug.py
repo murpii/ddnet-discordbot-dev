@@ -6,8 +6,6 @@ from pprint import pprint, pformat
 import discord
 from discord.ext import commands
 
-from extensions.map_testing.checklist import ChecklistView
-
 
 class Debug(commands.Cog):
     def __init__(self, bot):
@@ -18,10 +16,6 @@ class Debug(commands.Cog):
     @commands.command()
     async def sessions(self, ctx: commands.Context):
         await ctx.send(self.sessions)
-
-    @commands.command()
-    async def map_channels(self, ctx: commands.Context):
-        print(self.bot.map_channels)
 
     @commands.command()
     async def tickets(self, ctx: commands.Context):
@@ -71,11 +65,32 @@ class Debug(commands.Cog):
                     print(f"Failed to update thread {thread.name}: {e}")
 
     @commands.command()
-    async def count_threads(self, ctx: commands.Context, id: int):
-        channel = ctx.guild.get_channel(1222336261000396961)
-        tag_id_open_app = id
-        count = 0
+    async def count_threads(self, ctx: commands.Context, channel_input: str, tag_input: str):
 
+        channel = None
+        if channel_input.isdigit():
+            channel = ctx.guild.get_channel(int(channel_input))
+        if not channel:
+            for ch in ctx.guild.channels:
+                if ch.name == channel_input:
+                    channel = ch
+                    break
+
+        if not channel:
+            await ctx.send(f"Channel '{channel_input}' not found.")
+            return
+
+        tag = None
+        if tag_input.isdigit():
+            tag = discord.utils.get(channel.available_tags, id=int(tag_input))
+        if not tag:
+            tag = discord.utils.get(channel.available_tags, name=tag_input)
+
+        if not tag:
+            await ctx.send(f"Tag '{tag_input}' not found in channel '{channel.name}'.")
+            return
+
+        count = 0
         active_threads = list(channel.threads)
         archived_threads = []
         async for thread in channel.archived_threads(limit=None):
@@ -85,22 +100,11 @@ class Debug(commands.Cog):
         for thread in all_threads:
             if not isinstance(thread, discord.Thread):
                 continue
-
-            thread_tag_ids = [tag.id for tag in thread.applied_tags]
-
-            if tag_id_open_app in thread_tag_ids:
+            thread_tag_ids = [t.id for t in thread.applied_tags]
+            if tag.id in thread_tag_ids:
                 count += 1
 
-        tag = discord.utils.get(channel.available_tags, id=tag_id_open_app)
-        tag_name = tag.name if tag else "Unknown Tag"
-
-        await ctx.send(f"Total amount of threads with tag '{tag_name}': {count}")
-
-    @commands.command()
-    async def checklist(self, ctx):
-        view = ChecklistView()
-        embed = view.generate_embed()
-        await ctx.channel.send(embed=embed, view=view)
+        await ctx.send(f"Total amount of threads with tag '{tag.name}': {count}")
 
     @commands.command()
     async def ban_list(self, ctx):

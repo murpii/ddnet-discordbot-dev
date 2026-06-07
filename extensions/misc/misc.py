@@ -47,63 +47,42 @@ class Misc(commands.Cog):
     async def about(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
-        title = "Discord bot for DDraceNetwork"
-        embed = discord.Embed(title=title, color=0xFEA500, url="https://ddnet.org")
-
-        embed.set_author(
-            name=self.bot.user,
-            icon_url=self.bot.user.display_avatar.with_static_format("png"),
-        )
-
         channels = sum(len(g.voice_channels + g.text_channels) for g in self.bot.guilds)
-        stats = f"{len(self.bot.guilds)} Guilds\n{channels} Channels\n{len(self.bot.users)} Users"
-        embed.add_field(name="Stats", value=stats)
 
         memory = self.process.memory_full_info().uss / 1024 ** 2
         cpu = self.process.cpu_percent() / psutil.cpu_count()
         threads = self.process.num_threads()
-        embed.add_field(
-            name="Process", value=f"{memory:.2f} MiB\n{cpu:.2f}% CPU\n{threads} Threads"
-        )
 
         delta = discord.utils.utcnow() - self.start_time
         uptime = human_timedelta(delta.total_seconds(), brief=True)
         latency = self.bot.latency * 1000
-        embed.add_field(name="Bot", value=f"{uptime} Uptime\n{latency:.2f}ms Latency")
 
         commits = await self.get_latest_commits()
-        embed.add_field(name="Latest commits", value=commits)
 
-        embed.set_footer(
-            text=f"Made by jao#3750 with Python (discord.py {discord.__version__})"
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(
+            discord.ui.Container(
+                discord.ui.Section(
+                    "## [Discord bot for DDraceNetwork](https://ddnet.org)",
+                    (
+                        f"**Stats:** {len(self.bot.guilds)} Guilds, {channels} Channels, "
+                        f"{len(self.bot.users)} Users\n"
+                        f"**Process:** {memory:.2f} MiB, {cpu:.2f}% CPU, {threads} Threads\n"
+                        f"**Bot:** {uptime} Uptime, {latency:.2f}ms Latency"
+                    ),
+                    accessory=discord.ui.Thumbnail(
+                        self.bot.user.display_avatar.with_static_format("png").url
+                    ),
+                ),
+                discord.ui.TextDisplay(
+                    f"### Latest commits\n{commits}\n"
+                    f"-# Made by jao#3750 with Python (discord.py {discord.__version__})"
+                ),
+                accent_colour=0xFEA500,
+            )
         )
 
-        await interaction.followup.send(embed=embed)  # noqa
-
-        if interaction.response.is_done():  # noqa
-            return
-
-    @app_commands.command(name="commandstats", description="Shows command stats")
-    async def commandstats(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
-        query = "SELECT command, COUNT(*) AS uses FROM discordbot_stats_commands GROUP BY command ORDER BY uses DESC;"
-        stats = await self.bot.fetch(query, fetchall=True)
-        stats = [s for s in stats if self.bot.walk_commands() is not None]
-
-        width = len(max((s[0] for s in stats[:20]), key=len))
-        desc = "\n".join(f'`/{c}{"." * (width - len(c))}:` {u}' for c, u in stats[:20])
-        total = sum(s[1] for s in stats)
-
-        embed = discord.Embed(
-            title="Command Stats", description=desc, color=discord.Color.blurple()
-        )
-        embed.set_footer(text=f"{total} total")
-
-        await interaction.followup.send(embed=embed)
-
-        if interaction.response.is_done():  # noqa
-            return
+        await interaction.followup.send(view=view)  # noqa
 
     @app_commands.command(name="avatar", description="Shows the avatar of a user")
     @app_commands.describe(user="@mention the user")

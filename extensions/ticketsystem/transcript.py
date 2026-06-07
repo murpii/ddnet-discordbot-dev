@@ -12,10 +12,12 @@ from typing import Iterable, Optional, TypeAlias
 
 import discord
 
+from .mappings import TRANSCRIPT_THREADS
 from .ticket import Ticket, TicketCategory
 from .views.containers.transcript import TranscriptContainer
-from constants import Channels, Roles
+from constants import Roles
 from utils.checks import is_staff
+from utils.misc import resolve_active_thread
 
 log = logging.getLogger("tickets")
 
@@ -48,12 +50,6 @@ class TranscriptBundle:
 class TicketTranscript:
     """
     Create transcripts + attachment zips for a ticket channel and its threads, then upload them.
-
-    Main goals of the refactor:
-    - Single pipeline to build transcript/attachments for any Messageable (channel/thread).
-    - One zip writer that supports "split into multiple zip files by size" and returns a name->zip mapping.
-    - Pathlib and context managers.
-    - Fix thread zip mapping bug (filenames -> specific zip file).
     """
 
     def __init__(self, bot, ticket: Ticket):
@@ -65,11 +61,19 @@ class TicketTranscript:
         self.attachments_dir = self.ticket_dir / "attachments-temp"
 
         self.files_to_cleanup: set[Path] = set()
-
         self.main_transcript: TranscriptBundle | None = None
         self.thread_transcripts: list[TranscriptBundle] = []
+        self.seen_attachment_names: set[str] = set()
 
-        self._seen_attachment_names: set[str] = set()
+    async def run(
+            self,
+            interaction: Optional[discord.Interaction] = None,
+            postscript: Optional[str] = None,
+    ) -> None:
+        """Build the transcript, DM it to the ticket creator, then clean up temp files."""
+        await self.create_transcript(interaction)
+        await self.notify_ticket_creator(interaction, postscript)
+        self.cleanup()
 
     async def create_transcript(self, interaction: Optional[discord.Interaction] = None) -> None:
         await self.send_or_edit(interaction, content="Collecting messages...")
@@ -79,7 +83,7 @@ class TicketTranscript:
             target=self.ticket.channel,
             transcript_name=f"{self.sanitize_name(self.ticket.channel.name)}-{self.ticket.channel.id}",
             interaction=interaction,
-            skip_lines=3,
+            skip_lines=2,
             header_lines=self.info_header(),
         )
         if main_transcript is None:
@@ -93,7 +97,7 @@ class TicketTranscript:
             thread_transcript = await self.build_transcript(
                 target=thread,
                 transcript_name=f"{self.sanitize_name(thread.name)}-{thread.id}",
-                interaction=None,  # keep thread work quiet; you can pass interaction if desired
+                interaction=None,
                 skip_lines=0,
                 header_lines=None,
             )
@@ -123,10 +127,9 @@ class TicketTranscript:
         if header_lines:
             messages.extend(header_lines)
 
-        # Collect + process messages
         processed_count = 0
         async for msg in target.history(limit=None, oldest_first=True):
-            # Skips lines (usually the first 3 embeds of a ticket channel)
+            # Skips lines (usually the first 2 template messages of a ticket channel)
             processed_count += 1
             if processed_count <= skip_lines:
                 continue
@@ -157,7 +160,6 @@ class TicketTranscript:
         self.tracked_files(transcript_path)
         for z in zip_paths:
             self.tracked_files(z)
-        b = TranscriptBundle(transcript_path=transcript_path, zip_paths=zip_paths)
         return TranscriptBundle(transcript_path=transcript_path, zip_paths=zip_paths)
 
     def compress_files(
@@ -254,8 +256,8 @@ class TicketTranscript:
         return content, attachment_items
 
     def unique_attachment_name(self, filename: str) -> str:
-        if filename not in self._seen_attachment_names:
-            self._seen_attachment_names.add(filename)
+        if filename not in self.seen_attachment_names:
+            self.seen_attachment_names.add(filename)
             return filename
 
         if "." in filename:
@@ -266,11 +268,11 @@ class TicketTranscript:
 
         counter = 1
         new_filename = f"{base}_{counter}{ext}"
-        while new_filename in self._seen_attachment_names:
+        while new_filename in self.seen_attachment_names:
             counter += 1
             new_filename = f"{base}_{counter}{ext}"
 
-        self._seen_attachment_names.add(new_filename)
+        self.seen_attachment_names.add(new_filename)
         return new_filename
 
     def info_header(self) -> list[str]:
@@ -286,7 +288,7 @@ class TicketTranscript:
                 ]
             return [title, divider, "Missing data.\n"]
 
-        if cat == TicketCategory.BAN_APPEAL:
+        if cat in (TicketCategory.BAN_APPEAL, TicketCategory.VPN_BAN_APPEAL):
             if self.ticket.appeal_data:
                 a = self.ticket.appeal_data
                 return [
@@ -307,16 +309,11 @@ class TicketTranscript:
 
         await self.send_or_edit(interaction, content="Uploading files...")
 
-        transcript_categories = {
-            TicketCategory.REPORT: Channels.TH_REPORTS,
-            TicketCategory.BAN_APPEAL: Channels.TH_BAN_APPEALS,
-            TicketCategory.RENAME: Channels.TH_RENAMES,
-            TicketCategory.COMPLAINT: Channels.TH_COMPLAINTS,
-            TicketCategory.ADMIN_MAIL: Channels.TH_ADMIN_MAIL,
-            TicketCategory.COMMUNITY_APP: Channels.TH_COMMUNITY_APPS,
-        }
-
-        target_channel = self.bot.get_channel(transcript_categories.get(self.ticket.category))
+        # The TH_* targets are threads, fetch + unarchive them so an archived
+        # transcript thread can still be found and written to
+        target_channel = await resolve_active_thread(
+            self.bot, TRANSCRIPT_THREADS.get(self.ticket.category)
+        )
         if target_channel is None:
             log.warning("No target channel found for category %s", self.ticket.category)
             return
@@ -332,7 +329,7 @@ class TicketTranscript:
 
         allowed = discord.AllowedMentions(users=False)
 
-        # Main transcript first
+        # main transcript first
         if self.main_transcript:
             await target_channel.send(
                 header,
@@ -342,7 +339,7 @@ class TicketTranscript:
             for zp in self.main_transcript.zip_paths:
                 await target_channel.send(files=[discord.File(zp)], allowed_mentions=allowed)
 
-        # Then thread transcripts + zips
+        # then thread transcripts + zips
         for bundle in self.thread_transcripts:
             await target_channel.send(files=[discord.File(bundle.transcript_path)], allowed_mentions=allowed)
             for zp in bundle.zip_paths:

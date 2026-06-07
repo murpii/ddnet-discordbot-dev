@@ -1,10 +1,10 @@
 from typing import Optional
 
 import discord
-from discord import SeparatorSpacing
 
 from constants import Emojis
 from extensions.ticketsystem.ticket import Ticket
+from extensions.ticketsystem.views.containers.base import large_seperator
 
 
 class TranscriptContainer(discord.ui.LayoutView):
@@ -21,27 +21,18 @@ class TranscriptContainer(discord.ui.LayoutView):
 
         items = [
             discord.ui.TextDisplay(
-                f""
                 f"## [ <:ddnet:{Emojis.DDNET}> ] Your {self.ticket.category.value.title()} Transcript"
             ),
-            discord.ui.Separator(
-                spacing=SeparatorSpacing.large,
-                visible=True,
-            ),
+            large_seperator(),
             discord.ui.TextDisplay(
-                'Your ticket has been closed by our staff.'
+                "Your ticket has been closed by our staff."
                 if closed_by_staff
-                else 'Your ticket has been closed.'
+                else "Your ticket has been closed."
             ),
         ]
 
         if postscript:
-            items.append(
-                discord.ui.Separator(
-                    spacing=SeparatorSpacing.large,
-                    visible=True,
-                )
-            )
+            items.append(large_seperator())
             items.append(
                 discord.ui.TextDisplay(
                     "This is the message that has been left for you by our team:\n"
@@ -50,23 +41,10 @@ class TranscriptContainer(discord.ui.LayoutView):
             )
 
         if transcript_filename:
-            items.append(
-                discord.ui.Separator(
-                    spacing=SeparatorSpacing.large,
-                    visible=True,
-                )
-            )
-            items.append(
-                discord.ui.TextDisplay("## Transcript:")
-            )
-            items.append(
-                discord.ui.File(
-                    f"attachment://{transcript_filename}"
-                )
-            )
+            items.append(large_seperator())
+            items.append(discord.ui.TextDisplay("## Transcript:"))
+            items.append(discord.ui.File(f"attachment://{transcript_filename}"))
+        else:
+            items.append(discord.ui.TextDisplay("Transcript not generated: fewer than 2 messages found."))
 
-        container = discord.ui.Container(
-            *items,
-            accent_colour=discord.Colour.ash_embed(),
-        )
-        self.add_item(container)
+        self.add_item(discord.ui.Container(*items, accent_colour=discord.Colour.ash_embed()))

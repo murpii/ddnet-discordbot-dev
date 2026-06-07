@@ -48,6 +48,7 @@ class TicketCategory(Enum):
     REPORT = "report"
     RENAME = "rename"
     BAN_APPEAL = "ban-appeal"
+    VPN_BAN_APPEAL = "vpn-ban-appeal"
     COMPLAINT = "complaint"
     ADMIN_MAIL = "admin-mail"
     COMMUNITY_APP = "community-app"
@@ -66,7 +67,6 @@ class Ticket:
     category: TicketCategory
     state: TicketState = TicketState.UNCLAIMED
     start_message: Optional[discord.Message] = None
-    info_message: Optional[discord.Message] = None
     close_message: Optional[discord.Message] = None
     rename_data: RenameData | None = None
     appeal_data: AppealData | None = None
@@ -98,7 +98,7 @@ class Ticket:
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.guild.me: discord.PermissionOverwrite(
-                read_messages=True, send_messages=True, manage_threads=True
+                read_messages=True, send_messages=True, manage_threads=True, pin_messages=True
             ),
             self.creator: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         }
@@ -114,7 +114,11 @@ class Ticket:
             ]
             for role_id in role_ids:
                 if role_obj := interaction.guild.get_role(role_id):
-                    overwrites[role_obj] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                    perms = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                    # ban appeals open a private mod review thread
+                    if self.category == TicketCategory.BAN_APPEAL:
+                        perms.manage_threads = True
+                    overwrites[role_obj] = perms
         return overwrites
 
     async def set_state(self, state: TicketState) -> None:

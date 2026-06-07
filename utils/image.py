@@ -1,32 +1,20 @@
-import os
 from typing import Callable, Union
 from io import BytesIO
 from typing import Dict, List, Tuple
 
-import discord
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from colorthief import ColorThief
 import datetime as dtt
 from datetime import datetime
 import re
 
-from utils.color import clamp_luminance
+from utils.color import clamp_luminance, rgb_to_hsp
 from utils.color import pack_rgb
 from utils.misc import executor
-from utils.text import plural, humanize_points, sanitize
+from utils.text import plural, humanize_points
 
 DIR = "data/assets"
-
-
-def get_map_thumbnail(map_name: str):
-    safe = sanitize(map_name)
-    path = os.path.join("data/assets/map_backgrounds", f"{safe}.png")
-
-    if not os.path.exists(path):
-        return None
-
-    filename = f"map_{safe}.png"
-    return discord.File(path, filename=filename), filename
+TEXT_LAYOUT = ImageFont.Layout.BASIC
 
 
 def save(img: Image.Image) -> BytesIO:
@@ -71,10 +59,10 @@ def auto_font(
         check: Callable = lambda w, _: w,
 ) -> ImageFont.FreeTypeFont:
     if isinstance(font, tuple):
-        font = ImageFont.truetype(*font)
+        font = ImageFont.truetype(*font, layout_engine=TEXT_LAYOUT)
 
     while check(font.getbbox(text)[2], font.size) > max_width:
-        font = ImageFont.truetype(font.path, font.size - 1)
+        font = ImageFont.truetype(font.path, font.size - 1, layout_engine=font.layout_engine)
 
     return font
 
@@ -213,7 +201,7 @@ def skin_renderer(img):
 
 @executor
 def generate_points_image(data: Dict[str, List[Tuple[datetime.date, int]]]) -> BytesIO:
-    font_small = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 16)
+    font_small = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 16, layout_engine=TEXT_LAYOUT)
 
     color_light = (100, 100, 100)
     color_dark = (50, 50, 50)
@@ -397,9 +385,9 @@ def generate_points_image(data: Dict[str, List[Tuple[datetime.date, int]]]) -> B
 
 @executor
 def generate_profile_image(data: Dict) -> BytesIO:
-    font_normal = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 24)
-    font_bold = ImageFont.truetype(f"{DIR}/fonts/bold.ttf", 34)
-    font_big = ImageFont.truetype(f"{DIR}/fonts/bold.ttf", 48)
+    font_normal = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 24, layout_engine=TEXT_LAYOUT)
+    font_bold = ImageFont.truetype(f"{DIR}/fonts/bold.ttf", 34, layout_engine=TEXT_LAYOUT)
+    font_big = ImageFont.truetype(f"{DIR}/fonts/bold.ttf", 48, layout_engine=TEXT_LAYOUT)
 
     now = datetime.now(dtt.timezone.utc)
     if data["day"] == now.day and data["month"] == now.month:
@@ -429,14 +417,52 @@ def generate_profile_image(data: Dict) -> BytesIO:
             e for t, e in thresholds.items() if data["total_points"]["points"] >= t
         )
 
-    base = Image.open(f"{DIR}/profile_backgrounds/{img}.png")
+    # The accent colours above are hand-picked per background and some are quite
+    # dark, which reads poorly on the dark panel. Lift only those below a minimum
+    # perceived brightness; bright accents are left exactly as chosen, since
+    # clamp_luminance round-trips through HSP and would otherwise shift them too.
+    if rgb_to_hsp(color)[2] < 0.6:
+        color = clamp_luminance(color, 0.6)
 
-    canv = ImageDraw.Draw(base)
-
-    width, height = base.size
+    bg_src = Image.open(f"{DIR}/profile_backgrounds/{img}.png").convert("RGBA")
+    top_h = bg_src.height
     outer = 32
     inner = outer // 2
     margin = outer + inner
+
+    font_label = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 18, layout_engine=TEXT_LAYOUT)
+    font_value = ImageFont.truetype(f"{DIR}/fonts/bold.ttf", 26, layout_engine=TEXT_LAYOUT)
+    font_bar = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 18, layout_engine=TEXT_LAYOUT)
+
+    div_y = top_h - margin + inner
+    label_y = div_y + inner
+    value_y = label_y + 24
+    partners = (data.get("partners") or [])[:3]
+    partners_block_h = 62 if partners else 0
+    bars_top = value_y + 32 + inner + partners_block_h
+    row_h = 30
+
+    cats = [c for c in (data.get("categories") or []) if (c.get("points") or 0) > 0]
+    bar_rows = list(cats)
+    if (data["total_points"].get("total") or 0) > 0:
+        bar_rows.append({
+            "name": "TOTAL",
+            "points": data["total_points"].get("points") or 0,
+            "total": data["total_points"]["total"],
+            "maps": sum(c.get("maps", 0) for c in cats),
+            "maps_total": sum(c.get("maps_total", 0) for c in cats),
+        })
+
+    total_gap = (inner + inner // 2) if (bar_rows and bar_rows[-1]["name"] == "TOTAL") else 0
+    extra = (bars_top - top_h) + len(bar_rows) * row_h + total_gap + margin
+
+    full_h = top_h + extra
+    scale = full_h / bg_src.height
+    scaled = bg_src.resize((round(bg_src.width * scale), full_h))
+    left = (scaled.width - bg_src.width) // 2
+    base = scaled.crop((left, 0, left + bg_src.width, full_h))
+    canv = ImageDraw.Draw(base)
+    width, height = base.size
 
     # draw bg
     size = (width - outer * 2, height - outer * 2)
@@ -471,35 +497,21 @@ def generate_profile_image(data: Dict) -> BytesIO:
     xy = (x + flag_w, margin + center(h, name_height))
     canv.text(xy, name, fill="white", font=font_bold)
 
-    # draw points
+    # draw rank (the only figure in the left column now)
     points_width = int((width - margin * 2) / 3)
 
     x = margin + points_width + inner
     y = margin + name_height + inner
 
-    xy = ((x, y), (x, height - margin))
+    xy = ((x, y), (x, top_h - margin))
     canv.line(xy, fill="white", width=3)
 
     text = f'#{data["total_points"]["rank"]}'
     left, top, right, bottom = font_big.getbbox(text)
-    w, h = right - left, bottom
-    xy = (margin + center(w, points_width), y)
-    canv.text(xy, text, fill="white", font=font_big)
-
-    offset = h * 0.25  # true drawn height is only 3 / 4
-
-    text = str(data["total_points"]["points"])
-    left, top, right, bottom = font_bold.getbbox(text)
-    w, h = right - left, bottom
-    suffix = plural(data["total_points"]["points"], " point").upper()
-    left, top, right, bottom = font_normal.getbbox(suffix)
-    w2, h2 = right - left, bottom
-
-    x = margin + center(w + w2, points_width)
-    y = height - margin - offset
-
-    canv.text((x, y - h), text, fill=color, font=font_bold)
-    canv.text((x + w, y - h2), suffix, fill=color, font=font_normal)
+    w, rh = right - left, bottom
+    rank_x = margin + center(w, points_width)
+    rank_y = y + center(rh, (top_h - margin) - y)  # vertically centred in the left column
+    canv.text((rank_x, rank_y), text, fill="white", font=font_big)
 
     # draw ranks
     types = {
@@ -509,7 +521,7 @@ def generate_profile_image(data: Dict) -> BytesIO:
 
     left, top, right, bottom = font_bold.getbbox("A")
     _, h = right - left, bottom
-    yy = (margin + name_height + inner + h * 1.25, height - margin - h * 0.5)
+    yy = (margin + name_height + inner + h * 1.25, top_h - margin - h * 0.5)
 
     for (type_, (rank, points)), y in zip(types.items(), yy):
         line = [(type_, "white", font_normal)]
@@ -539,6 +551,131 @@ def generate_profile_image(data: Dict) -> BytesIO:
             else:
                 canv.text((x, y - h), text, fill=color_, font=font)
 
+    grey = (170, 170, 170)
+    canv.line(((margin, div_y), (width - margin, div_y)), fill="white", width=2)
+
+    def since(ts):
+        return datetime.fromtimestamp(ts).strftime("%b %Y").upper() if ts else "N/A"
+
+    def ago(ts):
+        if not ts:
+            return "N/A"
+        days = (now - datetime.fromtimestamp(ts, dtt.timezone.utc)).days
+        if days <= 0:
+            return "TODAY"
+        if days == 1:
+            return "1 DAY AGO"
+        if days < 30:
+            return f"{days} DAYS AGO"
+        if days < 365:
+            return f"{days // 30} MO AGO"
+        return f"{days // 365} YR AGO"
+
+    def next_birthday(ts):
+        # the next anniversary of the player's first finish
+        if not ts:
+            return "N/A"
+        ff = datetime.fromtimestamp(ts)
+        today = datetime.now()
+        for year in (today.year, today.year + 1):
+            try:
+                bday = ff.replace(year=year)
+            except ValueError:  # first finish was on Feb 29
+                bday = ff.replace(year=year, month=2, day=28)
+            if bday.date() >= today.date():
+                return bday.strftime("%b %d").upper()
+        return ff.strftime("%b %d").upper()
+
+    earned = data["total_points"].get("points") or 0
+    total = data["total_points"].get("total") or 0
+    first = data.get("first_finish") or {}
+    last = data.get("last_finish") or {}
+    last_year = data.get("points_last_year")
+
+    chips = [
+        ("PLAYING SINCE", since(first.get("timestamp"))),
+        ("LAST ACTIVE", ago(last.get("timestamp"))),
+        ("POINTS / YEAR", f"+{last_year}" if last_year else "0"),
+        ("COMPLETION", f"{round(earned / total * 100)}%" if total else "N/A"),
+        ("NEXT BIRTHDAY", next_birthday(first.get("timestamp"))),
+    ]
+    chip_w = (width - margin * 2) / len(chips)
+    for i, (label, value) in enumerate(chips):
+        cx = margin + chip_w * i
+
+        lfont = auto_font(font_label, label, int(chip_w) - 8)
+        canv.text((cx + center(lfont.getbbox(label)[2], chip_w), label_y), label, fill=grey, font=lfont)
+        vfont = auto_font(font_value, value, int(chip_w) - 8)
+        canv.text((cx + center(vfont.getbbox(value)[2], chip_w), value_y), value, fill=color, font=vfont)
+
+    # Favorite partners (top 3)
+    if partners:
+        ph_y = value_y + 42
+        pc_y = value_y + 66
+        header = "FAVORITE PARTNERS"
+        hf = auto_font(font_label, header, width - margin * 2)
+        canv.text(
+            (margin + center(hf.getbbox(header)[2], width - margin * 2), ph_y),
+            header, fill=grey, font=hf,
+        )
+
+        pcell_w = (width - margin * 2) / len(partners)
+        texts = [f'{p.get("name", "?")} ({p.get("finishes", 0)})' for p in partners]
+        pf = font_value
+        for t in texts:  # one shared size that fits the widest cell
+            pf = auto_font(pf, t, int(pcell_w) - 12)
+        for i, p in enumerate(partners):
+            cx = margin + pcell_w * i
+            name = str(p.get("name", "?"))
+            cnt = f' ({p.get("finishes", 0)})'
+            nw = pf.getbbox(name)[2]
+            sx = cx + center(nw + pf.getbbox(cnt)[2], pcell_w)
+            canv.text((sx, pc_y), name, fill="white", font=pf)
+            canv.text((sx + nw, pc_y), cnt, fill=grey, font=pf)
+
+    # Per-category rows plus a TOTAL row, laid out as:
+    #   "<Name> (done/total)   [====        ]   pts/total Points"
+    # Maps completed sits on the left, points right-aligned, and the bar (map
+    # completion) fills the space between them -- so the full row width is used.
+    # All rows share one bar_x (widest left label + a gap) so the bars align.
+    if bar_rows:
+        gap = inner
+        bar_h = 14
+        h_text = font_bar.getbbox("yA")[3]
+
+        left_labels = [
+            f'{r["name"]} ({r.get("maps", 0)}/{r.get("maps_total", 0)})'
+            for r in bar_rows
+        ]
+        point_labels = [f'{r["points"]}/{r["total"]} Points' for r in bar_rows]
+        max_lw = max(font_bar.getbbox(s)[2] for s in left_labels)
+        max_pw = max(font_bar.getbbox(s)[2] for s in point_labels)
+        bar_x = margin + max_lw + gap
+        bar_w = (width - margin - max_pw - gap) - bar_x
+
+        for i, r in enumerate(bar_rows):
+            is_total = r["name"] == "TOTAL"
+            ry = bars_top + row_h * i + (total_gap if is_total else 0)
+            ty = ry + center(h_text, row_h)
+
+            if is_total:
+                sep_y = int(ry - total_gap / 2)
+                canv.line(((margin, sep_y), (width - margin, sep_y)), fill="white", width=1)
+
+            canv.text((margin, ty), left_labels[i], fill="white", font=font_bar)
+
+            by = ry + center(bar_h, row_h)
+            track = round_rectangle((bar_w, bar_h), bar_h // 2, color=(255, 255, 255, 45))
+            base.alpha_composite(track, dest=(int(bar_x), int(by)))
+            maps_total = r.get("maps_total") or 0
+            frac = min(1.0, (r.get("maps", 0) / maps_total) if maps_total else 0.0)
+            fill_w = max(bar_h, int(bar_w * frac))
+            fill = round_rectangle((fill_w, bar_h), bar_h // 2, color=(*color, 255))
+            base.alpha_composite(fill, dest=(int(bar_x), int(by)))
+
+            pw = font_bar.getbbox(point_labels[i])[2]
+            canv.text((width - margin - pw, ty), point_labels[i], fill=(color if is_total else grey), font=font_bar)
+
     return save(base.convert("RGB"))
 
 
@@ -546,7 +683,7 @@ def generate_profile_image(data: Dict) -> BytesIO:
 def generate_map_image(data: Dict) -> BytesIO:
     font_sizes = [48, 36, 32, 26, 24, 22, 20, 16]
     fonts = {
-        size: ImageFont.truetype(f"{DIR}/fonts/normal.ttf", size, encoding="unic")
+        size: ImageFont.truetype(f"{DIR}/fonts/normal.ttf", size, encoding="unic", layout_engine=TEXT_LAYOUT)
         for size in font_sizes
     }
 
@@ -735,7 +872,7 @@ def generate_map_image(data: Dict) -> BytesIO:
 
 @executor
 def generate_hours_image(data: Dict[str, List[Tuple[int, int]]]) -> BytesIO:
-    font_small = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 16)
+    font_small = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 16, layout_engine=TEXT_LAYOUT)
 
     color_light = (100, 100, 100)
     colors = (

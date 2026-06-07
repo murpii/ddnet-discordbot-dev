@@ -1,9 +1,9 @@
 import asyncio
-import contextlib
 import logging
 import os
+import time
 import difflib
-import asyncmy
+import traceback
 import discord
 from discord.ext import commands
 import itertools
@@ -12,9 +12,14 @@ from io import BytesIO
 from typing import List, Tuple, Union
 
 from utils.text import escape
+from utils.misc import log_to
 from constants import Guilds, Channels, Emojis
 
 VALID_IMAGE_FORMATS = (".webp", ".jpeg", ".jpg", ".png", ".gif")
+
+ATTACHMENT_CACHE_TTL = 60 * 60  # keep cached bytes for 1 hour
+ATTACHMENT_MAX_FILE = 8 * 1024 * 1024  # only cache attachments up to 8 MiB
+ATTACHMENT_CACHE_BUDGET = 100 * 1024 * 1024  # total cached bytes kept at once
 
 if not os.path.exists("logs"):
     os.mkdir("logs")
@@ -25,31 +30,155 @@ def setup_logger(name, level, filename, propagate):
     logger.setLevel(level)
     logger.propagate = propagate
 
-    file_handler = logging.FileHandler(filename, "a", encoding="utf-8")
+    if logger.handlers:
+        return logger
+
     formatter = logging.Formatter(
         "[%(asctime)s][%(levelname)s][%(name)s]: %(message)s", "%Y-%m-%d %H:%M:%S"
     )
+
+    file_handler = logging.FileHandler(filename, "a", encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-
-    if name is not None:
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
     return logger
+
+
+# ---------------------------------------------------------------------------
+# Rate limit logging
+#
+# discord.py never raises an error when Discord rate limits us but instead it quietly
+# sleeps and retries, and the only trace is a log record on its "discord.http"
+# or "discord.gateway" logger. The watcher below picks those records out and
+# re-logs them to logs/ratelimits.log together with the code path that made
+# the request, so we can see *what* the bot was doing when it got slowed down.
+# ---------------------------------------------------------------------------
+
+# repo root, two folders up from extensions/logutils/logger.py.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+RATELIMIT_MESSAGE_PREFIXES = (
+    "We are being rate limited.",  # a request got an actual 429 response
+    "Global rate limit has been hit.",  # the bot tripped the global limit
+    "A rate limit bucket",  # bucket drained; discord.py waits before sending
+    "WebSocket in shard ID",  # gateway (websocket) send limiter kicked in
+)
+
+
+def is_ratelimit_record(record: logging.LogRecord) -> bool:
+    template = str(record.msg)
+    return template.startswith(RATELIMIT_MESSAGE_PREFIXES) or "429" in template
+
+
+REAL_THROTTLE_PREFIXES = (
+    "We are being rate limited.",  # an actual 429 response
+    "Global rate limit has been hit.",  # the global limit was hit
+)
+
+
+def is_real_throttle(record: logging.LogRecord) -> bool:
+    template = str(record.msg)
+    return template.startswith(REAL_THROTTLE_PREFIXES) or "429" in template
+
+
+def describe_caller() -> str:
+    """Describe what the bot is doing right now: the current asyncio task
+    plus the stack frames that belong to our own code.
+
+    This works because discord.py logs rate limits from inside the very
+    coroutine that performs the HTTP request. At that moment the call
+    still contains the frames of our code that triggered it, for example
+    overseer.py sync_messages -> discord Message.edit -> http request.
+    """
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        task = None
+    lines = [f"task: {task.get_name() if task else 'unknown'}"]
+
+    this_file = os.path.abspath(__file__)
+    for frame in traceback.extract_stack():
+        filename = os.path.abspath(frame.filename)
+        if not filename.startswith(PROJECT_ROOT):
+            continue
+        if "site-packages" in filename:
+            continue  # discord.py and other libraries (the venv lives inside the repo)
+        if filename == this_file:
+            continue  # the watcher itself
+        relative = os.path.relpath(filename, PROJECT_ROOT)
+        lines.append(f"{relative}:{frame.lineno} in {frame.name}")
+
+    return "\n    ".join(lines)
+
+
+class RatelimitWatcher(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.DEBUG)
+        self.ratelimit_log = logging.getLogger("ratelimits")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return is_ratelimit_record(record)
+
+    @staticmethod
+    def _is_console_handler(handler: logging.Handler) -> bool:
+        return isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        real = is_real_throttle(record)
+        enriched = logging.LogRecord(
+            name="ratelimits",
+            level=logging.WARNING if real else logging.INFO,
+            pathname=record.pathname,
+            lineno=record.lineno,
+            msg=f"{record.getMessage()}\n    {describe_caller()}",
+            args=None,
+            exc_info=None,
+        )
+        for handler in self.ratelimit_log.handlers:
+            if not real and self._is_console_handler(handler):
+                continue
+            if enriched.levelno >= handler.level:
+                handler.handle(enriched)
+
+
+class HttpLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= logging.WARNING or is_ratelimit_record(record)
+
+
+class DropRatelimitRecords(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (record.name.startswith("discord.") and is_ratelimit_record(record))
+
+
+def setup_ratelimit_logging():
+    http_log = logging.getLogger("discord.http")
+    if any(isinstance(h, RatelimitWatcher) for h in http_log.handlers):
+        return
+
+    setup_logger("ratelimits", logging.INFO, "logs/ratelimits.log", propagate=False)
+
+    watcher = RatelimitWatcher()
+
+    http_log.setLevel(logging.DEBUG)
+    http_log.addFilter(HttpLogFilter())
+    http_log.addHandler(watcher)
+
+    logging.getLogger("discord.gateway").addHandler(watcher)
+    drop = DropRatelimitRecords()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(drop)
 
 
 class Logging(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
-
-    # root logger
+    # root logger (file + console; replaces the old logging.basicConfig call)
     setup_logger(None, logging.INFO, "logs/bot.log", propagate=True)
-    # map testing logger
-    setup_logger("mt", logging.INFO, "logs/map_testing.log", propagate=False)
     # tickets logger
     setup_logger("tickets", logging.INFO, "logs/tickets.log", propagate=False)
     # skin submits logger
@@ -59,16 +188,18 @@ class Logging(commands.Cog):
 
     # root
     logging.getLogger("discord").setLevel(logging.WARNING)
-    logging.getLogger("discord.http").setLevel(logging.WARNING)
+
+    # rate limit visibility -- logs/ratelimits.log. Also configures the
+    # "discord.http" logger (DEBUG + filter), replacing the old plain
+    # WARNING level it had before.
+    setup_ratelimit_logging()
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, app_command):
         if interaction.guild is None:
             destination = "Private Message"
-            guild_id = None
         else:
             destination = f"#{interaction.channel} ({interaction.guild})"
-            guild_id = interaction.guild.id
 
         options = interaction.data.get("options", [])
         if args := {opt["name"]: opt.get("value") for opt in options}:  # noqa
@@ -76,26 +207,95 @@ class Logging(commands.Cog):
         else:
             logging.info("%s used /%s in %s", interaction.user, app_command.name, destination)
 
-        query = """
-                INSERT INTO discordbot_stats_commands (guild_id, channel_id, author_id, timestamp, command)
-                VALUES (%s, %s, %s, %s, %s); \
-                """
 
-        values = (
-            guild_id,
-            interaction.channel.id,
-            interaction.user.id,
-            interaction.created_at.replace(tzinfo=None),
-            interaction.command.qualified_name,
-        )
-
-        with contextlib.suppress(asyncmy.Connection.DataError):
-            await self.bot.upsert(query, *values)
+def author_channel_label(message: discord.Message) -> str:
+    author = message.author
+    if isinstance(message.channel, discord.Thread):
+        parent = message.channel.parent.name
+        return f"{author} → #{parent} → Thread: #{message.channel}"
+    return f"{author} → #{message.channel}"
 
 
 class GuildLog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self._attachment_cache: dict[int, tuple[float, list[tuple[str, bytes]]]] = {}
+        self._attachment_cache_bytes = 0
+
+    @staticmethod
+    def channel_excluded(channel) -> bool:
+        """Channels we never log/cache. Threads inside the LOGS channel (the log
+        sub-threads) are excluded too, so the bot never logs its own logs."""
+        category = getattr(channel, "category", None)
+        return (
+                channel.id in (Channels.LOGS, Channels.PLAYERFINDER)
+                or getattr(channel, "parent_id", None) == Channels.LOGS
+                or (category is not None and category.id == Channels.CAT_INTERNAL)
+                or channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
+        )
+
+    def drop_cached(self, message_id: int) -> list[tuple[str, bytes]]:
+        entry = self._attachment_cache.pop(message_id, None)
+        if entry is None:
+            return []
+        self._attachment_cache_bytes -= sum(len(data) for _, data in entry[1])
+        return entry[1]
+
+    def purge_expired_attachments(self) -> None:
+        now = time.monotonic()
+        for mid in [mid for mid, (expiry, _) in self._attachment_cache.items() if expiry <= now]:
+            self.drop_cached(mid)
+
+    def evict_attachments_until(self, budget: int) -> None:
+        for mid in list(self._attachment_cache):
+            if self._attachment_cache_bytes <= budget:
+                break
+            self.drop_cached(mid)
+
+    async def attachment_cache(self, message: discord.Message) -> None:
+        items: list[tuple[str, bytes]] = []
+        for attachment in message.attachments:
+            if not attachment.filename.lower().endswith(VALID_IMAGE_FORMATS):
+                continue
+            if attachment.size > ATTACHMENT_MAX_FILE:
+                continue
+            try:
+                items.append((attachment.filename, await attachment.read()))
+            except discord.HTTPException:
+                continue
+
+        if not items:
+            return
+
+        self.purge_expired_attachments()
+        total = sum(len(data) for _, data in items)
+        self.evict_attachments_until(ATTACHMENT_CACHE_BUDGET - total)
+        self._attachment_cache[message.id] = (time.monotonic() + ATTACHMENT_CACHE_TTL, items)
+        self._attachment_cache_bytes += total
+
+    def repost_files(self, message_id: int) -> list[discord.File]:
+        files: list[discord.File] = []
+        seen: set[str] = set()
+        for name, data in self.drop_cached(message_id):
+            unique, counter = name, 1
+            while unique in seen:
+                base, dot, ext = name.rpartition(".")
+                unique = f"{base}_{counter}.{ext}" if dot else f"{name}_{counter}"
+                counter += 1
+            seen.add(unique)
+            files.append(discord.File(BytesIO(data), filename=unique))
+        return files
+
+    @commands.Cog.listener("on_message")
+    async def cache_attachments(self, message: discord.Message) -> None:
+        if (
+                not message.guild
+                or message.guild.id != Guilds.DDNET
+                or not message.attachments
+                or self.channel_excluded(message.channel)
+        ):
+            return
+        await self.attachment_cache(message)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -124,9 +324,7 @@ class GuildLog(commands.Cog):
                 not message.guild
                 or message.guild.id != Guilds.DDNET
                 or message.is_system()
-                or message.channel.id in (Channels.LOGS, Channels.PLAYERFINDER)
-                or message.channel.category.id == Channels.CAT_INTERNAL
-                or message.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
+                or self.channel_excluded(message.channel)
         ):
             return
 
@@ -137,38 +335,27 @@ class GuildLog(commands.Cog):
             timestamp=datetime.now(timezone.utc),
         )
 
-        file = None
-        if message.attachments:
-            attachment = message.attachments[0]
+        files = self.repost_files(message.id)
+        if files:
+            embed.set_image(url=f"attachment://{files[0].filename}")
 
-            # can only properly recover images
-            if attachment.filename.endswith(VALID_IMAGE_FORMATS):
-                buf = BytesIO()
-                try:
-                    await attachment.save(buf, use_cached=True)
-                except discord.HTTPException:
-                    pass
-                else:
-                    file = discord.File(buf, filename=attachment.filename)
-                    embed.set_image(url=f"attachment://{attachment.filename}")
+        retained = {f.filename for f in files}
+        missing = [a.filename for a in message.attachments if a.filename not in retained]
+        if missing:
+            embed.add_field(
+                name="Attachments (not retained)",
+                value="\n".join(missing)[:1024],
+                inline=False,
+            )
 
         author = message.author
-        if isinstance(message.channel, discord.Thread):
-            parent = message.channel.parent.name
-            author_name_and_channel = (
-                f"{author} → #{parent} → Thread: #{message.channel}"
-            )
-        else:
-            author_name_and_channel = f"{author} → #{message.channel}"
-
         embed.set_author(
-            name=author_name_and_channel,
+            name=author_channel_label(message),
             icon_url=author.display_avatar.with_static_format("png"),
         )
         embed.set_footer(text=f"Author ID: {author.id} | Message ID: {message.id}")
 
-        chan = self.bot.get_channel(Channels.LOGS)
-        await chan.send(file=file, embed=embed)
+        await log_to(self.bot, Channels.LOG_MESSAGES, files=files, embed=embed)
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
@@ -229,10 +416,8 @@ class GuildLog(commands.Cog):
                 not before.guild
                 or before.guild.id != Guilds.DDNET
                 or before.is_system()
-                or before.channel.id in (Channels.LOGS, Channels.PLAYERFINDER)
-                or before.channel.category.id == Channels.CAT_INTERNAL
                 or before.author.bot
-                or before.channel.name.startswith(("complaint-", "admin-mail-", "rename-"))
+                or self.channel_excluded(before.channel)
         ):
             return
 
@@ -254,22 +439,13 @@ class GuildLog(commands.Cog):
         embed.add_field(name="After", value=after_content or "\u200b", inline=False)
 
         author = before.author
-        if isinstance(before.channel, discord.Thread):
-            parent = before.channel.parent.name
-            author_name_and_channel = (
-                f"{author} → #{parent} → Thread: #{before.channel}"
-            )
-        else:
-            author_name_and_channel = f"{author} → #{before.channel}"
-
         embed.set_author(
-            name=author_name_and_channel,
+            name=author_channel_label(before),
             icon_url=author.display_avatar.with_static_format("png"),
         )
         embed.set_footer(text=f"Author ID: {author.id} | Message ID: {before.id}")
 
-        chan = self.bot.get_channel(Channels.LOGS)
-        await chan.send(embed=embed)
+        await log_to(self.bot, Channels.LOG_MESSAGES, embed=embed)
 
     @commands.Cog.listener("on_message")
     async def auto_publish(self, message: discord.Message):

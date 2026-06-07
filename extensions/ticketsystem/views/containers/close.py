@@ -1,8 +1,8 @@
 from typing import Iterable
-from discord import SeparatorSpacing
 import discord
 
 from extensions.ticketsystem.ticket import TicketCategory
+from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from extensions.ticketsystem.views.inner_buttons import (
     CloseBtn,
     LockBtn,
@@ -19,15 +19,11 @@ class CloseContainer(discord.ui.LayoutView):
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                "If you wish to close this ticket or opened this ticket by mistake, "
-                "use either the close button below or type `/close`."
+                "If you want to close this ticket or opened it by mistake, please click the blue close button below!"
             ),
-            discord.ui.Separator(
-                spacing=SeparatorSpacing.large,
-                visible=True,
-            ),
+            large_seperator(),
             discord.ui.ActionRow(*buttons),
-            accent_colour=2210995,
+            accent_colour=TICKET_ACCENT,
         )
 
         self.add_item(container)
@@ -36,7 +32,6 @@ class CloseContainer(discord.ui.LayoutView):
     def for_category(cls, category: TicketCategory, locked: bool = False) -> "CloseContainer":
         buttons: list[discord.ui.Button] = [
             CloseBtn(),
-            LockBtn(label="🔓 Unlock Ticket" if locked else "🔒 Lock Ticket"),
         ]
 
         if category == TicketCategory.REPORT:
@@ -48,7 +43,7 @@ class CloseContainer(discord.ui.LayoutView):
                     RenamePrintCMD(),
                 ]
             )
-        elif category == TicketCategory.BAN_APPEAL:
+        elif category in (TicketCategory.BAN_APPEAL, TicketCategory.VPN_BAN_APPEAL):
             buttons.append(BanAppealFindBanBtn())
-
+        buttons.append(LockBtn(label="🔓" if locked else "🔒"))
         return cls(buttons)

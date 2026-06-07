@@ -1,0 +1,79 @@
+{
+  "staff": {
+    "aliases": [],
+    "style": "guide",
+    "text": {
+      "en": "## DDNet Staff List\nThe link below will give you a full list of all DDNet staff members.\n\n**URL:** https://ddnet.org/staff/"
+    }
+  },
+  "configdir": {
+    "aliases": [],
+    "style": "guide",
+    "text": {
+      "en": "### [DDNet config directory:](https://wiki.ddnet.org/wiki/FAQ#Where_is_the_DDNet_config,_config_directory_or_save_directory?)\n__**On Windows:**__\nOld: `%appdata%\\Teeworlds`\nNew: `%appdata%\\DDNet`\n__**On Linux:**__\nOld: `~/.teeworlds`\nNew: `~/.local/share/ddnet`\n__**On macOS:**__\nOld: `~/Library/Application Support/Teeworlds`\nNew: `~/Library/Application Support/DDNet`"
+    }
+  },
+  "skins": {
+    "aliases": [],
+    "style": "guide",
+    "text": {
+      "en": "## How can I get other players to see the skin that I created?\nThere are two ways to get other players to see your custom skin: \n\n**Method 1:** \nThey need to manually add your skin to their game files by pasting it in the skins folder in the config directory. \n\n**Method 2:** \nYour skin gets added to the official SkinDB. \n\nFor more info on how to get your skin uploaded to the SkinDB, visit this channel: <#{Channels.SKIN_INFO}>"
+    }
+  },
+  "binds": {
+    "aliases": [],
+    "style": "guide",
+    "text": {
+      "en": "## How do I bind x ?\n### wiki.ddnet.org\nContent: \nThorough explanation how binds work, Deepfly, 45° Aim bind, Rainbow Tee \n\n**URL:** \n[wiki.ddnet.org](https://wiki.ddnet.org/wiki/Binds)\n### DDNet Forums\nContent: \nClient-, Chat-, Dummy-, Mouse-, Player- and RCON settings \n\n**URL:** \n[forum.ddnet.org](https://forum.ddnet.org/viewtopic.php?f=16&t=2537)"
+    }
+  },
+  "crash": {
+    "aliases": [],
+    "style": "guide",
+    "text": {
+      "en": "## Crash Logs\nTo help us debug the cause for your crash, provide the following information: \n* Operating System \n - Windows, Linux or macOS? \n - 32Bit or 64Bit? \n* Client version \n* Steam or Standalone? \n - Steam: Stable, Nightly or releasecandidate beta? \n* Upload the most recent crash log file from your dumps folder in the config directory (drag and drop it here).\n[btn:configdir:Config Directory Location]"
+    }
+  },
+  "deepl": {
+    "aliases": [
+      "translator",
+      "english"
+    ],
+    "style": "notice",
+    "text": {
+      "en": "Hi! Most of us communicate in English. If you're having trouble with English, use <https://www.deepl.com/en/translator> to help you out."
+    }
+  },
+  "failed_inserts": {
+    "aliases": [
+      "failed-inserts",
+      "missing-rank",
+      "missing-save"
+    ],
+    "style": "notice",
+    "text": {
+      "en": "In-game Ranks and saves may occasionally fail to be inserted in our database. This can happen for various reasons, including poor connectivity to our main database due to lag or hoster issues. However, there's no need to worry! The ranks and saves are stored locally and will be attempted to be inserted again within the next 24 hours."
+    }
+  },
+  "gfx_troubleshoot": {
+    "aliases": [
+      "gfx",
+      "missing-text",
+      "no-text",
+      "missing-ui",
+      "no-ui"
+    ],
+    "style": "notice",
+    "text": {
+      "en": "https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Some_text_is_invisible_with_the_Vulkan_backend"
+    }
+  },
+  "deepfly": {
+    "aliases": [],
+    "style": "guide",
+    "attachment": "deepfly.txt",
+    "text": {
+      "en": "### [How to bind and configure deepfly](https://wiki.ddnet.org/wiki/Binds#Deepfly):\nWe highly recommended to read this [article](https://wiki.ddnet.org/wiki/Binds#Deepfly).\n\n### To get you started, follow the instructions below:\nMove the attached text file to your config directory and then type: ```exec deepfly.txt``` into the ingame console (F1).\n[btn:\"configdir\":Config Directory]\nTo toggle deepfly on/off, press \"C\" on your keyboard."
+    }
+  }
+}

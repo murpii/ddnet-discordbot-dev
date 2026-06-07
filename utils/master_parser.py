@@ -172,10 +172,6 @@ class Server:
             return r or None, c or None
         return None, None
 
-    @property
-    def ddnet_address(self) -> Optional[str]:
-        """Return the first (primary) address string, or None if unavailable."""
-        return self.addresses[0] if self.addresses else None
 
     @property
     def normalized_address(self) -> Optional[str]:
@@ -202,39 +198,6 @@ class Server:
             return f"[{host}]:{port}"
 
         return f"{host}:{port}"
-
-    @property
-    def normalized_addresses(self) -> List[str]:
-        """
-        Returns a list of unique normalized "host:port" strings for this server.
-        IPv4 + IPv6 or genuinely different endpoints.
-
-        Example:
-            IPv4 only:
-                ['45.141.57.22:8379']
-
-            IPv4 + IPv6:
-                ['45.141.57.22:8379', '[2a01:4f8:1c1e::1]:8379']
-        """
-        seen = set()
-        out = []
-
-        for addr in self.addresses:
-            _, _, _, host, port = parse_address(addr)
-            if not host or not port:
-                continue
-
-            # Normalize IPv6
-            if ":" in host and not host.startswith("["):
-                norm = f"[{host}]:{port}"
-            else:
-                norm = f"{host}:{port}"
-
-            if norm not in seen:
-                seen.add(norm)
-                out.append(norm)
-
-        return out
 
 
 @dataclass
@@ -440,93 +403,12 @@ def find_player(master: MasterList, player_name: str) -> Optional[Tuple[Server, 
     return None
 
 
-def find_server_by_ip(master: MasterList, ip_port: str) -> Optional[Server]:
-    """
-    Find a server either by raw address match or by normalized host:port match.
-    """
-    for server in master.servers:
-        if ip_port in server.addresses:
-            return server
-
-        norm = server.normalized_address
-        if norm and norm == ip_port:
-            return server
-
-    return None
-
-
 def find_servers_by_community(master: MasterList, community_id: str) -> List[Server]:
     """
     All servers that belong to a specific community (e.g. 'ddnet').
     """
     cid = community_id.lower()
     return [s for s in master.servers if (s.community or "").lower() == cid]
-
-
-def find_servers_by_region(master: MasterList, region: Optional[str] = None, country: Optional[str] = None) -> List[
-    Server]:
-    """
-    Filter servers by region and/or country code from the 'location' field.
-
-    Args:
-        region: 'eu', 'na', 'as', 'sa', etc. If None, don't filter by region.
-        country: 'de', 'us', 'ru', etc. If None, don't filter by country.
-
-    Returns:
-        List of Server.
-    """
-    rnorm = region.lower() if region else None
-    cnorm = country.lower() if country else None
-
-    def ok(s: Server) -> bool:
-        r, c = s.region_country
-        if rnorm and (r or "").lower() != rnorm:
-            return False
-        return not cnorm or (c or "").lower() == cnorm
-
-    return [s for s in master.servers if ok(s)]
-
-
-def find_servers_by_gametype(master: MasterList, game_type: str) -> List[Server]:
-    """
-    All servers whose info.game_type matches (case-insensitive exact).
-    """
-    gt = game_type.lower()
-    return [s for s in master.servers if (s.info.game_type or "").lower() == gt]
-
-
-def find_servers_by_map(master: MasterList, map_name: str, exact: bool = False) -> List[Server]:
-    """
-    Servers running a given map (exact or substring, case-insensitive).
-
-    Args:
-        map_name: Target map string.
-        exact: If True, require exact name match; otherwise substring match.
-
-    Returns:
-        List of Server.
-    """
-    needle = map_name.lower()
-    out: List[Server] = []
-    for s in master.servers:
-        m = s.info.map.name.lower() if s.info.map and s.info.map.name else ""
-        if (m == needle) if exact else (needle in m):
-            out.append(s)
-    return out
-
-
-def count_players(master: MasterList, community_id: Optional[str] = None) -> int:
-    """
-    Total player count across all servers (or a single community).
-
-    Args:
-        community_id: Limit to a community ID (e.g., 'ddnet'), or None for all.
-
-    Returns:
-        Sum of Info.total_players across the selected servers.
-    """
-    servers = find_servers_by_community(master, community_id) if community_id else master.servers
-    return sum(s.info.total_players for s in servers)
 
 
 class AddressParseError(ValueError):

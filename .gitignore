@@ -1,24 +1,53 @@
+# Python
 __pycache__/
-.idea/
 *.pyc
-venv/
-config.ini
+
+# Virtual environments
+.venv/
+
+# IDE / editor
+.idea/
+
+# Build artifacts
+*.exe
+
+# Logs
 *.log
+
+# Local config & secrets (copy from the *_example templates)
+config.ini
 constants.py
 constants_ddnet.py
-*.exe
-find_players.json
-!find_players.json.schema
 
+# Runtime data & caches (schema files are kept)
+data/cache/
+data/watchlist.json
+data/map-testing/
+data/ticket-system/*
+!data/ticket-system/*.json.schema
+data/events/*
+!data/events/teeguesser/
+data/events/teeguesser/*
+!data/events/teeguesser/*.json.schema
+data/tester-hub/*
+!data/tester-hub/*.json.schema
 data/assets/map_backgrounds/*
 !data/assets/map_backgrounds/.gitkeep
-data/map-testing/
-data/ticket-system/
-!data/ticket-system/*.json.schema
-data/watchlist.json
-data/cache.sqlite
 data/tools/dontuse/
 data/tools/render_map/
-data/events/
-!data/events/teeguesser/*.json.schema
-/extensions/player_finder/secret/
+
+# Player finder
+find_players.json
+!find_players.json.schema
+/extensions/management/moderator/player_finder/secret/
+
+# Test extensions
+/extensions/testing/
+
+# Personal notes / TODOs
+TODO.txt
+ddnet-todo.txt
+
+# Debug scripts and migration tools
+/scripts/
+/migrations/

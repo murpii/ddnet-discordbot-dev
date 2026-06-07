@@ -1,83 +1,86 @@
+import asyncio
 import discord
 from discord.ext import commands
 from discord import app_commands
 
-from constants import Channels
 
+class HelpFormatter:
+    PREFIX = "$"
 
-class HelpCommand(commands.MinimalHelpCommand):
-    async def send_bot_help(self, mapping):
-        """Shows a list of public commands"""
+    @classmethod
+    def format_command(cls, command: commands.Command) -> str:
+        params = " ".join(f"<{p}>" for p in command.clean_params)
+        base = f"{cls.PREFIX}{command.qualified_name} {params}".strip()
 
-        if self.context.channel.id == Channels.BOT_CMDS:
-            return
+        if command.aliases:
+            aliases = ", ".join(f"{cls.PREFIX}{a}" for a in command.aliases)
+            return f"`{base}` (aliases: {aliases})"
 
-        excluded_cogs = ["Help", "Moderation", "Botscribe", "Forum", "TestingBans", ]
-        excluded_commands = ["$wikicontributor <member>"]
+        return f"`{base}`"
 
-        embed = discord.Embed(title="Available Text-based Commands")
-        embed.colour = discord.Colour.blurple()
+    @classmethod
+    async def collect_commands(cls, bot: commands.Bot, interaction: discord.Interaction):
+        result = {}
 
-        for cog, commands in mapping.items():
-            if cog is None or cog.qualified_name in excluded_cogs:
-                continue
+        for cog_name, cog in bot.cogs.items():
+            if visible_commands := [
+                cmd for cmd in cog.get_commands() if not cmd.hidden and cmd.enabled
+            ]:
+                visible_commands.sort(key=lambda c: c.name)
+                result[cog] = visible_commands  # store cog object
 
-            filtered_commands = []
-            for command in commands:
-                if self.get_command_signature(command) not in excluded_commands:
-                    # Get the command name and its aliases
-                    command_signature = self.get_command_signature(command)
-                    if command.aliases:
-                        aliases = [f"${alias}" for alias in command.aliases]
-                        command_signature += f" (**Aliases**: {', '.join(aliases)})"
-                    filtered_commands.append(command_signature)
+        return result
 
-            if filtered_commands:
-                cog_name = getattr(cog, "qualified_name", "No Category")
-                embed.add_field(name=cog_name, value="\n".join(filtered_commands), inline=False)
+    @classmethod
+    async def build_embed(cls, bot: commands.Bot, interaction: discord.Interaction) -> discord.Embed:
+        embed = discord.Embed(
+            title="Commands",
+            description="Available prefix commands",
+            colour=discord.Colour.blurple(),
+        )
 
-        channel = self.get_destination()
-        await channel.send(embed=embed)
+        grouped = await cls.collect_commands(bot, interaction)
+
+        for cog, commands_list in grouped.items():
+            cog_name = getattr(cog, "qualified_name", "No Category")
+            formatted = [cls.format_command(cmd) for cmd in commands_list]
+            value = "\n".join(formatted)
+
+            if (
+                    cog_description := getattr(cog, "description", None)
+                                       or cog.__doc__
+                                       or ""
+            ):
+                value = f"> {cog_description}\n\n{value}"
+
+            embed.add_field(
+                name=cog_name,
+                value=value,
+                inline=False,
+            )
+
+        return embed
 
 
 class HelpAppCommand(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Shows available commands")
+    @app_commands.command(name="help", description="Show available commands")
     async def help_command(self, interaction: discord.Interaction):
-        """Shows a list of public commands"""
+        embed = await HelpFormatter.build_embed(self.bot, interaction)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        excluded_cogs = ["Help", "Moderation", "Botscribe", "Forum"]
-        excluded_commands = ["$wikicontributor <member>"]
+    @commands.command(name="help")
+    async def help_redirect(self, ctx: commands.Context):
+        resp = await ctx.message.reply(
+            "Use `/help` to view available commands.",
+            mention_author=False,
 
-        embed = discord.Embed(title="Available Text-based Commands")
-        mapping = self.bot.cogs  # Adjust based on your structure
-
-        for cog_name, cog in mapping.items():
-            if cog_name in excluded_cogs:
-                continue
-
-            filtered_commands = []
-            for command in cog.get_commands():  # Get the commands from the cog
-                if self.get_command_signature(command) not in excluded_commands:
-                    command_signature = f"**$**{self.get_command_signature(command)}"  # Add "$" in front
-                    if command.aliases:
-                        aliases = [f"**$**{alias}" for alias in command.aliases]
-                        command_signature += f" (**Aliases**: {', '.join(aliases)})"
-                    filtered_commands.append(command_signature)
-
-            if filtered_commands:
-                embed.add_field(name=cog_name, value="\n".join(filtered_commands), inline=False)
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)  # noqa
-
-    @staticmethod
-    def get_command_signature(command):
-        """Get the command signature."""
-        return f"{command.qualified_name} " + " ".join(
-            f"<{arg}>" for arg in command.clean_params
         )
+        await asyncio.sleep(30)
+        await ctx.channel.delete_messages([resp, ctx.message])
 
-async def setup(bot):
+
+async def setup(bot: commands.Bot):
     await bot.add_cog(HelpAppCommand(bot))

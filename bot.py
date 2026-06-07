@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import platform
 import time
 import sys
@@ -17,9 +18,8 @@ from colorama import Back, Fore, Style
 
 from constants import Guilds
 from extensions.ticketsystem.manager import TicketManager
-from extensions.player_finder.manager import PlayerfinderManager
-from extensions.moderator.manager import ModeratorDB
-from extensions.help import HelpCommand
+from extensions.management.moderator.player_finder.manager import PlayerfinderManager
+from extensions.management.moderator.manager import ModeratorDB
 
 config = ConfigParser()
 config.read("config.ini")
@@ -30,32 +30,31 @@ log = logging.getLogger()
 extensions = [
     ("extensions.logutils.logger", True),
     ("extensions.logutils.errorhandler", True),
-    ("extensions.admin", True),
-    ("extensions.admin.rename", True),
+    ("extensions.management.admin", True),
+    ("extensions.management.admin.rename", True),
+    ("extensions.management.admin.auto_responses", True),
     ("extensions.assignees", True),
-    ("extensions.moderator", True),
-    ("extensions.map_testing", True),
-    ("extensions.map_testing.secret_testing", True),
-    ("extensions.map_testing.bans", True),
+    ("extensions.management.moderator", True),
+    ("extensions.management.tester", True),
     ("extensions.skindb", True),
-    ("extensions.player_finder", True),
-    ("extensions.player_finder.secret", True),
+    ("extensions.management.moderator.player_finder", True),
+    ("extensions.management.moderator.player_finder.secret", True),
     ("extensions.ticketsystem", True),
     ("extensions.wiki.wiki", True),
     ("extensions.misc.meme", True),
     ("extensions.misc.misc", True),
     ("extensions.misc.profile", True),
     ("extensions.misc.status", True),
-    ("extensions.misc.guides", True),
-    ("extensions.chat.github", True),
-    ("extensions.chat.forum", True),
-    ("extensions.chat.templates", True),
-    ("extensions.chat.auto_responses", True),
+    ("extensions.guides", True),
+    ("extensions.chat", True),
+    ("extensions.github", True),
+    ("extensions.forum", True),
     ("extensions.map_awards", True),
     # ("extensions.events.teeguesser", False),
     # ("extensions.events", True),
-    ("extensions.testing", True),
-    ("extensions.debug", True)
+    # ("extensions.testing", True),
+    # ("extensions.debug", True),
+    ("extensions.help", True)
 ]
 
 
@@ -63,7 +62,6 @@ class DDNet(commands.Bot):
     """Represents the DDNet Discord bot.
 
     This class extends the `commands.Bot` to provide additional functionality specific to the DDNet community.
-    It initializes various components such as the database connection pool, session management and caching.
 
     Attributes:
         pool: The database connection pool used for database operations.
@@ -79,8 +77,7 @@ class DDNet(commands.Bot):
     def __init__(self, **kwargs):
         super().__init__(
             command_prefix="$",
-            fetch_offline_members=True,
-            help_command=HelpCommand(),
+            help_command=None,
             intents=Intents().all(),
         )
 
@@ -90,8 +87,9 @@ class DDNet(commands.Bot):
         self.ticket_manager = TicketManager(self)
         self.pfm = PlayerfinderManager(self)
         self.moddb = ModeratorDB(self)
+        os.makedirs("data/cache", exist_ok=True)
         self.request_cache = CachedSession(
-            cache_name="data/cache", backend="sqlite", expire_after=60 * 60 * 2
+            cache_name="data/cache/http_cache", backend="sqlite", expire_after=60 * 60 * 2
         )
         self.session_manager = SessionManager()
         self.synced = False
@@ -147,21 +145,23 @@ class DDNet(commands.Bot):
             return rowcount
 
     async def setup_hook(self):
-        """|coro|
-        Initializes the bot by loading extensions and setting up the database connection.
+        """Initializes the bot by loading extensions and setting up the database connection"""
 
-        This function iterates through the extensions,
-        loading each one that is marked for initialization.
-        It also checks the status of the database connection pool and retrieves a session for the bot's operations
-        """
-
+        failed = []
         for cog, init in extensions:
             if init:
                 try:
                     await self.load_extension(cog)
                     log.info(f"Successfully loaded {cog}")
                 except Exception:
-                    logging.error("Failed to load extension:\n%s", traceback.format_exc())
+                    failed.append(cog)
+                    log.error("Failed to load extension %s:\n%s", cog, traceback.format_exc())
+
+        if failed:
+            log.error(
+                "%d extension(s) FAILED to load: %s, the bot is running without them.",
+                len(failed), ", ".join(failed),
+            )
 
         log.info(f"Python version: {sys.version}")
         log.info(f"Discord.py version: {discord.__version__}")
@@ -229,15 +229,7 @@ class DDNet(commands.Bot):
 
 
 class SessionManager:
-    """Manages HTTP sessions for different components of the bot.
-
-    Attributes:
-        sessions (dict): A dictionary that stores active sessions keyed by cog names.
-
-    Methods:
-        get_session(cog_name): Retrieves an existing session or creates a new one for the specified cog.
-        Close_session(cog_name): Closes and removes the session associated with the specified cog.
-    """
+    """Manages HTTP sessions for different components of the bot"""
 
     def __init__(self):
         self.sessions = {}

@@ -4,120 +4,132 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
+from urllib.parse import quote
 
 import aiohttp
 import discord
-import requests
 from discord.ext import commands, tasks
 
-from constants import Channels
+from constants import Channels, URLs
+from utils.containers import NoticeView
+from utils.misc import resolve_active_thread
+from utils.text import clip, to_discord_timestamp
 
 log = logging.getLogger()
-WIKI_API = "https://wiki.ddnet.org/w/api.php"
+
 STATE_FILE = "data/wiki/wiki_state.json"
+HEADERS = {"User-Agent": "DDNetDiscordBot/1.0 (+https://ddnet.org/)"}
+HEADING_RE = re.compile(r"==+\s*([^=]+?)\s*==+\s*(?:<!--.*?-->\s*)?$")
+
+
+async def fetch_json(session: aiohttp.ClientSession, **params) -> dict:
+    """One GET against the wiki API. "formatversion=2" makes MediaWiki return modern, flat JSON"""
+    params.update(format="json", formatversion="2")
+    query = {key: str(value) for key, value in params.items()}
+
+    async with session.get(URLs.WIKI_API, params=query, headers=HEADERS) as resp:
+        resp.raise_for_status()
+        data = await resp.json()
+
+    if "error" in data:
+        raise ValueError(f"Wiki API error: {data['error'].get('info', 'unknown error')}")
+    return data
+
+
+def page_url(title: str, section: str = "") -> str:
+    """Link to a wiki page, optionally to a specific section."""
+    url = URLs.WIKI_PAGE_URL + quote(title.replace(" ", "_"))
+    if section:
+        url += "#" + quote(section.replace(" ", "_"))
+    return url
+
+
+def format_section_link(title: str, section: str) -> str:
+    """[`Title - Section`](link), a plain title link if section is empty"""
+    label = f"{title} - {section}" if section else title
+    return f"[`{label}`]({page_url(title, section)})"
+
+
+def find_matching_sections(wikitext: str, keywords: list) -> list:
+    keywords = [keyword.lower() for keyword in keywords]
+    matches = []
+    current = ""
+
+    def add(section: str):
+        if section not in matches:
+            matches.append(section)
+
+    for line in wikitext.splitlines():
+        if heading := HEADING_RE.match(line):
+            current = heading[1].strip()
+            if any(keyword in current.lower() for keyword in keywords):
+                add(current)
+            continue
+
+        lowered = line.lower()
+        if all(keyword in lowered for keyword in keywords):
+            add(current)
+
+    return matches
+
+
+def count_changed_lines(old_text: str, new_text: str) -> tuple:
+    """\"added\" and \"removed\" line counts between two revisions"""
+    added = removed = 0
+    for line in difflib.unified_diff(old_text.splitlines(), new_text.splitlines(), lineterm=""):
+        if line.startswith("+") and not line.startswith("+++"):
+            added += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            removed += 1
+    return added, removed
 
 
 class Wiki(commands.Cog):
+    """$wiki <keyword>: searches the DDNet wiki and links the articles and sections where the keywords appear."""
+
     def __init__(self, bot):
         self.bot = bot
+        self.session = None
 
-    @staticmethod
-    def find_sections_with_keywords(content, keywords):
-        sections = []
-        current_section = ""
-        in_relevant_section = False
-        lines = content.split("\n")
-        for line in lines:
-            if match := re.match(r"==+\s*([^=]+?)\s*==+", line):
-                if any(keyword.lower() in match[1].lower() for keyword in keywords):
-                    if in_relevant_section:
-                        sections.append(current_section)
-                    current_section = match[1].strip()
-                    in_relevant_section = True
+    async def cog_load(self):
+        self.session = await self.bot.session_manager.get_session(self.__class__.__name__)
 
-            if all(keyword.lower() in line.lower() for keyword in keywords):
-                in_relevant_section = True
+    async def cog_unload(self):
+        await self.bot.session_manager.close_session(self.__class__.__name__)
 
-        if in_relevant_section:
-            sections.append(current_section)
-
-        return sections
-
-    @staticmethod
-    def format_section_link(title, section):
-        title_formatted = title.replace(" ", "_")
-        section_formatted = section.replace(" ", "_")
-        link = f"https://wiki.ddnet.org/wiki/{title_formatted}#{section_formatted}"
-
-        if section:
-            return f"[`{title} - {section}`]({link})"
-        else:
-            return f"[`{title}`]({link})"
-
-    def fetch_article_content(self, pageid):
-        params = {
-            "action": "parse",
-            "format": "json",
-            "pageid": pageid,
-            "prop": "wikitext",
-        }
-        headers = {"User-Agent": "DDNetDiscordBot/1.0 (+https://ddnet.org/)"}
-
-        try:
-            response = self.bot.request_cache.get(WIKI_API, params=params, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            # print(data.get('parse', {}).get('wikitext', {}).get('*'))
-            return data.get("parse", {}).get("wikitext").get("*")
-        except requests.RequestException as e:
-            logging.error("Error fetching article content:", e)
-            return ""
-
-    def wiki_search(self, keyword, max_articles=5, max_sections_per_article=2):
-        keywords = keyword.split()
-        articles = self.search_articles(keyword)
-        if not articles:
+    async def search(self, query: str, max_articles: int = 5, max_sections_per_article: int = 3) -> str:
+        data = await fetch_json(
+            self.session,
+            action="query", list="search", srsearch=query, srlimit="10",
+        )
+        hits = data.get("query", {}).get("search", [])
+        # subpages like "Dragger/es" are translations of the main article
+        hits = [hit for hit in hits if "/" not in hit["title"]][:max_articles]
+        if not hits:
             return "No articles found."
 
-        response_lines = []
+        data = await fetch_json(
+            self.session,
+            action="query", prop="revisions",
+            rvprop="content", rvslots="main",
+            titles="|".join(hit["title"] for hit in hits),
+        )
+        contents = {}
+        for page in data.get("query", {}).get("pages", []):
+            if revisions := page.get("revisions"):
+                contents[page["title"]] = revisions[0].get("slots", {}).get("main", {}).get("content", "")
 
-        for article in articles[:max_articles]:
-            content = self.fetch_article_content(article["pageid"])
-            sections = self.find_sections_with_keywords(content, keywords)
-
-            for section in sections[:max_sections_per_article]:
-                link = self.format_section_link(article["title"], section)
-                response_lines.append(link)
-
-        return "\n".join(response_lines) if response_lines else "No matching sections found."
-
-    def search_articles(self, keyword):
-        params = {
-            "action": "query",
-            "format": "json",
-            "list": "search",
-            "srsearch": keyword,
-            "srlimit": 5,
-        }
-        headers = {"User-Agent": "DDNetDiscordBot/1.0 (+https://ddnet.org/)"}
-
-        try:
-            response = self.bot.request_cache.get(WIKI_API, params=params, headers=headers)
-            response.raise_for_status()
-
-            if response.status_code == 200:
-                data = response.json()
-                if "error" in data:
-                    raise ValueError(f"Wiki API Error: {data['error'].get('info', 'Unknown error')}")
-
-                articles = data.get("query", {}).get("search", [])
-                return [article for article in articles if "/" not in article["title"]]
-
-            raise ValueError(f"Unexpected status code from Wiki API: {response.status_code}")
-
-        except requests.RequestException as e:
-            raise ValueError(f"Failed to fetch articles: {e}") from e
+        keywords = query.split()
+        lines = []
+        for hit in hits:
+            title = hit["title"]
+            sections = find_matching_sections(contents.get(title, ""), keywords)
+            lines.extend(
+                format_section_link(title, section)
+                for section in sections[:max_sections_per_article]
+            )
+        return "\n".join(lines) if lines else "No matching sections found."
 
     @commands.command(
         name="wiki",
@@ -126,148 +138,139 @@ class Wiki(commands.Cog):
     )
     async def wiki(self, ctx, *keywords):
         """Usage: $wiki <keyword>"""
-        search_query = " ".join(keywords)
+        query = " ".join(keywords)
 
-        if not search_query or len(search_query) < 3:
+        if len(query) < 3:
             await ctx.send("Please enter a keyword that is at least 3 characters long.")
             return
 
         try:
-            resp = self.wiki_search(search_query, max_articles=5, max_sections_per_article=3)
-            embed = discord.Embed(description=resp, colour=discord.Colour.blurple())
-        except ValueError as e:
-            embed = discord.Embed(
-                title="Wiki Search Error",
-                description=str(e),
-                colour=discord.Colour.red()
-            )
+            text = await self.search(query)
+        except (aiohttp.ClientError, ValueError) as error:
+            log.warning("Wiki search for %r failed: %s", query, error)
+            text = f"Wiki search failed: {error}"
 
         with contextlib.suppress(discord.Forbidden):
-            if ctx.interaction:
-                await ctx.interaction.followup.send(embed=embed)
-            else:
-                await self.bot.reply(message=ctx.message, embed=embed)
+            await self.bot.reply(message=ctx.message, view=NoticeView(text))
 
 
 class WikiChanges(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.session = None
         self.last_rev_id = self.load_last_rev_id()
         self.check_changes.start()
 
-    def cog_unload(self):
-        self.check_changes.cancel()
+    async def cog_load(self):
+        self.session = await self.bot.session_manager.get_session(self.__class__.__name__)
 
-    def load_last_rev_id(self):
+    async def cog_unload(self):
+        self.check_changes.cancel()
+        await self.bot.session_manager.close_session(self.__class__.__name__)
+
+    @staticmethod
+    def load_last_rev_id():
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
-                data = json.load(f)
-                return data.get("last_rev_id")
+                return json.load(f).get("last_rev_id")
         return None
 
-    def save_last_rev_id(self, rev_id):
+    @staticmethod
+    def save_last_rev_id(rev_id: int):
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
         with open(STATE_FILE, "w") as f:
             json.dump({"last_rev_id": rev_id}, f)
 
-    async def fetch_json(self, session, params):
-        async with session.get(WIKI_API, params=params) as resp:
-            return await resp.json()
+    async def fetch_revision_texts(self, old_rev: int, new_rev: int) -> tuple:
+        """The wikitext of both revisions. "old_rev" is 0 for page creations, the old text is then empty"""
+        revids = f"{old_rev}|{new_rev}" if old_rev else str(new_rev)
+        data = await fetch_json(
+            self.session,
+            action="query", prop="revisions", revids=revids,
+            rvslots="main", rvprop="ids|content",
+        )
 
-    async def fetch_revision(self, session, rev_id):
-        """Fetch the raw wikitext of a specific revision."""
-        params = {
-            "action": "query",
-            "prop": "revisions",
-            "revids": rev_id,
-            "rvslots": "main",
-            "rvprop": "content",
-            "format": "json",
-        }
-        data = await self.fetch_json(session, params)
-        pages = data.get("query", {}).get("pages", {})
-        for page in pages.values():
-            if revisions := page.get("revisions", []):
-                return revisions[0].get("slots", {}).get("main", {}).get("*", "")
-        return ""
+        texts = {}
+        for page in data.get("query", {}).get("pages", []):
+            for revision in page.get("revisions", []):
+                texts[revision["revid"]] = revision.get("slots", {}).get("main", {}).get("content", "")
+
+        return texts.get(old_rev, ""), texts.get(new_rev, "")
 
     @tasks.loop(seconds=60)
     async def check_changes(self):
-        await self.bot.wait_until_ready()
-        channel = self.bot.get_channel(Channels.WIKI_THREAD)
-        if not channel:
-            log.warning(f"No channel found for {self}")
+        thread = await resolve_active_thread(self.bot, Channels.WIKI_THREAD)
+        if thread is None:
             return
 
-        async with aiohttp.ClientSession() as session:
-            params = {
-                "action": "query",
-                "list": "recentchanges",
-                "rcprop": "title|ids|sizes|flags|user|comment|timestamp",
-                "rclimit": 50,
-                "format": "json"
-            }
-            data = await self.fetch_json(session, params)
-            changes = data.get("query", {}).get("recentchanges", [])
+        try:
+            data = await fetch_json(
+                self.session,
+                action="query", list="recentchanges", rctype="edit|new",
+                rcprop="title|ids|sizes|user|comment|timestamp", rclimit="50",
+            )
+        except (aiohttp.ClientError, ValueError) as error:
+            log.warning("Wiki recentchanges fetch failed: %s", error)
+            return  # transient -- try again next minute
 
-            new_changes = [
-                c for c in reversed(changes)
-                if c.get("revid") and (not self.last_rev_id or c["revid"] > self.last_rev_id)
-            ]
+        changes = data.get("query", {}).get("recentchanges", [])
 
-            for change in new_changes:
-                rev_id = change["revid"]
-                old_rev = change.get("old_revid")
+        if self.last_rev_id is None:
+            # first run: remember the newest revision instead of
+            # spamming the thread with the 50 most recent edits
+            if newest := max((c["revid"] for c in changes if c.get("revid")), default=None):
+                self.last_rev_id = newest
+                self.save_last_rev_id(newest)
+            return
 
-                ts = change["timestamp"]
-                dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
-                discord_ts = f"<t:{int(dt.timestamp())}:f>"
+        new_changes = [
+            change for change in reversed(changes)
+            if change.get("revid") and change["revid"] > self.last_rev_id
+        ]
 
-                old_size = change.get("oldlen", 0)
-                new_size = change.get("newlen", 0)
-                added_bytes = max(new_size - old_size, 0)
-                removed_bytes = max(old_size - new_size, 0)
+        for change in new_changes:
+            await self.post_change(thread, change)
+            self.last_rev_id = change["revid"]
+            self.save_last_rev_id(change["revid"])
 
-                old_text = await self.fetch_revision(session, old_rev) if old_rev else ""
-                new_text = await self.fetch_revision(session, rev_id)
+    async def post_change(self, thread, change: dict):
+        rev_id = change["revid"]
+        old_rev = change.get("old_revid") or 0
 
-                diff = list(difflib.unified_diff(
-                    old_text.splitlines(),
-                    new_text.splitlines(),
-                    lineterm=""
-                ))
+        old_text, new_text = await self.fetch_revision_texts(old_rev, rev_id)
+        added_lines, removed_lines = count_changed_lines(old_text, new_text)
 
-                added_lines = sum(bool(line.startswith("+") and not line.startswith("+++"))
-                                  for line in diff)
-                removed_lines = sum(bool(line.startswith("-") and not line.startswith("---"))
-                                    for line in diff)
+        new_size = change.get("newlen", 0)
+        byte_delta = new_size - change.get("oldlen", 0)
 
-                diff = "```diff\n"
-                if removed_lines > 0:
-                    diff += f"- {removed_lines} line(s) removed\n"
-                if added_lines > 0:
-                    diff += f"+ {added_lines} line(s) added\n"
-                diff += "```"
-                bytes = "```diff\n"
-                if removed_bytes > 0:
-                    bytes += f"- {removed_bytes} byte(s)\n"
-                if added_bytes > 0:
-                    bytes += f"+ {added_bytes} byte(s)\n"
-                bytes += f"= {new_size} bytes total\n```"
-                diff += bytes
-                embed = discord.Embed(
-                    title=f"Page edited: {change['title']}",
-                    url=f"https://wiki.ddnet.org/?diff={rev_id}&oldid={old_rev}",
-                    description=change.get("comment") or "(no edit summary)",
-                    color=discord.Color.blue()
-                )
-                embed.set_author(name=change["user"])
-                embed.add_field(name="Revision ID", value=str(rev_id), inline=True)
-                embed.add_field(name="Timestamp", value=discord_ts, inline=True)
-                embed.add_field(name="Changes", value=diff, inline=False)
+        stats = ["```diff"]
+        if removed_lines:
+            stats.append(f"- {removed_lines} line(s) removed")
+        if added_lines:
+            stats.append(f"+ {added_lines} line(s) added")
+        if byte_delta:
+            stats.append(f"{'+' if byte_delta > 0 else '-'} {abs(byte_delta)} byte(s)")
+        stats.append(f"= {new_size} bytes total")
+        stats.append("```")
 
-                await channel.send(embed=embed)
-                self.last_rev_id = rev_id
-                self.save_last_rev_id(rev_id)
+        timestamp = datetime.strptime(change["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+        if old_rev:
+            action = "Page edited"
+            url = f"https://wiki.ddnet.org/?diff={rev_id}&oldid={old_rev}"
+        else:
+            action = "Page created"
+            url = page_url(change["title"])
+
+        summary = discord.utils.escape_mentions(change.get("comment") or "(no edit summary)")
+        text = (
+                f"## {action}: [{change['title']}]({url})\n"
+                f"{clip(summary, 200)}\n"
+                f"-# By {change['user']} -- {to_discord_timestamp(timestamp)} -- revision {rev_id}\n"
+                + "\n".join(stats)
+        )
+
+        await thread.send(view=NoticeView(text), allowed_mentions=discord.AllowedMentions.none())
 
     @check_changes.before_loop
     async def before_check_changes(self):

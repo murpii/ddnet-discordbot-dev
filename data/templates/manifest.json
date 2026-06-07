@@ -1,0 +1,23 @@
+{
+    "welcome": {
+        "channel": "WELCOME",
+        "messages": [
+            {"image": "welcome_main.png", "sections": ["welcome_main"]},
+            {"image": "welcome_rules.png", "sections": ["welcome_rules"]},
+            {"image": "welcome_channels.png", "sections": ["welcome_channels", "welcome_channels2"]},
+            {"image": "welcome_links.png", "sections": ["welcome_ddnet_links"]},
+            {"image": "welcome_roles.png", "sections": ["welcome_ddnet_roles"]},
+            {"image": "welcome_communities.png", "sections": ["welcome_community_links"]}
+        ]
+    },
+    "testing-info": {
+        "channel": "TESTING_INFO",
+        "end_reaction": "✅",
+        "messages": [
+            {"image": "testing_map_testing.png", "sections": []},
+            {"image": "testing_main.png", "sections": ["testing_info_header"]},
+            {"sections": ["testing_info"]},
+            {"sections": ["testing_channel_access"]}
+        ]
+    }
+}
