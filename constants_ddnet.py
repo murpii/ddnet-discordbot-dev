@@ -171,3 +171,4 @@ class URLs(StrEnum):
     DDNET_MAPPING_GUIDELINES = "https://ddnet.org/mapping/guidelines/"
     DDNET_MASTER_RULES = "https://ddnet.org/rules/master/"
     DDNET_COMMUNITY_RULES = "https://ddnet.org/rules/community/"
+    CONSTANTS_URL = "https://github.com/murpii/ddnet-discordbot-dev/blob/master/constants_ddnet.py"
