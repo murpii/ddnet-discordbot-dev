@@ -25,6 +25,8 @@ data/watchlist.json
 data/map-testing/
 data/ticket-system/*
 !data/ticket-system/*.json.schema
+!data/ticket-system/attachments-temp
+!data/ticket-system/transcripts-temp
 data/events/*
 !data/events/teeguesser/
 data/events/teeguesser/*
