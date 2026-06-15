@@ -1,0 +1,27 @@
+# Runtime dependencies for the DDNet Discord bot.
+# Pinned to the versions currently installed/tested. Regenerate by deriving
+# from the codebase imports (scripts derive these from ast + importlib.metadata).
+
+# Core
+discord.py==2.7.1        # the bot framework (Components V2, app commands)
+asyncmy==0.2.10          # async MariaDB driver (the connection pool)
+
+# HTTP
+aiohttp==3.11.18         # per-cog async sessions, master-server fetches
+requests==2.32.3
+requests-cache==1.2.1    # cached HTTP (sqlite backend at data/cache)
+
+# /rtfm settings lookup
+pandas==2.2.3            # pandas.read_html on the settings-commands page
+lxml==5.4.0              # HTML parser pandas.read_html uses (implicit; required)
+
+# Image generation (profile/map/points/activity cards)
+pillow==11.2.1
+numpy==2.2.5             # whole-number float cleanup in the profile card
+matplotlib==3.10.3       # points/activity graphs
+colorthief==0.2.1        # dominant background colour for the map card
+
+# Misc
+dateparser==1.2.1        # natural-language date parsing
+psutil==7.0.0            # system info for /status
+colorama==0.4.6          # coloured console logging
