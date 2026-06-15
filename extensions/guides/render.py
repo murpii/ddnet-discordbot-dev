@@ -141,7 +141,7 @@ def render_guide(name: str, lang: str, fallback: bool = True) -> Optional[tuple]
 
     text = render_constants(text)
     is_guide_style = guide.get("style") != "notice"
-    attachment_file, attachment_name = attachment_file(guide.get("attachment"))
+    attachment, attachment_name = attachment_file(guide.get("attachment"))
 
     items = []
     pending_buttons = []
@@ -187,8 +187,8 @@ def render_guide(name: str, lang: str, fallback: bool = True) -> Optional[tuple]
     files = []
     if avatar_placed:
         files.append(avatar_file())
-    if attachment_file is not None:
-        files.append(attachment_file)
+    if attachment is not None:
+        files.append(attachment)
 
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*items, accent_colour=INFO_ACCENT))
