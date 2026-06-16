@@ -373,8 +373,7 @@ class ModHubView(discord.ui.LayoutView):
                     "## Playerfinder\n"
                     "Watchlist for flagged players. Add or remove names, edit a reason, "
                     "look one up, dump the full list, search who is online right now, or "
-                    "start/stop the live search.\n"
-                    "-# Moderator + Admin."
+                    "start/stop the live search."
                 ),
                 *playerfinder_action_rows(bot),
                 accent_colour=INFO_ACCENT,
@@ -401,17 +400,17 @@ class DiscordModHubView(discord.ui.LayoutView):
                 separator(),
                 discord.ui.TextDisplay(
                     "## Lookups\n"
-                    "Look up a user's moderation history and name changes (with Ban / "
+                    "Look up a user's moderation history and name changes (contains Ban / "
                     "Timeout / Kick / Remove Entry controls), or see who is playing what "
-                    "right now.\n"
-                    "-# Available to Moderators and Discord Moderators. Also /info, /ban, "
+                    "right now.\n\n"
+                    "-# Available to **Moderators** and **Discord Moderators**. Also /info, /ban, "
                     "/unban, /timeout, /kick and the \"Ban user\" context menu."
                 ),
                 discord.ui.ActionRow(UserLookupButton(bot), WhoIsPlayingButton(bot)),
                 separator(),
                 discord.ui.TextDisplay(
                     "## Channel tools\n"
-                    "Slowmode, bulk-deleting messages, and locking a channel for @everyone.\n"
+                    "Slowmode, bulk-delete messages, and lock a channel for @everyone.\n"
                     "-# Slowmode is also available as /slowmode (run in the target channel)."
                 ),
                 discord.ui.ActionRow(SlowmodeButton(bot), PurgeButton(bot), LockButton(bot)),
@@ -419,10 +418,8 @@ class DiscordModHubView(discord.ui.LayoutView):
                 discord.ui.TextDisplay(
                     "## Messaging\n"
                     "Send a message as the bot, or edit/delete an existing message "
-                    "by its URL -- the URL (not the ID!) lets the bot find the "
-                    "message no matter which channel it is in.\n"
-                    "-# Admins also have /echo and /by_id, plus the message context "
-                    "menus \"Echo a message\", \"Reply to this message\" and "
+                    "by its URL.\n"
+                    "-# Available as right-click context menu: \"Echo a message\", \"Reply to this message\" and "
                     "\"Edit this message\"."
                 ),
                 discord.ui.ActionRow(

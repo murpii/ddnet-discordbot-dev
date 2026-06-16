@@ -489,7 +489,7 @@ class AdminHubView(discord.ui.LayoutView):
                     "**Channel templates (welcome / testing-info):**\n"
                     "Edit and preview a section, then rebuild the channel to apply it.\n\n"
                     "**Guide commands (`$`-prefix commands):**\n"
-                    "Add, Edit or Remove guide commands. (Does not require a restart.)"
+                    "Add, Edit or Remove guide commands."
                 ),
                 discord.ui.ActionRow(
                     TemplateEditButton(bot), TemplateRebuildButton(bot), ManageGuidesButton(bot),
