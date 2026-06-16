@@ -9,9 +9,15 @@ class BanAppealContainer(discord.ui.LayoutView):
     def __init__(self, ticket: Ticket | None = None):
         super().__init__(timeout=None)
 
+        greeting = (
+            f"Hello {ticket.creator.mention}, thanks for reaching out!"
+            if ticket is not None else "Thanks for reaching out!"
+        )
+
         items = [
             discord.ui.TextDisplay(
-                "# [Ban Appeal Ticket](https://-/)",
+                "# [Ban Appeal Ticket](https://-/)\n"
+                f"{greeting}"
             ),
             large_seperator(),
             discord.ui.TextDisplay(

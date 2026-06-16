@@ -18,8 +18,16 @@ class RenameContainer(discord.ui.LayoutView):
             custom_id="RenameConfigDirBtn",
         )
 
+        greeting = (
+            f"Hello {ticket.creator.mention}, thanks for reaching out!"
+            if ticket is not None else "Thanks for reaching out!"
+        )
+
         items = [
-            discord.ui.TextDisplay("# [Player Rename Request](https://ddnet.org/renames/)"),
+            discord.ui.TextDisplay(
+                "# [Player Rename Request](https://ddnet.org/renames/)\n"
+                f"{greeting}"
+            ),
             large_seperator(),
             discord.ui.TextDisplay(
                 "To transfer your in-game points to a new name, we need a few details first.\n"

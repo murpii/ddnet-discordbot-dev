@@ -22,7 +22,8 @@ class CommunityAppContainer(discord.ui.LayoutView):
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                "# [Community Application](https://-/)"
+                "# [Community Application](https://-/)\n"
+                f"Hello {ticket.creator.mention}, thanks for reaching out!"
             ),
             large_seperator(),
             discord.ui.TextDisplay(
