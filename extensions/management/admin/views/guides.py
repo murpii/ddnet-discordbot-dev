@@ -164,11 +164,12 @@ class GuideEditView(discord.ui.LayoutView):
 
 class GuideAddModal(discord.ui.Modal, title="Add a guide"):
     name = discord.ui.Label(
-        text="Command name -- lowercase letters, digits, _ or -",
+        text="Command name",
+        description="Lowercase letters, digits, _ or -",
         component=discord.ui.TextInput(max_length=32),
     )
     aliases = discord.ui.Label(
-        text="Aliases -- comma separated (optional)",
+        text="Aliases, comma separated (optional)",
         component=discord.ui.TextInput(required=False, max_length=200),
     )
     style = discord.ui.Label(
@@ -176,21 +177,23 @@ class GuideAddModal(discord.ui.Modal, title="Add a guide"):
         component=discord.ui.Select(
             min_values=1,
             max_values=1,
+            # TODO: Add more styles, Embeds without logo for example
             options=[
-                discord.SelectOption(label="guide (avatar thumbnail)", value="guide", default=True),
-                discord.SelectOption(label="notice (plain text)", value="notice"),
+                discord.SelectOption(label="Embed with Logo", value="guide", default=True),
+                discord.SelectOption(label="Plain Text", value="notice"),
             ],
         ),
     )
     text = discord.ui.Label(
-        text="English text -- Discord markdown",
+        text="English text | Discord markdown available",
         component=discord.ui.TextInput(
             style=discord.TextStyle.paragraph,  # noqa
             max_length=4000,
         ),
     )
     attachment = discord.ui.Label(
-        text="Attachment -- file path under data/ (optional)",
+        text="Attachment (optional)",
+        description="File path under data/ (Needs to be added manually)",
         component=discord.ui.TextInput(required=False, max_length=200, placeholder="e.g. deepfly.txt"),
     )
 
@@ -208,10 +211,10 @@ class GuideAddModal(discord.ui.Modal, title="Add a guide"):
             await interaction.response.send_message(view=NoticeView(error), ephemeral=True)
             return
 
-        if marker_error := marker_error(  # noqa
+        if marker_err := marker_error(
                 self.text.component.value, set(load_guides()) | {name}
         ):
-            await interaction.response.send_message(view=NoticeView(marker_error), ephemeral=True)
+            await interaction.response.send_message(view=NoticeView(marker_err), ephemeral=True)
             return
 
         upsert_guide(
