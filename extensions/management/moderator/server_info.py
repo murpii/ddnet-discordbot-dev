@@ -12,6 +12,7 @@ class ServerInfoEmbed(discord.Embed):
             *,
             ticket: bool = False,
             region: str = None,
+            addr: str = None,
     ) -> discord.Embed:
         if not info:
             return cls(
@@ -31,6 +32,9 @@ class ServerInfoEmbed(discord.Embed):
         if players is not None and max_players:
             title += f" ({players}/{max_players})"
 
+        if region and not region.startswith("<"):
+            title = f"{region} {title}"
+
         embed = cls(
             title=title,
             color=discord.Color.green() if is_ddnet else discord.Color.orange(),
@@ -42,7 +46,8 @@ class ServerInfoEmbed(discord.Embed):
                 warning += "\nClick the contact URL button and ask for help there instead."
             embed.add_field(name="⚠️ Warning", value=warning, inline=False)
 
-        embed.add_field(name="Country", value=region, inline=True)
+        if addr:
+            embed.add_field(name="Address", value=f"{addr}", inline=True)
         embed.add_field(name="Server Type", value=server_type, inline=True)
         if game_map := info.get("map"):
             embed.add_field(name="Map", value=game_map, inline=True)

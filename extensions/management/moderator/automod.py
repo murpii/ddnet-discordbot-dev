@@ -179,7 +179,7 @@ class AutoMod(commands.Cog):
         is_ticket = self.bot.ticket_manager.tickets.get(channel.id) is not None
         network = info.get("network")
 
-        embed = ServerInfoEmbed.from_server_info(info, ticket=is_ticket, region=region)
+        embed = ServerInfoEmbed.from_server_info(info, ticket=is_ticket, region=region, addr=addr)
         view = ServerLinksView(
             addr,
             network=network,
