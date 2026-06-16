@@ -21,8 +21,22 @@ from utils.misc import resolve_active_thread
 
 log = logging.getLogger("tickets")
 
-MAX_ZIP_SIZE = 5 * 1024 * 1024
-MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024
+DEFAULT_MAX_ZIP_SIZE_MB = 8
+DEFAULT_MAX_ATTACHMENT_SIZE_MB = 8
+
+
+def _config_size_bytes(config, option: str, default_mb: int) -> int:
+    """
+    Read an integer megabyte value from the [TRANSCRIPTS] config section and return it
+    in bytes. Falls back to default_mb when the section/option is missing or not a valid
+    integer (e.g. left blank), so a partial config never crashes the close flow.
+    """
+    try:
+        mb = config.getint("TRANSCRIPTS", option, fallback=default_mb)
+    except ValueError:
+        mb = default_mb
+    return mb * 1024 * 1024
+
 
 AttachmentBytes: TypeAlias = bytes
 AttachmentItem: TypeAlias = tuple[str, AttachmentBytes]
@@ -55,6 +69,12 @@ class TicketTranscript:
     def __init__(self, bot, ticket: Ticket):
         self.bot = bot
         self.ticket = ticket
+
+        # upload limits are configurable in config.ini (in MB)
+        self.max_zip_size = _config_size_bytes(bot.config, "MAX_ZIP_SIZE_MB", DEFAULT_MAX_ZIP_SIZE_MB)
+        self.max_attachment_size = _config_size_bytes(
+            bot.config, "MAX_ATTACHMENT_SIZE_MB", DEFAULT_MAX_ATTACHMENT_SIZE_MB
+        )
 
         self.ticket_dir = Path("data/ticket-system")
         self.transcripts_dir = self.ticket_dir / "transcripts-temp"
@@ -183,10 +203,10 @@ class TicketTranscript:
             for name, data in attachments:
                 data_size = len(data)
 
-                if data_size > MAX_ZIP_SIZE:
-                    raise ValueError(f"Attachment {name} exceeds MAX_ZIP_SIZE")
+                if data_size > self.max_zip_size:
+                    raise ValueError(f"Attachment {name} exceeds MAX_ZIP_SIZE_MB")
 
-                if current_zip is None or current_size + data_size > MAX_ZIP_SIZE:
+                if current_zip is None or current_size + data_size > self.max_zip_size:
                     if current_zip is not None:
                         current_zip.close()
                         zip_paths.append(current_zip_path)
@@ -234,10 +254,12 @@ class TicketTranscript:
         if message.attachments:
             content += "\nAttachments:\n"
             for a in message.attachments:
-                if a.size > MAX_ATTACHMENT_SIZE:
+                if a.size > self.max_attachment_size:
                     raise FileTooLargeError(
-                        f"Attachment exceeds MAX_ATTACHMENT_SIZE ({MAX_ATTACHMENT_SIZE} bytes)\n"
-                        f"Either increase limit or delete attachment {a} ({message.jump_url}) and try again."
+                        f"Attachment {a.filename!r} is {a.size / 1024 / 1024:.1f} MB, over the "
+                        f"{self.max_attachment_size // 1024 // 1024} MB limit.\n"
+                        f"Raise MAX_ATTACHMENT_SIZE_MB in config.ini, or delete the attachment "
+                        f"({message.jump_url}) and try again."
                     )
                 name = self.unique_attachment_name(a.filename)
                 content += f"{name}\n"
