@@ -89,7 +89,10 @@ async def build_ticket_channel(
     await manager.create_ticket(ticket=ticket, channel=ticket.channel, init=init)
 
     start_container = START_CONTAINERS[ticket.category]
-    ticket.start_message = await ticket.channel.send(view=start_container(ticket))  # noqa
+    ticket.start_message = await ticket.channel.send(
+        view=start_container(ticket),  # noqa
+        allowed_mentions=discord.AllowedMentions.none(),
+    )
     ticket.close_message = await ticket.channel.send(
         view=CloseContainer.for_category(ticket.category), allowed_mentions=discord.AllowedMentions(roles=False)
     )
