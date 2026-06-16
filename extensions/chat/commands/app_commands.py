@@ -17,25 +17,6 @@ class Botscribe(commands.Cog):
 
     @app_commands.guilds(discord.Object(Guilds.DDNET))
     @app_commands.default_permissions(administrator=True)
-    @app_commands.command(name="echo", description="Echo a message via bot")
-    async def echo_command(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(EchoModal(interaction.channel))
-
-    @app_commands.guilds(discord.Object(Guilds.DDNET))
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.command(name="by_id", description="Edit a message by ID")
-    @app_commands.describe(message_id="Message ID to edit")
-    async def by_id(self, interaction: discord.Interaction, message_id: str):
-        try:
-            message = await interaction.channel.fetch_message(int(message_id))
-        except (ValueError, discord.NotFound):
-            await interaction.response.send_message("Invalid message ID.", ephemeral=True)
-            return
-
-        await interaction.response.send_modal(EditMsgModal(message))
-
-    @app_commands.guilds(discord.Object(Guilds.DDNET))
-    @app_commands.default_permissions(administrator=True)
     @app_commands.command(
         name="less",
         description="Reads the raw message content and echos it back")
