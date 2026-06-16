@@ -410,7 +410,7 @@ class DiscordModHubView(discord.ui.LayoutView):
                 separator(),
                 discord.ui.TextDisplay(
                     "## Channel tools\n"
-                    "Slowmode, bulk-delete messages, and lock a channel for @everyone.\n"
+                    "Slowmode, bulk-delete messages, and lock a channel for `@everyone`.\n"
                     "-# Slowmode is also available as /slowmode (run in the target channel)."
                 ),
                 discord.ui.ActionRow(SlowmodeButton(bot), PurgeButton(bot), LockButton(bot)),
