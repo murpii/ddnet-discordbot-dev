@@ -40,11 +40,38 @@ def lang_options(default: str = DEFAULT_LANG) -> list:
     return [discord.SelectOption(label=lang, value=lang, default=(lang == default)) for lang in LANGUAGES]
 
 
+GUIDE_STYLE_CHOICES = [
+    ("Embed with Logo", "guide", "Container with the bot logo"),
+    ("Embed without Logo", "notice", "Container, no logo"),
+    ("Plain Text", "plain", "Just text, no embed"),
+]
+
+
+def style_options(default: str | None = None) -> list:
+    return [
+        discord.SelectOption(label=label, value=value, description=desc, default=(value == default))
+        for label, value, desc in GUIDE_STYLE_CHOICES
+    ]
+
+
 def helper_cog(interaction: discord.Interaction):
     return interaction.client.get_cog("Help Commands")
 
 
 class EditGuideModal(discord.ui.Modal):
+    aliases = discord.ui.Label(
+        text="Aliases, comma separated (optional)",
+        description="Guide-wide. Lowercase letters, digits, _ or -",
+        component=discord.ui.TextInput(required=False, max_length=200),
+    )
+    style = discord.ui.Label(
+        text="Style (guide-wide)",
+        component=discord.ui.Select(
+            min_values=1,
+            max_values=1,
+            options=style_options(),
+        ),
+    )
     text = discord.ui.Label(
         text="Guide text -- Discord markdown",
         component=discord.ui.TextInput(
@@ -53,31 +80,63 @@ class EditGuideModal(discord.ui.Modal):
         ),
     )
 
-    def __init__(self, name: str, lang: str):
+    def __init__(self, name: str, lang: str, bot):
         super().__init__(timeout=600, title=f"Edit {name} [{lang}]"[:45])
         self.name = name
         self.lang = lang
+        self.bot = bot
         guide = get_guide(name) or {}
         # prefill with the actual text for THIS language (empty if not written yet)
         self.text.component.default = guide.get("text", {}).get(lang, "")
+        # prefill aliases + style with whts currently stored for the guide
+        self.aliases.component.default = ", ".join(guide.get("aliases", []))
+        current_style = guide.get("style", "guide")
+        for option in self.style.component.options:
+            option.default = (option.value == current_style)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        new_aliases = [a.strip().lower() for a in self.aliases.component.value.split(",") if a.strip()]
+        new_style = self.style.component.values[0]
+
         if error := marker_error(self.text.component.value, set(load_guides())):
             await interaction.response.send_message(view=NoticeView(error), ephemeral=True)
             return
 
-        guide = get_guide(self.name) or {}
+        if alias_error := self.validate_aliases(new_aliases):
+            await interaction.response.send_message(view=NoticeView(alias_error), ephemeral=True)
+            return
+
+        old_aliases = (get_guide(self.name) or {}).get("aliases", [])
         upsert_guide(
             self.name,
-            guide.get("aliases", []),
-            guide.get("style", "guide"),
+            new_aliases,
+            new_style if new_style in STYLES else "guide",
             self.lang,
             self.text.component.value,
         )
+
+        note = f"Saved `{self.name}` [{self.lang}]."
+        if sorted(new_aliases) != sorted(old_aliases):
+            if cog := helper_cog(interaction):
+                cog.unregister_guide(self.name)
+                if not cog.register_guide(self.name):
+                    note += " (Aliases saved, but the live command could not be re-registered. Check the logs.)"
+
         log.info("AdminHub: %s edited guide %r [%s]", interaction.user, self.name, self.lang)
-        await interaction.response.send_message(
-            view=NoticeView(f"Saved `{self.name}` [{self.lang}]."), ephemeral=True
-        )
+        await interaction.response.send_message(view=NoticeView(note), ephemeral=True)
+
+    def validate_aliases(self, aliases: list) -> str | None:
+        if self.name in aliases:
+            return f"`{self.name}` is the command name; it can't also be an alias."
+        # the guide's own command owns its current aliases, so don't flag those as collisions
+        own = self.bot.get_command(self.name)
+        for token in aliases:
+            if not NAME_RE.match(token):
+                return f"Invalid alias `{token}`. Use only lowercase letters, digits, `_` or `-`."
+            cmd = self.bot.get_command(token)
+            if cmd is not None and cmd is not own:
+                return f"`{token}` is already a registered command. Pick another alias."
+        return None
 
 
 class PreviewGuideButton(discord.ui.Button):
@@ -114,7 +173,7 @@ class EditGuideButton(discord.ui.Button):
         if not name:
             await interaction.response.send_message(view=NoticeView("Pick a command first."), ephemeral=True)
             return
-        await interaction.response.send_modal(EditGuideModal(name, self.view.language))
+        await interaction.response.send_modal(EditGuideModal(name, self.view.language, interaction.client))
 
 
 class GuideEditView(discord.ui.LayoutView):
@@ -124,13 +183,14 @@ class GuideEditView(discord.ui.LayoutView):
         super().__init__(timeout=300)
         self.command = None
         self.language = DEFAULT_LANG
-
+        # TODO: Make this look better. It's ugly as hell right now.
         self.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     "# Edit a guide\n"
                     "Pick a command and a language, then **Preview** the result or "
                     "**Edit** that language's text. Edits apply instantly.\n"
+                    "-# Aliases and style are guide-wide. The text box is for the picked language.\n"
                     "## Formatting you can use in the text\n"
                     "**Style**:\n"
                     "You can use the usual markdown discord supports.\n\n"
@@ -177,11 +237,7 @@ class GuideAddModal(discord.ui.Modal, title="Add a guide"):
         component=discord.ui.Select(
             min_values=1,
             max_values=1,
-            # TODO: Add more styles, Embeds without logo for example
-            options=[
-                discord.SelectOption(label="Embed with Logo", value="guide", default=True),
-                discord.SelectOption(label="Plain Text", value="notice"),
-            ],
+            options=style_options(default="guide"),
         ),
     )
     text = discord.ui.Label(

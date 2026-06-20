@@ -7,6 +7,7 @@ from extensions.management.moderator.commands.context_menu import ModeratorCtxMe
 from extensions.management.moderator.views.containers.hub import ModHubView, DiscordModHubView
 from extensions.management.moderator.views.containers.mod_log import ModLogView
 from extensions.management.moderator.views.info import ModeratorInfoButtons
+from extensions.management.moderator.views.spam_actions import SpamModButton
 from extensions.management.moderator.listeners import ModListeners
 
 
@@ -23,3 +24,4 @@ async def setup(bot):
     bot.add_view(view=DiscordModHubView(bot))
     bot.add_view(view=ModLogView(bot))
     bot.add_view(view=ModeratorInfoButtons(bot))
+    bot.add_dynamic_items(SpamModButton)

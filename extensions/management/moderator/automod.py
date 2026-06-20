@@ -2,6 +2,7 @@ import re
 import contextlib
 import os
 import time
+from io import BytesIO
 from collections import defaultdict
 
 from requests_cache import CachedSession
@@ -22,6 +23,9 @@ from utils.checks import is_staff
 # If the bot is running into KeyErrors, clear the sqlite cache via the admin hub's "Clear Cache" button.
 os.makedirs("data/cache", exist_ok=True)
 session = CachedSession(cache_name="data/cache/http_cache", expire_after=60 * 60 * 2)
+
+SPAM_IMAGE_FORMATS = (".webp", ".jpeg", ".jpg", ".png", ".gif")
+SPAM_IMAGE_MAX = 8 * 1024 * 1024
 
 
 def parse_community_info(resp):
@@ -426,39 +430,104 @@ class AutoMod(commands.Cog):
         with contextlib.suppress(discord.Forbidden):
             await before.author.timeout(now + datetime.timedelta(minutes=1), reason="Ghost pinging (edit)")
 
-    # TODO: Include UPLOADED attachments
+    @staticmethod
+    def spam_signatures(message: discord.Message) -> set[str]:
+        """Just a test"""
+        signatures = set()
+        if text := message.content.strip().casefold():
+            signatures.add(f"t:{text}")
+        for attachment in message.attachments:
+            if attachment.width and attachment.height:
+                signatures.add(
+                    f"a:{attachment.size}:{attachment.width}x{attachment.height}:{attachment.content_type}"
+                )
+            else:
+                signatures.add(f"a:{attachment.filename.lower()}:{attachment.size}")
+        for embed in message.embeds:
+            for media in (embed.thumbnail, embed.image):
+                if media and media.url:
+                    signatures.add(f"e:{media.url}")
+        return signatures
+
+    @staticmethod
+    def spam_summary(message: discord.Message) -> str:
+        """Human-readable description of what was spammed, for the mod alert."""
+        if text := message.content.strip():
+            return text
+        if message.attachments:
+            return "[attachments] " + ", ".join(
+                f"{a.filename} ({a.size} bytes)" for a in message.attachments
+            )
+        if message.embeds:
+            return "[embedded media]"
+        return "[no text]"
+
+    @staticmethod
+    async def capture_images(message: discord.Message) -> list[discord.File]:
+        files: list[discord.File] = []
+        for attachment in message.attachments:
+            if not attachment.filename.lower().endswith(SPAM_IMAGE_FORMATS):
+                continue
+            if attachment.size > SPAM_IMAGE_MAX:
+                continue
+            try:
+                data = await attachment.read()
+            except discord.HTTPException:
+                continue
+            ext = os.path.splitext(attachment.filename)[1] or ".png"
+            files.append(discord.File(BytesIO(data), filename=f"spam_{len(files)}{ext}"))
+        return files
+
     @commands.Cog.listener('on_message')
     async def spam_protection(self, message: discord.Message):
         if not message.guild or message.author.bot or message.guild.id != Guilds.DDNET:
             return
 
-        now = time.time()
-        content = message.content
+        signatures = self.spam_signatures(message)
+        if not signatures:
+            return
 
-        messages = self.user_messages.get(message.author.id, [])
-        messages = [(msg, t) for msg, t in messages if now - t <= 20]
-        messages.append((message, now))
+        now = time.time()
+        messages = [
+            (msg, sigs, t)
+            for msg, sigs, t in self.user_messages.get(message.author.id, [])
+            if now - t <= 20
+        ]
+        messages.append((message, signatures, now))
         self.user_messages[message.author.id] = messages
 
-        channels = {msg.channel.id for msg, _ in messages if msg.content == content}
+        triggered = None
+        spammed_channels = set()
+        for signature in signatures:
+            channels = {msg.channel.id for msg, sigs, _ in messages if signature in sigs}
+            if len(channels) >= 4:
+                triggered = signature
+                spammed_channels = channels
+                break
 
-        if len(channels) >= 4 and content not in self.alerted[message.author.id]:
+        if triggered and triggered not in self.alerted[message.author.id]:
             try:
                 await message.author.timeout(
                     datetime.timedelta(hours=1),
-                    reason="Spamming identical messages in multiple channels",
+                    reason="Spamming identical messages/images in multiple channels",
                 )
                 action = "User timed out successfully."
             except Exception as e:
                 action = f"Failed to timeout user: {e}"
 
-            for msg, _ in messages:
-                if msg.content == content:
+            files = await self.capture_images(message)
+
+            for msg, sigs, _ in messages:
+                if triggered in sigs:
                     with contextlib.suppress(Exception):
                         await msg.delete()
-            self.alerted[message.author.id].add(content)
+            self.alerted[message.author.id].add(triggered)
 
             await log_to(
                 self.bot, Channels.LOG_MOD_ALERTS,
-                view=SpamAlertView(Roles.DISCORD_MODERATOR, message.author, channels, content, action),
+                view=SpamAlertView(
+                    Roles.DISCORD_MODERATOR, message.author, spammed_channels,
+                    self.spam_summary(message), action, files=files,
+                ),
+                files=files,
             )

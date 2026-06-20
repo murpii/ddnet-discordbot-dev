@@ -68,3 +68,32 @@ class NoChat(commands.Cog):
                 except discord.Forbidden:
                     log.error("media_only: Missing permissions to delete messages.")
                 return
+
+    @commands.Cog.listener("on_message")
+    async def testing_submit(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        if message.channel.id != Channels.TESTING_SUBMIT:
+            return
+
+        has_map = any(a.filename.lower().endswith(".map") for a in message.attachments)
+        if has_map:
+            return
+
+        try:
+            await message.delete()
+            try:
+                await message.author.send(
+                    f"{message.channel.jump_url}: Only map submissions are allowed here. "
+                    f"Please attach your `.map` file.",
+                    delete_after=30
+                )
+            except discord.Forbidden:
+                await message.channel.send(
+                    f"{message.author.mention} Only `.map` file submissions are allowed in this channel.",
+                    delete_after=5
+                )
+        except discord.Forbidden:
+            log.error("Testing-submit/no-chat: Missing permissions to delete messages.")
+        return

@@ -206,6 +206,24 @@ def extract_address(string: str) -> Optional[str]:
     return match.group(1) if (match := re.search(pattern, string)) else None
 
 
+def mask_ip(ip: str, octets: int = 2) -> str:
+    """Replace the last `octets` octets of an IPv4 address with 'x'.
+
+    Used for the retained ban-appeal transcript so the full IP is never stored:
+    the appeal itself still runs on the full IP (VPN check, ban matching, the
+    eventual unban), only the saved record is shortened. e.g. with octets=2,
+    "203.0.113.45" becomes "203.0.x.x".
+
+    Only IPv4 is handled (the appeal modal accepts IPv4 only). Anything that
+    isn't a dotted quad, including the "DEBUG" test sentinel, is returned as-is.
+    """
+    parts = ip.split(".")
+    if len(parts) != 4 or not all(part.isdigit() for part in parts):
+        return ip
+    keep = max(0, 4 - octets)
+    return ".".join(parts[:keep] + ["x"] * (4 - keep))
+
+
 def clip(text: str, limit: int = 150) -> str:
     """
     Collapse text onto one line and cap its length. Used by the container

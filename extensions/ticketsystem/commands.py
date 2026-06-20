@@ -5,14 +5,12 @@ from discord import app_commands
 from discord.ext import commands
 
 from utils.checks import check_dm_channel, is_staff
+from . import actions
 from .ticket import TicketCategory
 from .views import buttons
 from .views.confirm import ConfirmView
 from .views.containers.MainMenu import MainMenuContainer
-from extensions.ticketsystem.views.containers.ban_appeal.ban_appeal_change import BanAppealChangeContainer
-from extensions.ticketsystem.views.containers.rename.rename_change import RenameChangeContainer
 from .views.modals import ban_appeal_m
-from extensions.ticketsystem.views.containers.close import CloseContainer
 from constants import Guilds, Roles
 
 
@@ -73,20 +71,8 @@ class TicketSystem(commands.Cog):
         ):
             await interaction.followup.send("Inviting the default role is prohibited.")
             return
-        if isinstance(user, discord.Member):
-            await interaction.channel.set_permissions(
-                user, view_channel=True, send_messages=True
-            )
-            await interaction.followup.send(
-                f"{user.mention} has been added to the channel."
-            )
-        if isinstance(user, discord.Role):
-            await interaction.channel.set_permissions(
-                user, view_channel=True, send_messages=True
-            )
-            await interaction.followup.send(
-                f"{user.mention} role has been added to the channel."
-            )
+
+        await interaction.followup.send(await actions.invite_entity(interaction.channel, user))
 
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.check(predicate)
@@ -135,6 +121,7 @@ class TicketSystem(commands.Cog):
         app_commands.Choice(name="Report", value=TicketCategory.REPORT.value),
         app_commands.Choice(name="Rename", value=TicketCategory.RENAME.value),
         app_commands.Choice(name="Ban Appeal", value=TicketCategory.BAN_APPEAL.value),
+        app_commands.Choice(name="VPN Ban Appeal", value=TicketCategory.VPN_BAN_APPEAL.value),
         app_commands.Choice(name="Complaint", value=TicketCategory.COMPLAINT.value),
         app_commands.Choice(name="Admin-Mail", value=TicketCategory.ADMIN_MAIL.value),
         app_commands.Choice(name="Community Application", value=TicketCategory.COMMUNITY_APP.value),
@@ -161,33 +148,8 @@ class TicketSystem(commands.Cog):
             )
             return
 
-        # Special-case categories that need validation or start flows
-        if category_enum == TicketCategory.RENAME:
-            view = RenameChangeContainer(ticket)
-            await interaction.response.send_message(view=view)
-            message = await interaction.original_response()
-            view.message = message
-            if not ticket.locked:
-                await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False)
-                upd_view = CloseContainer.for_category(ticket.category, locked=ticket.locked)
-                await ticket.close_message.edit(view=upd_view)
-            return
-
-        if category_enum == TicketCategory.BAN_APPEAL:
-            view = BanAppealChangeContainer(ticket)
-            await interaction.response.send_message(view=view)
-            message = await interaction.original_response()
-            view.message = message
-            if not ticket.locked:
-                await self.ticket_manager.toggle_ticket_lock(ticket=ticket, send_msg=False)
-                upd_view = CloseContainer.for_category(ticket.category, locked=ticket.locked)
-                await ticket.close_message.edit(view=upd_view)
-            return
-
-        await self.ticket_manager.update_ticket(
-            interaction,
-            ticket=ticket,
-            category=category_enum,
+        await actions.apply_category_change(
+            interaction, self.ticket_manager, ticket, category_enum
         )
 
     @invite.error

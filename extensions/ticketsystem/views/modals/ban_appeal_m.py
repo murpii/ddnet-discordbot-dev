@@ -47,6 +47,9 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         title = "VPN Ban Appeal Ticket" if category == TicketCategory.VPN_BAN_APPEAL else modal["title"]
         super().__init__(title=title, timeout=None)
 
+        privacy_note = modal.get("privacy_note") or ban_appeal_m["en"]["privacy_note"]
+        self.add_item(discord.ui.TextDisplay(privacy_note))
+
         self.public_ip = discord.ui.TextInput(
             label=modal["ip_label"],
             placeholder=modal["ip_placeholder"],

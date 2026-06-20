@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 import sqlite3
-from pprint import pprint, pformat
 
 import discord
 from discord.ext import commands
@@ -142,7 +141,6 @@ class Debug(commands.Cog):
             })
 
         conn.close()
-        print(bans_list)
 
 
 async def setup(bot):

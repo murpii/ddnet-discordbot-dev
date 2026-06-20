@@ -3,7 +3,7 @@ import os
 from typing import Optional
 
 GUIDES_PATH = "data/config/guides.json"
-STYLES = ("guide", "notice")
+STYLES = ("guide", "notice", "plain")
 _KEEP = object()
 
 # languages a guide can be translated into. English is the default + fallback.

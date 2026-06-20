@@ -2,11 +2,12 @@ import asyncio
 import contextlib
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import discord
 
 import extensions.ticketsystem.queries as queries
-from constants import Guilds, Channels
+from constants import Guilds, Channels, Emojis
 from utils.profile import PlayerProfile
 from .mappings import START_CONTAINERS
 from .ticket import Ticket, AppealData, TicketCategory, TicketState, RenameData
@@ -312,9 +313,13 @@ class TicketManager:
                 f"Appeal Name: {ticket.appeal_data.name}",
                 f"Appeal Address: {ticket.appeal_data.address}",
                 f"Appeal DNSBL: {ticket.appeal_data.dnsbl}",
-                f"Appeal Reason: {ticket.appeal_data.reason}",
-                f"Appeal Statement: {ticket.appeal_data.appeal}",
             ])
+            # VPN appeals have no ban reason or appeal statement, so don't store empty keys
+            if ticket.category == TicketCategory.BAN_APPEAL:
+                extra.extend([
+                    f"Appeal Reason: {ticket.appeal_data.reason}",
+                    f"Appeal Statement: {ticket.appeal_data.appeal}",
+                ])
 
         return "\n".join(base_lines + extra)
 
@@ -424,35 +429,39 @@ class TicketManager:
 
     async def close_ticket(
             self,
-            interaction: discord.Interaction,
+            interaction: Optional[discord.Interaction],
             ticket: Ticket,
             *,
             message: Optional[str] = None,
+            closer: Optional[discord.abc.User] = None,
     ) -> None:
         """Run the full close lifecycle, shared by /close and the confirm buttons:
         post the closing message, build + DM the transcript, drop the ticket, then
         delete the channel (and its category if it is now empty).
         """
+        closer = closer or (interaction.user if interaction else None)
         async with ticket.lock:
             ticket.being_closed = True
             try:
-                if not interaction.response.is_done():
+                if interaction and not interaction.response.is_done():
                     await interaction.response.defer(ephemeral=True, thinking=True)
                 if message:
                     await ticket.channel.send(message)
 
-                await TicketTranscript(self.bot, ticket).run(interaction, message)
+                await TicketTranscript(self.bot, ticket).run(interaction, message, closer=closer)
                 await self.del_ticket(ticket=ticket)
 
+                closer_info = f"{closer} [ID: {closer.id}]" if closer else "an automated close"
                 log.info(
-                    f"{interaction.user} [ID: {interaction.user.id}] closed a "
+                    f"{closer_info} closed a "
                     f"{ticket.category.value.title()} ticket made by {ticket.creator} "
                     f"[ID: {ticket.creator.id}]. Removed channel {ticket.channel.name} "
                     f"[ID: {ticket.channel.id}]"
                 )
 
-                with contextlib.suppress(discord.NotFound):
-                    await interaction.edit_original_response(content="Closing Ticket...")
+                if interaction:
+                    with contextlib.suppress(discord.NotFound):
+                        await interaction.edit_original_response(content="Closing Ticket...")
 
                 category = ticket.channel.category
                 await ticket.channel.delete()
@@ -460,6 +469,8 @@ class TicketManager:
                     await category.delete()
             except Exception as e:
                 log.exception(f"{ticket.channel.name}: Error during ticket closure:\n{e}")
+                if interaction is None:
+                    raise  # let the bulk caller count this ticket as a failure
                 if not interaction.response.is_done():
                     await interaction.response.send_message(
                         f"An error occurred while closing the ticket:\n{e}", ephemeral=True
@@ -470,6 +481,40 @@ class TicketManager:
                     )
             finally:
                 ticket.being_closed = False
+
+    def neglect_message(self) -> str:
+        tear = self.bot.get_emoji(Emojis.TEAR)
+        return f"Sorry, looks like no one was around at the time to check. {tear}"
+
+    def neglected_report_tickets(self, hours: int) -> list[Ticket]:
+        """
+        Unresponded Report tickets whose channel is older than x hours.
+        Only UNCLAIMED tickets count as neglected
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        return [
+            ticket for ticket in self.tickets.values()
+            if ticket.category == TicketCategory.REPORT
+               and ticket.state == TicketState.UNCLAIMED
+               and not ticket.being_closed
+               and ticket.channel.created_at <= cutoff
+        ]
+
+    async def bulk_close_neglected(
+            self,
+            tickets: list[Ticket],
+            closer: Optional[discord.abc.User],
+    ) -> tuple[int, int]:
+        message = self.neglect_message()
+        closed = failed = 0
+        for ticket in tickets:
+            try:
+                await self.close_ticket(None, ticket, message=message, closer=closer)
+                closed += 1
+            except Exception:
+                log.exception("Bulk close failed for %s", ticket.channel.name)
+                failed += 1
+        return closed, failed
 
     async def check_for_open_ticket(
             self,
@@ -531,8 +576,6 @@ class TicketManager:
             "Appeal Name",
             "Appeal Address",
             "Appeal DNSBL",
-            "Appeal Reason",
-            "Appeal Statement",
         }
 
         if missing := required_keys - topic_data.keys():
@@ -542,6 +585,6 @@ class TicketManager:
             name=topic_data["Appeal Name"],
             address=topic_data["Appeal Address"],
             dnsbl=topic_data["Appeal DNSBL"],
-            reason=topic_data["Appeal Reason"],
-            appeal=topic_data["Appeal Statement"],
+            reason=topic_data.get("Appeal Reason", ""),
+            appeal=topic_data.get("Appeal Statement", ""),
         )

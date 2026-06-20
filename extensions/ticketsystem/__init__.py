@@ -7,6 +7,7 @@ from .views.containers.MainMenu import MainMenuContainer
 from .views.containers.close import CloseContainer
 from extensions.ticketsystem.views.containers.ban_appeal.ban_appeal import BanAppealContainer
 from extensions.ticketsystem.views.containers.ban_appeal.vpn_ban_appeal import VpnBanAppealContainer
+from extensions.ticketsystem.views.containers.admin_mail.community_app import CommunityAppContainer
 from extensions.ticketsystem.views.containers.rename.rename import RenameContainer
 
 
@@ -20,6 +21,7 @@ async def setup(bot):
     bot.add_view(view=RenameContainer())
     bot.add_view(view=BanAppealContainer())
     bot.add_view(view=VpnBanAppealContainer())
+    bot.add_view(view=CommunityAppContainer())
     await bot.add_cog(TicketSystem(bot))
     await bot.add_cog(TicketListeners(bot))
     await bot.add_cog(TicketScores(bot))

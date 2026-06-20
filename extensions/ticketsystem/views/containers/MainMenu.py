@@ -70,7 +70,11 @@ class MainMenuContainer(discord.ui.LayoutView):
             discord.ui.TextDisplay(
                 "## Admin-Mail (No technical support)\n"
                 "If you have an issue or request related to administrative matters, you can use this option. "
-                "Explain your issue or request in detail and we will review it and assist you accordingly.\n\n"
+                "Explain your issue or request in detail and we will review it and assist you accordingly.\n"
+                "## Community Application\n"
+                "Do you run a server network and want it to be featured in DDNet's server browser?\n"
+                "Use \"Community Application\" below to submit your community for review.\n"
+                "The ticket will guide you through the requirements and information needed for your application.\n\n"
                 f"-# **Note:** For technical issues, use <#{Channels.QUESTIONS}> or <#{Channels.BUGS}> instead."
             ),
             discord.ui.ActionRow(

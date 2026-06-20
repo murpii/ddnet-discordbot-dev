@@ -2,7 +2,7 @@ from typing import Optional
 
 import discord
 
-from constants import Roles, Emojis
+from constants import Roles
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from utils.checks import is_staff
@@ -128,7 +128,6 @@ class ConfirmViewStaff(BaseConfirmView):
         ticket = await self.close_guard(interaction)
         if ticket is None:
             return
-        tear = self.bot.get_emoji(Emojis.TEAR)
         await self.ticket_manager.close_ticket(
-            interaction, ticket, message=f"Sorry, looks like no one was around at the time to check. {tear}"
+            interaction, ticket, message=self.ticket_manager.neglect_message()
         )

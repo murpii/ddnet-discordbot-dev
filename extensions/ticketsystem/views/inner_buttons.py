@@ -40,6 +40,27 @@ class CloseBtn(discord.ui.Button):
         await interaction.response.send_message(ephemeral=True, view=options(interaction.client))
 
 
+class OptionsBtn(discord.ui.Button):
+    def __init__(self, label: str = "🛠️"):
+        super().__init__(
+            label=label,
+            style=discord.ButtonStyle.secondary,  # noqa
+            custom_id="Ticket:WrenchBtn",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if not is_staff(interaction.user, roles=STAFF_ROLES):
+            await interaction.response.send_message(
+                content="Only staff members can use this button.",
+                ephemeral=True,
+            )
+            return
+
+        ticket = await interaction.client.ticket_manager.get_ticket(interaction.channel)
+        from extensions.ticketsystem.views.containers.edit.menu import TicketEditView
+        await interaction.response.send_message(view=TicketEditView(ticket), ephemeral=True)
+
+
 class LockBtn(discord.ui.Button):
     def __init__(self, label: str = "🔒"):
         super().__init__(

@@ -6,6 +6,7 @@ from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_s
 from extensions.ticketsystem.views.inner_buttons import (
     CloseBtn,
     LockBtn,
+    OptionsBtn,
     ReportClaimBtn,
     RenameRunBtn,
     RenamePrintCMD,
@@ -46,4 +47,5 @@ class CloseContainer(discord.ui.LayoutView):
         elif category in (TicketCategory.BAN_APPEAL, TicketCategory.VPN_BAN_APPEAL):
             buttons.append(BanAppealFindBanBtn())
         buttons.append(LockBtn(label="🔓" if locked else "🔒"))
+        buttons.append(OptionsBtn())
         return cls(buttons)

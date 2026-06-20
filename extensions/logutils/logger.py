@@ -11,8 +11,9 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import List, Tuple, Union
 
-from utils.text import escape
+from utils.text import escape, to_discord_timestamp, clip
 from utils.misc import log_to
+from utils.containers import separator
 from constants import Guilds, Channels, Emojis
 
 VALID_IMAGE_FORMATS = (".webp", ".jpeg", ".jpg", ".png", ".gif")
@@ -216,6 +217,51 @@ def author_channel_label(message: discord.Message) -> str:
     return f"{author} → #{message.channel}"
 
 
+class DeletedMessageLog(discord.ui.LayoutView):
+    def __init__(self, message: discord.Message, files: List[discord.File], missing: List[str]):
+        super().__init__(timeout=None)
+        author = message.author
+
+        content = message.content.strip()
+        body = discord.utils.escape_mentions(clip(content, 3000)) if content else "*No content*"
+
+        items = [
+            discord.ui.Section(
+                f"### Message deleted\n"
+                f"**{discord.utils.escape_mentions(author_channel_label(message))}**\n\n"
+                f"{body}",
+                accessory=discord.ui.Thumbnail(author.display_avatar.with_static_format("png").url),
+            )
+        ]
+
+        # every retained image, not just the first one.
+        if files:
+            items.append(
+                discord.ui.MediaGallery(
+                    *(discord.MediaGalleryItem(f"attachment://{f.filename}") for f in files)
+                )
+            )
+
+        # attachments we could not keep
+        if missing:
+            items.append(
+                discord.ui.TextDisplay(
+                    "**Attachments (not retained):**\n"
+                    + discord.utils.escape_mentions(clip("\n".join(missing), 1000))
+                )
+            )
+
+        items.append(separator())
+        items.append(
+            discord.ui.TextDisplay(
+                f"-# Author ID: {author.id} | Message ID: {message.id} "
+                f"| {to_discord_timestamp(discord.utils.utcnow(), 'f')}"
+            )
+        )
+
+        self.add_item(discord.ui.Container(*items, accent_colour=0xDD2E44))
+
+
 class GuildLog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -328,34 +374,16 @@ class GuildLog(commands.Cog):
         ):
             return
 
-        embed = discord.Embed(
-            title="Message deleted",
-            description=message.content,
-            color=0xDD2E44,
-            timestamp=datetime.now(timezone.utc),
-        )
-
         files = self.repost_files(message.id)
-        if files:
-            embed.set_image(url=f"attachment://{files[0].filename}")
-
         retained = {f.filename for f in files}
         missing = [a.filename for a in message.attachments if a.filename not in retained]
-        if missing:
-            embed.add_field(
-                name="Attachments (not retained)",
-                value="\n".join(missing)[:1024],
-                inline=False,
-            )
 
-        author = message.author
-        embed.set_author(
-            name=author_channel_label(message),
-            icon_url=author.display_avatar.with_static_format("png"),
+        await log_to(
+            self.bot,
+            Channels.LOG_MESSAGES,
+            view=DeletedMessageLog(message, files, missing),
+            files=files,
         )
-        embed.set_footer(text=f"Author ID: {author.id} | Message ID: {message.id}")
-
-        await log_to(self.bot, Channels.LOG_MESSAGES, files=files, embed=embed)
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):

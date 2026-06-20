@@ -140,7 +140,8 @@ def render_guide(name: str, lang: str, fallback: bool = True) -> Optional[tuple]
         return None
 
     text = render_constants(text)
-    is_guide_style = guide.get("style") != "notice"
+    style = guide.get("style", "guide")
+    is_logo_style = style not in ("notice", "plain")
     attachment, attachment_name = attachment_file(guide.get("attachment"))
 
     items = []
@@ -159,7 +160,7 @@ def render_guide(name: str, lang: str, fallback: bool = True) -> Optional[tuple]
             if not chunk.strip():
                 continue
             flush_buttons()
-            if is_guide_style and not avatar_placed:
+            if is_logo_style and not avatar_placed:
                 items.append(
                     discord.ui.Section(chunk, accessory=discord.ui.Thumbnail("attachment://avatar.png"))
                 )
@@ -191,5 +192,10 @@ def render_guide(name: str, lang: str, fallback: bool = True) -> Optional[tuple]
         files.append(attachment)
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*items, accent_colour=INFO_ACCENT))
+    if style == "plain":
+        # literally just text, no embed container
+        for item in items:
+            view.add_item(item)
+    else:
+        view.add_item(discord.ui.Container(*items, accent_colour=INFO_ACCENT))
     return view, files

@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 import logging
 import os
@@ -416,6 +417,98 @@ class ReloadBlacklistButton(HubButton):
         )
 
 
+class NeglectedReportsModal(discord.ui.Modal, title="Close neglected reports"):
+    hours = discord.ui.Label(
+        text="Close Report tickets older than (hours)",
+        component=discord.ui.TextInput(placeholder="e.g. 48", max_length=5),
+    )
+
+    def __init__(self, bot):
+        super().__init__(timeout=300)
+        self.bot = bot
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        raw = self.hours.component.value.strip()
+        if not raw.isdigit() or int(raw) <= 0:
+            await interaction.response.send_message(
+                view=NoticeView("Please enter a whole number of hours greater than 0."),
+                ephemeral=True,
+            )
+            return
+
+        hours = int(raw)
+        tickets = self.bot.ticket_manager.neglected_report_tickets(hours)
+        if not tickets:
+            await interaction.response.send_message(
+                view=NoticeView(f"No open Report tickets are older than {hours} hours."),
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            view=ConfirmCloseNeglectedView(self.bot, hours, len(tickets)), ephemeral=True
+        )
+
+
+class ConfirmCloseNeglectedButton(discord.ui.Button):
+    def __init__(self, bot, hours: int):
+        super().__init__(label="Close them", style=discord.ButtonStyle.danger)  # noqa
+        self.bot = bot
+        self.hours = hours
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        manager = self.bot.ticket_manager
+        # recompute the set now, it may have shifted since the modal was shown
+        tickets = manager.neglected_report_tickets(self.hours)
+        closed, failed = await manager.bulk_close_neglected(tickets, closer=interaction.user)
+        log.info(
+            "AdminHub: %s bulk-closed %d neglected report(s) (%d failed, older than %dh)",
+            interaction.user, closed, failed, self.hours,
+        )
+        summary = f"Closed {closed} neglected Report ticket(s)."
+        if failed:
+            summary += f" {failed} could not be closed, check the logs."
+        with contextlib.suppress(discord.NotFound):
+            await interaction.edit_original_response(view=NoticeView(summary))
+
+
+class CancelCloseNeglectedButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Cancel", style=discord.ButtonStyle.secondary)  # noqa
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.edit_message(
+            view=NoticeView("Cancelled. No tickets were closed.")
+        )
+
+
+class ConfirmCloseNeglectedView(discord.ui.LayoutView):
+    def __init__(self, bot, hours: int, count: int):
+        super().__init__(timeout=120)
+        self.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    f"**Close {count} neglected Report ticket(s)?**\n"
+                    f"This closes every open Report ticket older than {hours} hours and DMs each "
+                    f"creator the neglect apology. This cannot be undone."
+                ),
+                discord.ui.ActionRow(
+                    ConfirmCloseNeglectedButton(bot, hours), CancelCloseNeglectedButton()
+                ),
+                accent_colour=INFO_ACCENT,
+            )
+        )
+
+
+class CloseNeglectedReportsButton(HubButton):
+    def __init__(self, bot):
+        super().__init__(bot, label="Close Neglected Reports", custom_id="AdminHub:close-neglected")
+
+    async def run(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(NeglectedReportsModal(self.bot))
+
+
 class TicketCleanupButton(HubButton):
     def __init__(self, bot):
         super().__init__(bot, label="Ticket DB Cleanup", custom_id="AdminHub:ticket-cleanup")
@@ -460,12 +553,14 @@ class AdminHubView(discord.ui.LayoutView):
                 ),
                 discord.ui.TextDisplay(
                     "### Maintenance\n"
-                    "Slash command sync, ban import, blacklist reload, and "
-                    "cleaning orphaned ticket rows."
+                    "Slash command sync, ban import, blacklist reload, cleaning orphaned "
+                    "ticket rows, and bulk-closing Report tickets that have gone unanswered "
+                    "for a chosen number of hours (closes them with the neglect apology)."
                 ),
                 discord.ui.ActionRow(
                     SyncCommandsButton(bot), ImportBansButton(bot),
                     ReloadBlacklistButton(bot), TicketCleanupButton(bot),
+                    CloseNeglectedReportsButton(bot),
                 ),
                 separator(),
                 discord.ui.TextDisplay(

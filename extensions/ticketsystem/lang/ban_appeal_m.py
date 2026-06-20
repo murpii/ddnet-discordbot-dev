@@ -2,6 +2,12 @@ ban_appeal_m = {
     "en": {
         "title": "Ban Appeal Ticket",
         "ip_label": "Your IP address from https://ipinfo.io/ip",
+        "privacy_note": (
+            "Your IP address is provided voluntarily. It is used only to check whether you have a "
+            "matching ban or flagged IP on our servers, is never shared or sold, and is not stored "
+            "in full (only a shortened form is kept in the appeal record). An appeal is declined if "
+            "nothing matching is found."
+        ),
         "ip_placeholder": "Example: 192.168.2.100",
         "name_label": "Your in-game name",
         "name_placeholder": "nameless tee",
