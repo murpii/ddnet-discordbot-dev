@@ -17,7 +17,6 @@ from utils.text import to_discord_timestamp, strip_surrounding_quotes
 
 log = logging.getLogger("tickets")
 
-STAFF_ROLES = [Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
 
 BAN_RE = (
     r"(?P<author>\w+) banned (?P<banned_user>.+?) "
@@ -36,7 +35,7 @@ class CloseBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         # the prompt now lives inside the confirmation container (per view class).
-        options = ConfirmViewStaff if is_staff(interaction.user, roles=STAFF_ROLES) else ConfirmView
+        options = ConfirmViewStaff if is_staff(interaction.user, roles="mods") else ConfirmView
         await interaction.response.send_message(ephemeral=True, view=options(interaction.client))
 
 
@@ -49,7 +48,7 @@ class OptionsBtn(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=STAFF_ROLES):
+        if not is_staff(interaction.user, roles="mods"):
             await interaction.response.send_message(
                 content="Only staff members can use this button.",
                 ephemeral=True,
@@ -70,7 +69,7 @@ class LockBtn(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=STAFF_ROLES):
+        if not is_staff(interaction.user, roles="mods"):
             await interaction.response.send_message(
                 content="Only staff members can use this button.",
                 ephemeral=True
@@ -205,7 +204,7 @@ class BanAppealFindBanBtn(discord.ui.Button):
         return FindBanContainer(address, grouped_bans, total_bans)
 
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=STAFF_ROLES):
+        if not is_staff(interaction.user, roles="mods"):
             await interaction.response.send_message("Only staff can use this button.", ephemeral=True)
             return
 
@@ -231,7 +230,7 @@ class ReportClaimBtn(discord.ui.Button):
         self.click_count = 0
 
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=STAFF_ROLES):
+        if not is_staff(interaction.user, roles="mods"):
             responses = {
                 1: "This button is for moderators only!",
                 2: "Stop clicking me!",

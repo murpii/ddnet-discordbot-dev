@@ -1,7 +1,10 @@
 import aiohttp
+import logging
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+log = logging.getLogger()
 
 MASTER_URL = "https://master1.ddnet.org/ddnet/15/servers.json"
 
@@ -114,6 +117,9 @@ class Info:
     Properties:
         total_clients: Count of connected clients (players + spectators).
         total_players: Estimated number of active players (treats unknown as player).
+        free_slots: Room left for more clients.
+        map_name: Name of the running map, if one was reported.
+        used_teams: DDrace team numbers currently in use.
     """
     max_clients: Optional[int] = None
     max_players: Optional[int] = None
@@ -142,6 +148,18 @@ class Info:
         """
         return sum(c.is_player is True or c.is_player is None for c in self.clients)
 
+    @property
+    def free_slots(self) -> int:
+        return (self.max_clients or 0) - self.total_clients
+
+    @property
+    def map_name(self) -> Optional[str]:
+        return self.map.name if self.map and self.map.name else None
+
+    @property
+    def used_teams(self) -> Set[int]:
+        return {c.team for c in self.clients if c.team}
+
 
 @dataclass
 class Server:
@@ -157,6 +175,7 @@ class Server:
 
     Properties:
         region_country: Tuple of (region, country) split from 'location'.
+        continent: The region half of 'location', lowercased.
         primary_address: First advertised address, if available.
     """
     addresses: List[str]
@@ -172,6 +191,10 @@ class Server:
             return r or None, c or None
         return None, None
 
+    @property
+    def continent(self) -> Optional[str]:
+        region, _ = self.region_country
+        return region.lower() if region else None
 
     @property
     def normalized_address(self) -> Optional[str]:
@@ -411,6 +434,27 @@ def find_servers_by_community(master: MasterList, community_id: str) -> List[Ser
     return [s for s in master.servers if (s.community or "").lower() == cid]
 
 
+def community_ips(master: MasterList, community_id: str) -> Set[str]:
+    """
+    Every IP that currently hosts at least one server of the given community.
+
+    Args:
+        master: The parsed MasterList.
+        community_id: Community ID such as 'ddnet'.
+
+    Returns:
+        Set of IP strings (IPv4 and IPv6 literals, unbracketed).
+    """
+    ips = set()
+    for server in find_servers_by_community(master, community_id):
+        for address in server.addresses:
+            try:
+                ips.add(parse_address(address)[3])
+            except AddressParseError:
+                continue
+    return ips
+
+
 class AddressParseError(ValueError):
     pass
 
@@ -484,3 +528,11 @@ async def fetch_master_list(session: aiohttp.ClientSession) -> MasterList:
         resp.raise_for_status()
         raw = await resp.json()
         return parse_master(raw)
+
+
+async def fetch_master_list_safe(session: aiohttp.ClientSession) -> Optional[MasterList]:
+    try:
+        return await fetch_master_list(session)
+    except Exception:
+        log.warning("Could not fetch the master server list")
+        return None

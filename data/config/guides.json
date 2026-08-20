@@ -10,7 +10,7 @@
     "aliases": [],
     "style": "guide",
     "text": {
-      "en": "### [DDNet config directory:](https://wiki.ddnet.org/wiki/FAQ#Where_is_the_DDNet_config,_config_directory_or_save_directory?)\n__**On Windows:**__\nOld: `%appdata%\\Teeworlds`\nNew: `%appdata%\\DDNet`\n__**On Linux:**__\nOld: `~/.teeworlds`\nNew: `~/.local/share/ddnet`\n__**On macOS:**__\nOld: `~/Library/Application Support/Teeworlds`\nNew: `~/Library/Application Support/DDNet`"
+      "en": "### [DDNet config directory:](https://wiki.ddnet.org/wiki/FAQ#Where_is_the_DDNet_config,_config_directory_or_save_directory?)\n__**On Windows:**__\nOld: `%appdata%\\Teeworlds`\nNew: `%appdata%\\DDNet`\n__**On Linux:**__\nOld: `~/.teeworlds`\nNew: `~/.local/share/ddnet`\n__**On macOS:**__\nOld: `~/Library/Application Support/Teeworlds`\nNew: `~/Library/Application Support/DDNet`\n__**On Android:**__\nNew: `/Android/data/org.ddnet.client/files/user`"
     }
   },
   "skins": {
@@ -31,7 +31,7 @@
     "aliases": [],
     "style": "guide",
     "text": {
-      "en": "## Crash Logs\nTo help us debug the cause for your crash, provide the following information: \n* Operating System \n - Windows, Linux or macOS? \n - 32Bit or 64Bit? \n* Client version \n* Steam or Standalone? \n - Steam: Stable, Nightly or releasecandidate beta? \n* Upload the most recent crash log file from your dumps folder in the config directory (drag and drop it here).\n[btn:configdir:Config Directory Location]"
+      "en": "## Crash Reporting\nTo help us debug the cause for your crash, provide the following information:\n* Operating system\n   - Windows, Linux, macOS, or Android?\n   - 32 Bit or 64 Bit?\n* DDNet client version\n   - Steam or standalone?\n   - Stable, nightly, or release candidate?\n* Upload the most recent *crash log* and *assert log* files from the `dumps` folder in your config directory (drag and drop it here with its original filename). Note that crash logs are currently only available on Windows.\n[btn:configdir:Config Directory Location]"
     }
   },
   "deepl": {
@@ -41,7 +41,9 @@
     ],
     "style": "notice",
     "text": {
-      "en": "Hi! Most of us communicate in English. If you're having trouble with English, use <https://www.deepl.com/en/translator> to help you out."
+      "en": "Hi! Most of us communicate in English. If you're having trouble with English, use <https://www.deepl.com/en/translator> to help you out.",
+      "ru": "Привет! Большинство из нас общается на английском, если у тебя с ним проблемы, используй https://www.deepl.com/en/translator",
+      "de": "Wilkommen! Die meisten von uns sprechen Englisch. Wenn du Hilfe mit Englisch benötigst, nutze bitte einen Übersetzer, beispielweise https://www.deepl.com/en/translator/."
     }
   },
   "failed_inserts": {
@@ -61,11 +63,12 @@
       "missing-text",
       "no-text",
       "missing-ui",
-      "no-ui"
+      "no-ui",
+      "device-lost"
     ],
     "style": "notice",
     "text": {
-      "en": "https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Some_text_is_invisible_with_the_Vulkan_backend"
+      "en": "## Graphics Troubleshooting\n\nRefer to the [Graphics troubleshooting guide](https://wiki.ddnet.org/wiki/GFX_Troubleshooting) on our Wiki, which explains possible solutions for various graphics-related problems such as:\n- [Game not starting](https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Game_not_starting)\n- [Some text is invisible with the Vulkan backend](https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Some_text_is_invisible_with_the_Vulkan_backend)\n- [Client crashes with Vulkan \"device lost\" error](https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Client_crashes_with_Vulkan_%22device_lost%22_error)\n- [Low FPS, stuttering or other problems](https://wiki.ddnet.org/wiki/GFX_Troubleshooting#Low_FPS,_stuttering_or_other_problems)\nFor general troubleshooting guidance also refer to the [Troubleshooting guide](https://wiki.ddnet.org/wiki/Troubleshooting) on our Wiki."
     }
   },
   "deepfly": {

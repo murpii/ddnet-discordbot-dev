@@ -3,15 +3,14 @@ import os
 
 import discord
 
-from constants import Roles
 from utils.containers import NoticeView, separator
+from utils.misc import connect_url
 from utils.text import choice_to_datetime, to_discord_timestamp
 from extensions.management.hub import HubButton
 from .utils import players
 
 log = logging.getLogger()
 
-PF_ROLES = [Roles.ADMIN, Roles.MODERATOR]
 DURATION_OPTIONS = [
     ("For 30 minutes", "0"),
     ("For 1 hour", "1"),
@@ -185,7 +184,7 @@ class PfFindModal(discord.ui.Modal, title="Find online player"):
 
         lines = [f'Found `{name}` on {len(servers)} server(s):']
         lines.extend(
-            f"{i}. {server_name} -- <https://ddnet.org/connect-to/?addr={address}/>"
+            f"{i}. {server_name} -- <{connect_url(address)}>"
             for i, (server_name, address) in enumerate(servers[:25], start=1)
         )
         if len(servers) > 25:
@@ -197,7 +196,7 @@ class PfAddButton(HubButton):
     def __init__(self, bot):
         super().__init__(
             bot, label="Add", custom_id="ModHub:pf-add",
-            style=discord.ButtonStyle.success, roles=PF_ROLES,  # noqa
+            style=discord.ButtonStyle.success, roles="game_mods",  # noqa
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -208,7 +207,7 @@ class PfRemoveButton(HubButton):
     def __init__(self, bot):
         super().__init__(
             bot, label="Remove", custom_id="ModHub:pf-remove",
-            style=discord.ButtonStyle.danger, roles=PF_ROLES,  # noqa
+            style=discord.ButtonStyle.danger, roles="game_mods",  # noqa
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -217,7 +216,7 @@ class PfRemoveButton(HubButton):
 
 class PfEditButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Edit reason", custom_id="ModHub:pf-edit", roles=PF_ROLES)
+        super().__init__(bot, label="Edit reason", custom_id="ModHub:pf-edit", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(PfEditModal())
@@ -225,7 +224,7 @@ class PfEditButton(HubButton):
 
 class PfInfoButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Query Player", custom_id="ModHub:pf-info", roles=PF_ROLES)
+        super().__init__(bot, label="Query Player", custom_id="ModHub:pf-info", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(PfInfoModal())
@@ -233,7 +232,7 @@ class PfInfoButton(HubButton):
 
 class PfFindButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Find online", custom_id="ModHub:pf-find", roles=PF_ROLES)
+        super().__init__(bot, label="Find online", custom_id="ModHub:pf-find", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(PfFindModal())
@@ -241,7 +240,7 @@ class PfFindButton(HubButton):
 
 class PfListButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Print List", custom_id="ModHub:pf-list", roles=PF_ROLES)
+        super().__init__(bot, label="Print List", custom_id="ModHub:pf-list", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         manager = interaction.client.pfm
@@ -272,7 +271,7 @@ class PfStartButton(HubButton):
     def __init__(self, bot):
         super().__init__(
             bot, label="Start search", custom_id="ModHub:pf-start",
-            style=discord.ButtonStyle.success, roles=PF_ROLES,  # noqa
+            style=discord.ButtonStyle.success, roles="game_mods",  # noqa
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -297,7 +296,7 @@ class PfStopButton(HubButton):
     def __init__(self, bot):
         super().__init__(
             bot, label="Stop search", custom_id="ModHub:pf-stop",
-            style=discord.ButtonStyle.danger, roles=PF_ROLES,  # noqa
+            style=discord.ButtonStyle.danger, roles="game_mods",  # noqa
         )
 
     async def run(self, interaction: discord.Interaction) -> None:

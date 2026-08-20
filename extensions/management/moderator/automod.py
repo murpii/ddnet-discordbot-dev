@@ -14,6 +14,7 @@ from constants import Guilds, Roles, Channels
 from utils.conn import source
 from utils.master_parser import MASTER_URL, parse_master
 from utils.misc import flag, log_to
+from utils.deletions import delete_messages
 from .server_info import ServerInfoEmbed, ServerLinksView
 from .views.containers.notices import GhostPingView, SpamAlertView
 
@@ -26,6 +27,9 @@ session = CachedSession(cache_name="data/cache/http_cache", expire_after=60 * 60
 
 SPAM_IMAGE_FORMATS = (".webp", ".jpeg", ".jpg", ".png", ".gif")
 SPAM_IMAGE_MAX = 8 * 1024 * 1024
+SPAM_WINDOW_SECONDS = 20
+SPAM_CHANNEL_THRESHOLD = 4
+SPAM_ALERT_TTL_SECONDS = 60 * 60
 
 
 def parse_community_info(resp):
@@ -132,7 +136,7 @@ def fetch_live_stats(addr):
             return {
                 "players": info.total_players,
                 "max_players": info.max_players or info.max_clients,
-                "map": info.map.name if info.map else None,
+                "map": info.map_name,
             }
     return None
 
@@ -145,7 +149,7 @@ class AutoMod(commands.Cog):
         self.timeout = datetime.timedelta(minutes=1)
         self.edited_with_mentions = set()
         self.user_messages = defaultdict(list)
-        self.alerted = defaultdict(set)
+        self.alerted: dict[tuple[int, str], float] = {}
 
     async def discord_resp(self, addr: str, channel: discord.TextChannel):
         """|coro|
@@ -478,6 +482,48 @@ class AutoMod(commands.Cog):
             files.append(discord.File(BytesIO(data), filename=f"spam_{len(files)}{ext}"))
         return files
 
+    def remember_message(self, message: discord.Message, signatures: set[str]) -> list:
+        cutoff = time.time() - SPAM_WINDOW_SECONDS
+        recent = [entry for entry in self.user_messages[message.author.id] if entry[2] > cutoff]
+        recent.append((message, signatures, time.time()))
+        self.user_messages[message.author.id] = recent
+        self.forget_idle_authors(cutoff)
+        return recent
+
+    def forget_idle_authors(self, cutoff: float) -> None:
+        for author_id in [
+            author_id for author_id, entries in self.user_messages.items()
+            if not entries or entries[-1][2] <= cutoff
+        ]:
+            del self.user_messages[author_id]
+
+    @staticmethod
+    def find_spam(recent: list, signatures: set[str]) -> tuple:
+        for signature in signatures:
+            channel_ids = {msg.channel.id for msg, sigs, _ in recent if signature in sigs}
+            if len(channel_ids) >= SPAM_CHANNEL_THRESHOLD:
+                return signature, channel_ids
+        return None, set()
+
+    def already_alerted(self, author_id: int, signature: str) -> bool:
+        now = time.time()
+        for key in [key for key, expiry in self.alerted.items() if expiry <= now]:
+            del self.alerted[key]
+        return (author_id, signature) in self.alerted
+
+    @staticmethod
+    async def timeout_spammer(author: discord.Member) -> str:
+        try:
+            await author.timeout(
+                datetime.timedelta(hours=1),
+                reason="Spamming identical messages/images in multiple channels",
+            )
+        except discord.Forbidden:
+            return "Failed to timeout user: missing permissions."
+        except discord.HTTPException as error:
+            return f"Failed to timeout user: {error}"
+        return "User timed out successfully."
+
     @commands.Cog.listener('on_message')
     async def spam_protection(self, message: discord.Message):
         if not message.guild or message.author.bot or message.guild.id != Guilds.DDNET:
@@ -487,47 +533,25 @@ class AutoMod(commands.Cog):
         if not signatures:
             return
 
-        now = time.time()
-        messages = [
-            (msg, sigs, t)
-            for msg, sigs, t in self.user_messages.get(message.author.id, [])
-            if now - t <= 20
-        ]
-        messages.append((message, signatures, now))
-        self.user_messages[message.author.id] = messages
+        recent = self.remember_message(message, signatures)
+        triggered, channel_ids = self.find_spam(recent, signatures)
+        if triggered is None or self.already_alerted(message.author.id, triggered):
+            return
 
-        triggered = None
-        spammed_channels = set()
-        for signature in signatures:
-            channels = {msg.channel.id for msg, sigs, _ in messages if signature in sigs}
-            if len(channels) >= 4:
-                triggered = signature
-                spammed_channels = channels
-                break
+        self.alerted[(message.author.id, triggered)] = time.time() + SPAM_ALERT_TTL_SECONDS
+        action = await self.timeout_spammer(message.author)
 
-        if triggered and triggered not in self.alerted[message.author.id]:
-            try:
-                await message.author.timeout(
-                    datetime.timedelta(hours=1),
-                    reason="Spamming identical messages/images in multiple channels",
-                )
-                action = "User timed out successfully."
-            except Exception as e:
-                action = f"Failed to timeout user: {e}"
+        files = await self.capture_images(message)
+        deleted = await delete_messages(
+            [msg for msg, sigs, _ in recent if triggered in sigs],
+            reason="Spam detected by automod",
+        )
 
-            files = await self.capture_images(message)
-
-            for msg, sigs, _ in messages:
-                if triggered in sigs:
-                    with contextlib.suppress(Exception):
-                        await msg.delete()
-            self.alerted[message.author.id].add(triggered)
-
-            await log_to(
-                self.bot, Channels.LOG_MOD_ALERTS,
-                view=SpamAlertView(
-                    Roles.DISCORD_MODERATOR, message.author, spammed_channels,
-                    self.spam_summary(message), action, files=files,
-                ),
-                files=files,
-            )
+        await log_to(
+            self.bot, Channels.LOG_MOD_ALERTS,
+            view=SpamAlertView(
+                Roles.DISCORD_MODERATOR, message.author, channel_ids,
+                self.spam_summary(message), action, deleted=deleted, files=files,
+            ),
+            files=files,
+        )

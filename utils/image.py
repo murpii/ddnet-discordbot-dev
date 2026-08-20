@@ -11,7 +11,7 @@ import re
 from utils.color import clamp_luminance, rgb_to_hsp
 from utils.color import pack_rgb
 from utils.misc import executor
-from utils.text import plural, humanize_points
+from utils.text import plural, humanize_points, difficulty_stars
 
 DIR = "data/assets"
 TEXT_LAYOUT = ImageFont.Layout.BASIC
@@ -778,7 +778,7 @@ def generate_map_image(data: Dict) -> BytesIO:
 
     lines = (
         ((server.upper(), "white", fonts[32]),),
-        (("★" * stars + "☆" * (5 - stars), "white", fonts[48]),),
+        ((difficulty_stars(stars), "white", fonts[48]),),
         (
             (str(points), color, fonts[26]),
             (plural(points, " point").upper(), "white", fonts[20]),

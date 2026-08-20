@@ -33,14 +33,17 @@ class MemberInfo:
         member: The Discord user or member.
         timed_out: The datetime when the member was timed out, if applicable.
         timeouts: The total number of timeouts for the member.
-        timeout_reasons: List of (reason, timestamp, invoked_by) tuples.
+        timeout_reasons: List of (entry_id, reason, timestamp, invoked_by) tuples, newest first.
         banned: Whether the member is currently banned.
         bans: The total number of bans for the member.
-        ban_reasons: List of (reason, timestamp, invoked_by) tuples.
+        ban_reasons: List of (entry_id, reason, timestamp, invoked_by) tuples, newest first.
         kicks: The total number of kicks for the member.
-        kick_reasons: List of (reason, timestamp, invoked_by) tuples.
+        kick_reasons: List of (entry_id, reason, timestamp, invoked_by) tuples, newest first.
         banned_from_testing: Whether the member is banned from testing.
-        nicknames: List of (nickname change, timestamp) tuples.
+        nicknames: List of (entry_id, nickname change, timestamp) tuples, newest first.
+
+    The entry_id is the row's primary key in discordbot_mod_actions, which is
+    what remove_user_entry() and edit_user_entry() take to target one row.
     """
 
     member: Union[discord.User, discord.Member]
@@ -54,6 +57,14 @@ class MemberInfo:
     kick_reasons: List[tuple] = field(default_factory=list)
     banned_from_testing: bool = False
     nicknames: List[tuple] = field(default_factory=list)
+
+    def entries(self, category: str) -> List[tuple]:
+        return {
+            "timeout": self.timeout_reasons,
+            "ban": self.ban_reasons,
+            "kick": self.kick_reasons,
+            "name": self.nicknames,
+        }[category]
 
     def __repr__(self):
         return (
@@ -76,13 +87,15 @@ class ModeratorDB:
             return None
 
         query = """
-                SELECT action,
+                SELECT id,
+                       action,
                        reason,
                        timestamp,
                        invoked_by
                 FROM discordbot_mod_actions
                 WHERE user_id = %s
                   AND action IN ('ban', 'kick', 'timeout', 'nickname')
+                ORDER BY timestamp DESC, id DESC
                 """
         results = await self.bot.fetch(query, member.id, fetchall=True)
 
@@ -94,25 +107,24 @@ class ModeratorDB:
         timeout = None
 
         for row in results:
-            action_type = row[0]
-            action_reason = row[1]
-            action_timestamp = row[2]
-            action_invoked_by = row[3]
+            entry_id = row[0]
+            action_type = row[1]
+            action_reason = row[2]
+            action_timestamp = row[3]
+            action_invoked_by = row[4]
 
             if action_type == 'timeout':
                 timeouts += 1
-                timeout_reasons.append((action_reason, action_timestamp, action_invoked_by))
+                timeout_reasons.append((entry_id, action_reason, action_timestamp, action_invoked_by))
             elif action_type == 'ban':
                 bans += 1
-                ban_reasons.append((action_reason, action_timestamp, action_invoked_by))
+                ban_reasons.append((entry_id, action_reason, action_timestamp, action_invoked_by))
             elif action_type == 'kick':
                 kicks += 1
-                kick_reasons.append((action_reason, action_timestamp, action_invoked_by))
+                kick_reasons.append((entry_id, action_reason, action_timestamp, action_invoked_by))
             elif action_type == "nickname":
-                nicknames.append((action_reason, action_timestamp))
+                nicknames.append((entry_id, action_reason, action_timestamp))
 
-        # A single lookup instead of paging through the guild's entire ban
-        # list; NotFound simply means the user isn't banned.
         try:
             await guild.fetch_ban(member)
             currently_banned = True
@@ -148,29 +160,32 @@ class ModeratorDB:
             self,
             member: Union[discord.User, discord.Member],
             entry_type: str,  # 'timeout', 'ban', 'kick'
-            *,
-            reason: Optional[str] = None,
-            timestamp: Optional[datetime] = None,
+            entry_id: int,
     ) -> int:
-        """
-        Remove user moderation entry/entries from the database.
-        Returns the number of rows deleted.
-        """
+        query = """
+                DELETE
+                FROM discordbot_mod_actions
+                WHERE id = %s
+                  AND user_id = %s
+                  AND action = %s
+                """
+        return await self.bot.upsert(query, entry_id, member.id, entry_type)
 
-        conditions = ["action = %s", "user_id = %s"]
-        params = [entry_type, member.id]
-
-        if reason is not None:
-            conditions.append("reason = %s")
-            params.append(reason)
-
-        if timestamp is not None:
-            conditions.append("timestamp = %s")
-            params.append(str(timestamp))
-
-        where_clause = " AND ".join(conditions)
-        query = f"DELETE FROM discordbot_mod_actions WHERE {where_clause}"
-        return await self.bot.upsert(query, *params)
+    async def edit_user_entry(
+            self,
+            member: Union[discord.User, discord.Member],
+            entry_type: str,  # 'timeout', 'ban', 'kick'
+            entry_id: int,
+            reason: str,
+    ) -> int:
+        query = """
+                UPDATE discordbot_mod_actions
+                SET reason = %s
+                WHERE id = %s
+                  AND user_id = %s
+                  AND action = %s
+                """
+        return await self.bot.upsert(query, reason, entry_id, member.id, entry_type)
 
     async def log_action(
             self,

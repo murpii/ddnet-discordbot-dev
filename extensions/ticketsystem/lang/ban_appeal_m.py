@@ -75,7 +75,7 @@ BAN_APPEAL_GATE = {
 
 BAN_APPEAL_CLOUDFLARE = {
     "en": {
-        "description": "the IP address you provided belongs to Cloudflare. "
+        "description": "The IP address you provided belongs to Cloudflare. "
                        "To play on official DDNet servers, you'll need to disable or uninstall Cloudflare WARP "
                        "from your device, as IPs from this service are flagged as VPNs in our system.",
         "title": "How to uninstall Cloudflare WARP:",

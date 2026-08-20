@@ -51,4 +51,6 @@ class UntimeoutButton(discord.ui.Button):
             await interaction.response.edit_message(view=NoUserInfoView(notice=notice))
             return
 
-        await interaction.response.edit_message(view=UserInfoView(self.bot, info, notice=notice))
+        await interaction.response.edit_message(
+            view=UserInfoView(self.bot, info, interaction.user, notice=notice)
+        )

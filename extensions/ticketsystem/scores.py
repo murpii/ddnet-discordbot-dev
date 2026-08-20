@@ -53,11 +53,16 @@ class TicketScores(commands.Cog):
 
         topic = "Tickets Claimed:"
         for user_id, score in sorted_scores[:30]:
-            topic += f" <@{user_id}> = {score} |"
+            entry = f" <@{user_id}> = {score} |"
+            # channel topics cap out at 1024 chars
+            if len(topic) + len(entry) > 1024:
+                break
+            topic += entry
 
         topic = topic.rstrip("|")
 
-        if channel := self.bot.get_channel(Channels.MODERATOR):
+        channel = self.bot.get_channel(Channels.MODERATOR)
+        if channel and (channel.topic or "") != topic:
             await channel.edit(topic=topic)
 
     @update_scores_topic.before_loop

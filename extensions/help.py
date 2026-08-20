@@ -1,63 +1,66 @@
-import asyncio
 import discord
 from discord.ext import commands
 from discord import app_commands
 
+from utils.checks import is_staff
+
+MAX_FIELD_LENGTH = 1024
+MAX_FIELDS = 25
+
 
 class HelpFormatter:
-    PREFIX = "$"
+    @staticmethod
+    def format_command(command: app_commands.Command) -> str:
+        params = " ".join(f"<{param.name}>" for param in command.parameters if param.required)
+        line = f"/{command.qualified_name} {params}".strip()
+        return f"`{line}`"
+
+    @staticmethod
+    def can_run(command: app_commands.Command, user) -> bool:
+        top = command.root_parent or command
+        needed = top.default_permissions
+        group = getattr(command.callback, "__staff_group__", None)
+
+        if not isinstance(user, discord.Member):
+            return needed is None and group is None
+        if needed is not None and not user.guild_permissions.is_superset(needed):
+            return False
+        return group is None or is_staff(user, roles=group)
 
     @classmethod
-    def format_command(cls, command: commands.Command) -> str:
-        params = " ".join(f"<{p}>" for p in command.clean_params)
-        base = f"{cls.PREFIX}{command.qualified_name} {params}".strip()
+    def collect_commands(cls, bot: commands.Bot, interaction: discord.Interaction) -> dict:
+        found = list(bot.tree.walk_commands())
+        if interaction.guild is not None:
+            found += bot.tree.walk_commands(guild=interaction.guild)
 
-        if command.aliases:
-            aliases = ", ".join(f"{cls.PREFIX}{a}" for a in command.aliases)
-            return f"`{base}` (aliases: {aliases})"
+        grouped = {}
+        for command in found:
+            if isinstance(command, app_commands.Group):
+                continue  # the group itself has nothing to run, only its subcommands do
+            if not cls.can_run(command, interaction.user):
+                continue
+            grouped.setdefault(command.binding, []).append(command)
 
-        return f"`{base}`"
-
-    @classmethod
-    async def collect_commands(cls, bot: commands.Bot, interaction: discord.Interaction):
-        result = {}
-
-        for cog_name, cog in bot.cogs.items():
-            if visible_commands := [
-                cmd for cmd in cog.get_commands() if not cmd.hidden and cmd.enabled
-            ]:
-                visible_commands.sort(key=lambda c: c.name)
-                result[cog] = visible_commands  # store cog object
-
-        return result
+        for commands_list in grouped.values():
+            commands_list.sort(key=lambda cmd: cmd.qualified_name)
+        return grouped
 
     @classmethod
-    async def build_embed(cls, bot: commands.Bot, interaction: discord.Interaction) -> discord.Embed:
+    def build_embed(cls, bot: commands.Bot, interaction: discord.Interaction) -> discord.Embed:
         embed = discord.Embed(
             title="Commands",
-            description="Available prefix commands",
+            description="Available slash commands",
             colour=discord.Colour.blurple(),
         )
 
-        grouped = await cls.collect_commands(bot, interaction)
+        for cog, commands_list in list(cls.collect_commands(bot, interaction).items())[:MAX_FIELDS]:
+            name = getattr(cog, "qualified_name", None) or "Other"
+            value = "\n".join(cls.format_command(command) for command in commands_list)
 
-        for cog, commands_list in grouped.items():
-            cog_name = getattr(cog, "qualified_name", "No Category")
-            formatted = [cls.format_command(cmd) for cmd in commands_list]
-            value = "\n".join(formatted)
+            if description := getattr(cog, "description", None):
+                value = f"> {description.strip()}\n\n{value}"
 
-            if (
-                    cog_description := getattr(cog, "description", None)
-                                       or cog.__doc__
-                                       or ""
-            ):
-                value = f"> {cog_description}\n\n{value}"
-
-            embed.add_field(
-                name=cog_name,
-                value=value,
-                inline=False,
-            )
+            embed.add_field(name=name, value=value[:MAX_FIELD_LENGTH], inline=False)
 
         return embed
 
@@ -68,18 +71,8 @@ class HelpAppCommand(commands.Cog):
 
     @app_commands.command(name="help", description="Show available commands")
     async def help_command(self, interaction: discord.Interaction):
-        embed = await HelpFormatter.build_embed(self.bot, interaction)
+        embed = HelpFormatter.build_embed(self.bot, interaction)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @commands.command(name="help")
-    async def help_redirect(self, ctx: commands.Context):
-        resp = await ctx.message.reply(
-            "Use `/help` to view available commands.",
-            mention_author=False,
-
-        )
-        await asyncio.sleep(30)
-        await ctx.channel.delete_messages([resp, ctx.message])
 
 
 async def setup(bot: commands.Bot):

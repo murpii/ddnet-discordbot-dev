@@ -2,7 +2,7 @@ import logging
 
 import discord
 
-from utils.containers import INFO_ACCENT, NoticeView, OptionSelect
+from utils.containers import INFO_ACCENT, NoticeView, OptionSelect, markup_kwargs
 from extensions.management.admin.templates import (
     load_manifest,
     read_section,
@@ -18,6 +18,7 @@ log = logging.getLogger()
 class EditSectionModal(discord.ui.Modal):
     text = discord.ui.Label(
         text="Section text -- Discord markdown",
+        description="Wrap a block in [embed] ... [/embed] lines to render it inside a container.",
         component=discord.ui.TextInput(
             style=discord.TextStyle.paragraph,  # noqa
             max_length=2000,
@@ -51,9 +52,9 @@ class PreviewSectionButton(discord.ui.Button):
                 view=NoticeView("Pick a section first."), ephemeral=True
             )
             return
-        # plain content, exactly like send_template() sends it
+        # rendered exactly like send_template() sends it
         await interaction.response.send_message(
-            content=render(read_section(section)),
+            **markup_kwargs(render(read_section(section))),
             allowed_mentions=discord.AllowedMentions.none(),
             ephemeral=True,
         )
@@ -93,7 +94,9 @@ class TemplateEditView(discord.ui.LayoutView):
                     "## Edit template text\n"
                     "Pick a section, then preview the rendered text or open "
                     "the editor. Placeholders like `{Channels.WELCOME}` are "
-                    "replaced with the real IDs when the channel is rebuilt."
+                    "replaced with the real IDs when the channel is rebuilt.\n"
+                    "Wrap a block in `[embed]` / `[/embed]` lines to render it "
+                    "inside a container, `[embed:#RRGGBB]` sets the accent colour."
                 ),
                 discord.ui.ActionRow(OptionSelect("Pick a section", "section", options)),
                 discord.ui.ActionRow(PreviewSectionButton(), EditSectionButton()),

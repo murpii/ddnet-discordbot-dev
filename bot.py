@@ -17,9 +17,6 @@ from discord.ext import commands
 from colorama import Back, Fore, Style
 
 from constants import Guilds
-from extensions.ticketsystem.manager import TicketManager
-from extensions.management.moderator.player_finder.manager import PlayerfinderManager
-from extensions.management.moderator.manager import ModeratorDB
 
 config = ConfigParser()
 config.read("config.ini")
@@ -27,12 +24,17 @@ config.read("config.ini")
 discord.voice_client.VoiceClient.warn_nacl = False
 log = logging.getLogger()
 
+USER_AGENT = "DDNetDiscordBot/1.0 (+https://ddnet.org/)"
+DEFAULT_HEADERS = {"User-Agent": USER_AGENT}
+
 extensions = [
     ("extensions.logutils.logger", True),
+    ("extensions.logutils.guildlog", True),
     ("extensions.logutils.errorhandler", True),
     ("extensions.management.admin", True),
     ("extensions.management.admin.rename", True),
     ("extensions.management.admin.auto_responses", True),
+    ("extensions.management.archive", True),
     ("extensions.assignees", True),
     ("extensions.management.moderator", True),
     ("extensions.management.tester", True),
@@ -40,6 +42,7 @@ extensions = [
     ("extensions.management.moderator.player_finder", True),
     ("extensions.management.moderator.player_finder.secret", True),
     ("extensions.ticketsystem", True),
+    ("extensions.rolehub", True),
     ("extensions.wiki.wiki", True),
     ("extensions.misc.meme", True),
     ("extensions.misc.misc", True),
@@ -50,12 +53,24 @@ extensions = [
     ("extensions.github", True),
     ("extensions.forum", True),
     ("extensions.map_awards", True),
-    # ("extensions.events.teeguesser", False),
     # ("extensions.events", True),
-    # ("extensions.testing", True),
-    # ("extensions.debug", True),
     ("extensions.help", True)
 ]
+
+
+def gateway_intents() -> Intents:
+    """Only the gateway events the bot actually handles."""
+    intents = Intents.none()
+    intents.guilds = True  # channels, threads, and the guild cache everything else reads
+    intents.members = True  # joins, leaves, role and name changes, ticket permissions
+    intents.moderation = True  # audit log entries, used to attribute bans and kicks
+    intents.emojis_and_stickers = True  # keeps get_emoji() and /emojis from going stale
+    intents.guild_messages = True  # automod, blacklist, submissions, message logs
+    intents.dm_messages = True  # the skin renderer replies to skins sent by DM
+    intents.guild_reactions = True  # reaction votes and the reaction driven prompts
+    intents.message_content = True  # message text, attachments and embeds
+    intents.presences = True  # the moderator only Activity Scan tool
+    return intents
 
 
 class DDNet(commands.Bot):
@@ -66,9 +81,9 @@ class DDNet(commands.Bot):
     Attributes:
         pool: The database connection pool used for database operations.
         config: Configuration settings for the bot.
-        session: The current session for managing user interactions.
-        ticket_manager: An instance of the TicketManager for handling tickets.
-        pfm: An instance of the PlayerfinderManager for managing player-related queries.
+        ticket_manager: TicketManager, created by the ticketsystem extension's setup().
+        pfm: PlayerfinderManager, created by the player_finder extension's setup().
+        moddb: ModeratorDB, created by the moderator extension's setup().
         request_cache: A cached session for storing requests.
         session_manager: An instance of the SessionManager for managing sessions.
         synced: A flag indicating whether the bot's commands have been synced.
@@ -76,21 +91,21 @@ class DDNet(commands.Bot):
 
     def __init__(self, **kwargs):
         super().__init__(
-            command_prefix="$",
+            command_prefix=commands.when_mentioned,
             help_command=None,
-            intents=Intents().all(),
+            intents=gateway_intents(),
         )
 
         self.pool = kwargs.pop("pool")
         self.config = kwargs.pop("config")
-        self.session = None
-        self.ticket_manager = TicketManager(self)
-        self.pfm = PlayerfinderManager(self)
-        self.moddb = ModeratorDB(self)
+        self.ticket_manager = None  # extensions.ticketsystem
+        self.pfm = None  # extensions.management.moderator.player_finder
+        self.moddb = None  # extensions.management.moderator
         os.makedirs("data/cache", exist_ok=True)
         self.request_cache = CachedSession(
             cache_name="data/cache/http_cache", backend="sqlite", expire_after=60 * 60 * 2
         )
+        self.request_cache.headers.update(DEFAULT_HEADERS)
         self.session_manager = SessionManager()
         self.synced = False
 
@@ -172,8 +187,6 @@ class DDNet(commands.Bot):
         else:
             log.info("Database pool created successfully.")
 
-        self.session = await self.session_manager.get_session(self.__class__.__name__)
-
     async def on_ready(self):
         await self.wait_until_ready()
         # Using colorama here, so ANSI escape character sequences work under MS Windows
@@ -239,7 +252,7 @@ class SessionManager:
 
     async def get_session(self, cog_name):
         if cog_name not in self.sessions:
-            self.sessions[cog_name] = aiohttp.ClientSession()
+            self.sessions[cog_name] = aiohttp.ClientSession(headers=DEFAULT_HEADERS)
         return self.sessions[cog_name]
 
     async def close_session(self, cog_name):
@@ -264,9 +277,8 @@ async def main():
         log.critical("Failed to connect to MariaDB: %s", e)
         return None
 
-    async with aiohttp.ClientSession() as session:
-        client = DDNet(config=config, session=session, pool=pool)
-        await client.start(config.get("AUTH", "TOKEN_DISCORD"), reconnect=True)
+    client = DDNet(config=config, pool=pool)
+    await client.start(config.get("AUTH", "TOKEN_DISCORD"), reconnect=True)
 
 
 if __name__ == "__main__":

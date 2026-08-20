@@ -10,6 +10,7 @@ from constants import Guilds, Roles, Channels
 from utils.checks import is_staff
 from utils.json_helpers import load_map, save_map
 from utils.misc import log_to
+from utils.deletions import delete_messages
 from extensions.management.moderator.views.containers.blacklist import BlacklistAlertView
 
 log = logging.getLogger()
@@ -61,7 +62,7 @@ class Blacklist(commands.Cog):
                 or message.guild is None
                 or message.guild.id != Guilds.DDNET
                 or message.channel.id in self.bot.ticket_manager.tickets
-                or is_staff(message.author, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR])
+                or is_staff(message.author, roles="mods")
         )
 
     async def enforce(self, message: discord.Message):
@@ -77,9 +78,7 @@ class Blacklist(commands.Cog):
         trigger = match[0].lower()
         response = self.words.get(trigger, DEFAULT_RESPONSE)
 
-        try:
-            await message.delete()
-        except (discord.NotFound, discord.Forbidden):
+        if not await delete_messages([message], reason=f"Blacklisted word: {trigger}"):
             return  # already gone, or we can't moderate here
 
         with contextlib.suppress(discord.HTTPException, discord.Forbidden):

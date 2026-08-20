@@ -1,6 +1,6 @@
 import discord
 
-from extensions.management.hub import HubCog
+from utils.hub import HubCog
 from extensions.management.moderator.views.containers.hub import ModHubView, DiscordModHubView
 
 

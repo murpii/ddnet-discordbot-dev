@@ -46,11 +46,6 @@ def get_guide(name: str) -> Optional[dict]:
     return load_guides().get(name)
 
 
-def guide_text(name: str, lang: str) -> Optional[str]:
-    guide = get_guide(name)
-    return localize(guide.get("text", {}), lang) if guide else None
-
-
 def upsert_guide(name: str, aliases: list, style: str, lang: str, text: str, attachment=_KEEP) -> None:
     data = load_guides()
     entry = data.setdefault(name, {"aliases": [], "style": "guide", "text": {}})

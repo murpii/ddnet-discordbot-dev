@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from extensions.chat.views.echo_modal import EchoModal
 from extensions.chat.views.edit_modal import EditMsgModal
+from utils.containers import message_markup
 
 
 class ChatCtxMenu(commands.Cog):
@@ -56,7 +57,18 @@ class ChatCtxMenu(commands.Cog):
                 ephemeral=True
             )
             return
-        await interaction.response.send_modal(EditMsgModal(message))
+
+        markup = None
+        if message.flags.components_v2:
+            markup = message_markup(message)
+            if markup is None or len(markup) > 2000:
+                await interaction.response.send_message(
+                    "This message has components the editor can't rebuild "
+                    "(buttons, selects or media). Edit it through the feature that owns it.",
+                    ephemeral=True,
+                )
+                return
+        await interaction.response.send_modal(EditMsgModal(message, markup))
 
     @app_commands.default_permissions(administrator=True)
     async def echo_context(self, interaction: discord.Interaction, message: discord.Message):

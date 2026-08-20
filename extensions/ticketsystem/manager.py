@@ -12,6 +12,7 @@ from utils.profile import PlayerProfile
 from .mappings import START_CONTAINERS
 from .ticket import Ticket, AppealData, TicketCategory, TicketState, RenameData
 from .transcript import TicketTranscript
+from .cooldown import global_cooldown
 from .views.containers.close import CloseContainer
 
 log = logging.getLogger("tickets")
@@ -29,6 +30,7 @@ class TicketManager:
         self.bot = bot
         self.tickets = {}
         self.lock = asyncio.Lock()
+        self.pending_channel_edits: dict[int, asyncio.Task] = {}
 
     def dump(self):
         return {
@@ -277,17 +279,44 @@ class TicketManager:
             await interaction.message.edit(view=button.view)
 
         overwrites = ticket.get_overwrites(interaction)
-        topic = self.topic_metadata(ticket)
+        edit_kwargs = {"overwrites": overwrites}
 
-        await ticket.channel.edit(
-            name=f"{ticket.category.value}-{await self.ticket_num(category=ticket.category.value)}",
-            topic=topic,
-            overwrites=overwrites,
-        )
+        if category_changed:
+            new_name = f"{ticket.category.value}-{await self.ticket_num(category=ticket.category.value)}"
+            if new_name != ticket.channel.name:
+                edit_kwargs["name"] = new_name
+
+        new_topic = self.topic_metadata(ticket)
+        if new_topic != (ticket.channel.topic or ""):
+            edit_kwargs["topic"] = new_topic
+
+        delayed_note = ""
+        cosmetic = {key: edit_kwargs[key] for key in ("name", "topic") if key in edit_kwargs}
+        if cosmetic:
+            on_cooldown, wait = global_cooldown.check(ticket.channel.id)
+            if on_cooldown:
+                for key in cosmetic:
+                    del edit_kwargs[key]
+                self.apply_edit_later(ticket, cosmetic, wait)
+                minutes = int(wait // 60) + 1
+                delayed_note = (
+                    f"\n-# The channel name/topic refresh is postponed by roughly {minutes} "
+                    "minute(s) and will apply automatically. Discord only allows 2 renames "
+                    "per channel every 10 minutes."
+                )
+                log.warning(
+                    "Rename budget exhausted for #%s, postponing the name/topic edit by %.0fs.",
+                    ticket.channel.name, wait,
+                )
+            else:
+                global_cooldown.update_cooldown(ticket.channel.id)
+
+        await ticket.channel.edit(**edit_kwargs)
 
         await interaction.channel.send(
             f"{ticket.creator.mention} ticket channel category changed to "
             f"**{ticket.category.name}**. Kindly review {ticket.start_message.jump_url}."
+            f"{delayed_note}"
         )
 
         with contextlib.suppress(discord.NotFound):
@@ -321,7 +350,32 @@ class TicketManager:
                     f"Appeal Statement: {ticket.appeal_data.appeal}",
                 ])
 
-        return "\n".join(base_lines + extra)
+        topic = "\n".join(base_lines + extra)
+        # discord caps topics at 1024 chars.
+        # tail trimming until I know a better solution
+        if len(topic) > 1024:
+            topic = topic[:1021] + "..."
+        return topic
+
+    def apply_edit_later(self, ticket: Ticket, edit_kwargs: dict, wait: float) -> None:
+        channel_id = ticket.channel.id
+        pending = self.pending_channel_edits.pop(channel_id, None)
+        if pending is not None:
+            pending.cancel()
+
+        async def apply():
+            await asyncio.sleep(wait + 5)
+            self.pending_channel_edits.pop(channel_id, None)
+            if self.tickets.get(channel_id) is not ticket:
+                return  # the ticket was closed while waiting
+            if "topic" in edit_kwargs:
+                edit_kwargs["topic"] = self.topic_metadata(ticket)
+            global_cooldown.update_cooldown(channel_id)
+            with contextlib.suppress(discord.HTTPException):
+                await ticket.channel.edit(**edit_kwargs)
+                log.info("Applied the postponed name/topic edit for #%s.", ticket.channel.name)
+
+        self.pending_channel_edits[channel_id] = asyncio.create_task(apply())
 
     def add_ticket(self, ticket: Ticket, channel: Optional[discord.TextChannel]):
         """
@@ -465,7 +519,10 @@ class TicketManager:
 
                 category = ticket.channel.category
                 await ticket.channel.delete()
-                if category and len(category.channels) == 0:
+                # only overflow clones get cleaned up, never the configured categories,
+                # deleting those would leave the bot with nowhere to put new tickets
+                base_categories = (Channels.CAT_TICKETS, Channels.CAT_COMMUNITY_APPS)
+                if category and len(category.channels) == 0 and category.id not in base_categories:
                     await category.delete()
             except Exception as e:
                 log.exception(f"{ticket.channel.name}: Error during ticket closure:\n{e}")

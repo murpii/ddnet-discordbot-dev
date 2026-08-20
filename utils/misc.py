@@ -7,11 +7,12 @@ import asyncio
 import functools
 import os
 from asyncio.subprocess import PIPE
+from datetime import datetime, timezone
 from typing import Callable, Tuple
 
-from constants import Emojis, Channels
-from utils.countryflags import COUNTRYFLAGS
-from utils.text import slugify2
+from constants import Emojis, Channels, URLs
+from utils.countryflags import flag_by_ident
+from utils.text import difficulty_stars, slugify2
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ DELETE_HISTORY_SECONDS = [0, 3600, 21600, 43200, 86400, 259200, 604800]
 
 async def resolve_active_thread(bot, channel_id):
     """Resolve a channel or thread by id, even if it's an archived thread"""
-    if channel_id is None:
+    if not channel_id:
         return None
 
     channel = bot.get_channel(channel_id)
@@ -141,6 +142,18 @@ async def run_process_shell(cmd: str, timeout: float = 90.0) -> Tuple[str, str]:
         return stdout.decode(), stderr.decode()
 
 
+async def run_process_exec(program: str, *args: str, timeout: float = 90.0) -> Tuple[str, str]:
+    proc = await asyncio.create_subprocess_exec(program, *args, stdout=PIPE, stderr=PIPE)
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError as e:
+        proc.kill()
+        await proc.wait()
+        raise RuntimeError("Process timed out") from e
+    else:
+        return stdout.decode(errors="replace"), stderr.decode(errors="replace")
+
+
 def executor(func: Callable):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
@@ -153,11 +166,8 @@ def executor(func: Callable):
 
 def rating() -> list:
     return [
-        discord.SelectOption(label="Rating: ★☆☆☆☆", value="0"),
-        discord.SelectOption(label="Rating: ★★☆☆☆", value="1"),
-        discord.SelectOption(label="Rating: ★★★☆☆", value="2"),
-        discord.SelectOption(label="Rating: ★★★★☆", value="3"),
-        discord.SelectOption(label="Rating: ★★★★★", value="4"),
+        discord.SelectOption(label=f"Rating: {difficulty_stars(value + 1)}", value=str(value))
+        for value in range(5)
     ]
 
 
@@ -188,10 +198,11 @@ def history() -> list:
 
 
 def flag(ident) -> str:
-    return next(
-        (COUNTRYFLAGS[key] for key in COUNTRYFLAGS.keys() if key[0] == ident),
-        f"<:flag_unk:{Emojis.FLAG_UNK}>",
-    )
+    return flag_by_ident(ident, f"<:flag_unk:{Emojis.FLAG_UNK}>")
+
+
+def connect_url(addr: str) -> str:
+    return f"{URLs.DDNET_CONNECT}?addr={addr}"
 
 
 def ip_matches(ip: str, target: str) -> bool:
@@ -212,6 +223,12 @@ def ip_matches(ip: str, target: str) -> bool:
             return False
 
     return False
+
+
+def to_utc(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
 
 
 def name_filter(player_name: str) -> bool:

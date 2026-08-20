@@ -7,7 +7,6 @@ from discord import app_commands
 
 from extensions.chat.views.echo_modal import EchoModal
 from extensions.chat.views.edit_modal import EditMsgModal
-from utils.checks import ddnet_only
 from constants import Guilds
 
 

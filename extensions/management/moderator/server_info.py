@@ -1,5 +1,7 @@
 import discord
 
+from utils.misc import connect_url
+
 
 class ServerInfoEmbed(discord.Embed):
     """Server lookup result: type, region, current map, live player count, and
@@ -73,7 +75,7 @@ class ServerLinksView(discord.ui.View):
             self.add_item(discord.ui.Button(
                 label="Join Server",
                 style=discord.ButtonStyle.url,  # noqa
-                url=f"https://ddnet.org/connect-to/?addr={addr}/",
+                url=connect_url(addr),
             ))
         elif contact_url:
             self.add_item(discord.ui.Button(

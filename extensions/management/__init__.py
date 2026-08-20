@@ -4,7 +4,7 @@ Server management: everything staff uses to run the DDNet guild.
 This package bundles the staff modules and the hub
 infrastructure they share:
 
-  - hub.py        shared hub code (HubCog, HubButton, staff_guard)
+  - hub.py        staff button helpers (HubButton, staff_guard); generic HubCog is utils/hub.py
   - admin/        admin hub, /purge, extension picker, player rename
   - moderator/    moderation hub, automod, blacklist, mod commands/views
   - tester/       tester hub, testing bans, Trial Tester votes

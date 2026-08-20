@@ -249,3 +249,14 @@ COUNTRYFLAGS = {
     (894, "ZMB"): "🇿🇲",
     (905, "EU"): "🇪🇺",
 }
+
+FLAGS_BY_CODE = {code: flag for (_, code), flag in COUNTRYFLAGS.items()}
+FLAGS_BY_IDENT = {ident: flag for (ident, _), flag in COUNTRYFLAGS.items()}
+
+
+def flag_by_code(code: str, default: str = "") -> str:
+    return FLAGS_BY_CODE.get(code.upper(), default) if code else default
+
+
+def flag_by_ident(ident: int, default: str = "") -> str:
+    return FLAGS_BY_IDENT.get(ident, default)

@@ -2,18 +2,22 @@ import discord
 
 from utils.paginator import Pages, page_nav_row
 from utils.text import to_discord_timestamp
+from utils.checks import is_staff
 from extensions.management.moderator.manager import MemberInfo
 from utils.containers import INFO_ACCENT, ALERT_ACCENT, separator
 from utils.text import clip
-from extensions.management.moderator.views.containers.remove_entry import RemoveEntryButton, removal_container
+from extensions.management.moderator.views.containers.manage_entries import ManageEntriesButton, entry_menu
 from extensions.management.moderator.views.buttons.ban import BanButton
 from extensions.management.moderator.views.buttons.kick import KickButton
 from extensions.management.moderator.views.buttons.timeout import TimeoutButton
 from extensions.management.moderator.views.buttons.unban import UnbanButton
 from extensions.management.moderator.views.buttons.untimeout import UntimeoutButton
 
-MAX_ENTRIES_PER_CATEGORY = 5
-NICKNAMES_PER_PAGE = 5
+ENTRIES_PER_PAGE = 5
+
+
+def history_columns() -> list:
+    return [("timeout", "Timeouts"), ("ban", "Bans"), ("kick", "Kicks")]
 
 
 def format_entry(reason: str, timestamp, invoked_by: str) -> str:
@@ -28,45 +32,55 @@ class UserInfoView(discord.ui.LayoutView):
             self,
             bot,
             info: MemberInfo,
+            invoker: discord.abc.User,
             *,
             notice: str = None,
-            pages: Pages = None,
-            removal_step: str = None,
-            removal_category: str = None,
+            page_numbers: dict = None,
+            menu_step: str = None,
+            menu_category: str = None,
     ):
         super().__init__(timeout=300)
         self.bot = bot
         self.info = info
+        self.invoker = invoker
         self.notice = notice
-        self.removal_step = removal_step
-        self.removal_category = removal_category
-        self.pages = pages or Pages(
-            sorted(info.nicknames, key=lambda entry: entry[1], reverse=True),  # newest first
-            per_page=NICKNAMES_PER_PAGE,
-        )
+        self.menu_step = menu_step
+        self.menu_category = menu_category
+        self.pages = self.build_pages(page_numbers or {})
 
         self.add_item(self.build_container())
-        if self.removal_step:
-            self.add_item(removal_container(self))
+        if self.menu_step:
+            self.add_item(entry_menu(self))
+
+    def build_pages(self, page_numbers: dict) -> dict:
+        pages = {}
+        for category in ("timeout", "ban", "kick", "name"):
+            column = Pages(self.info.entries(category), per_page=ENTRIES_PER_PAGE)
+            column.page = min(page_numbers.get(category, 0), column.total_pages - 1)
+            pages[category] = column
+        return pages
+
+    def current_pages(self) -> dict:
+        return {category: column.page for category, column in self.pages.items()}
 
     def rebuild(self) -> "UserInfoView":
         """Fresh view of the same data, used by the page buttons"""
         return UserInfoView(
-            self.bot, self.info,
+            self.bot, self.info, self.invoker,
             notice=self.notice,
-            pages=self.pages,
-            removal_step=self.removal_step,
-            removal_category=self.removal_category,
+            page_numbers=self.current_pages(),
+            menu_step=self.menu_step,
+            menu_category=self.menu_category,
         )
 
-    def with_removal(self, step: str, category: str = None) -> "UserInfoView":
-        """Same panel with the removal menu opened, advanced, or closed"""
+    def with_menu(self, step: str, category: str = None) -> "UserInfoView":
+        """Same panel with the entry menu opened, advanced, or closed"""
         return UserInfoView(
-            self.bot, self.info,
+            self.bot, self.info, self.invoker,
             notice=self.notice,
-            pages=self.pages,
-            removal_step=step,
-            removal_category=category,
+            page_numbers=self.current_pages(),
+            menu_step=step,
+            menu_category=category,
         )
 
     def build_container(self) -> discord.ui.Container:
@@ -82,24 +96,24 @@ class UserInfoView(discord.ui.LayoutView):
                 accessory=discord.ui.Thumbnail(member.display_avatar.url),
             )
         )
+        items.extend(self.history_items())
+        items.extend(self.nickname_items())
         items.extend(
             (
                 separator(),
-                discord.ui.TextDisplay(self.history_text()),
-                separator(),
-                discord.ui.TextDisplay(self.nickname_text()),
-            )
-        )
-        if self.pages.total_pages > 1:
-            items.append(page_nav_row(self.pages, self.rebuild))
-        items.extend(
-            (
-                separator(),
-                discord.ui.TextDisplay("-# Moderation controls"),
+                discord.ui.TextDisplay(self.controls_note()),
                 self.control_row(),
             )
         )
         return discord.ui.Container(*items, accent_colour=INFO_ACCENT)
+
+    def can_ban(self) -> bool:
+        return is_staff(self.invoker, roles="discord_mods")
+
+    def controls_note(self) -> str:
+        if self.can_ban():
+            return "-# Moderation controls"
+        return "-# Moderation controls -- ban, unban and kick are Discord Moderator only"
 
     def profile_text(self) -> str:
         member = self.info.member
@@ -119,46 +133,54 @@ class UserInfoView(discord.ui.LayoutView):
             f"Banned from Testing: {'✅' if self.info.banned_from_testing else '❌'}"
         )
 
-    def history_text(self) -> str:
-        """Timeouts/bans/kicks with per entry invoker, newest first"""
-        blocks = []
-        empty_labels = []
+    def history_items(self) -> list:
+        """One block per non-empty history column, each with its own page buttons"""
+        items = []
+        empty_headings = []
 
-        categories = (
-            ("Timeouts", self.info.timeout_reasons),
-            ("Bans", self.info.ban_reasons),
-            ("Kicks", self.info.kick_reasons),
-        )
-        for label, entries in categories:
-            if not entries:
-                empty_labels.append(label.lower())
+        for category, heading in history_columns():
+            column = self.pages[category]
+            if not column.items:
+                empty_headings.append(heading.lower())
                 continue
+            items.append(separator())
+            items.append(discord.ui.TextDisplay(self.history_text(heading, column)))
+            items.extend(self.nav_items(category))
 
-            newest_first = sorted(entries, key=lambda entry: entry[1], reverse=True)
-            lines = [f"### {label}: {len(entries)}"]
-            lines.extend(
-                format_entry(reason, timestamp, invoked_by)
-                for reason, timestamp, invoked_by in newest_first[
-                    :MAX_ENTRIES_PER_CATEGORY
-                ]
+        if empty_headings:
+            items.append(separator())
+            items.append(
+                discord.ui.TextDisplay(f"-# No {' / '.join(empty_headings)} on record.")
             )
-            if len(entries) > MAX_ENTRIES_PER_CATEGORY:
-                lines.append(f"-# ... and {len(entries) - MAX_ENTRIES_PER_CATEGORY} older entries")
-            blocks.append("\n".join(lines))
+        return items
 
-        if empty_labels:
-            blocks.append(f"-# No {' / '.join(empty_labels)} on record.")
+    def nickname_items(self) -> list:
+        column = self.pages["name"]
+        if not column.items:
+            return [
+                separator(),
+                discord.ui.TextDisplay("### Name history\n-# No previous names recorded."),
+            ]
 
-        return "\n".join(blocks)
-
-    def nickname_text(self) -> str:
-        if not self.pages.items:
-            return "### Name history\n-# No previous names recorded."
-
-        lines = [f"### Name history: {len(self.pages.items)}"]
+        lines = [f"### Name history: {len(column.items)}"]
         lines.extend(
             f"[`{timestamp.strftime('%Y-%m-%d %H:%M')}`] {clip(name, 80)}"
-            for name, timestamp in self.pages.current()
+            for _entry_id, name, timestamp in column.current()
+        )
+        return [separator(), discord.ui.TextDisplay("\n".join(lines)), *self.nav_items("name")]
+
+    def nav_items(self, category: str) -> list:
+        column = self.pages[category]
+        if column.total_pages < 2 or self.menu_step:
+            return []
+        return [page_nav_row(column, self.rebuild)]
+
+    @staticmethod
+    def history_text(heading: str, column: Pages) -> str:
+        lines = [f"### {heading}: {len(column.items)}"]
+        lines.extend(
+            format_entry(reason, timestamp, invoked_by)
+            for _entry_id, reason, timestamp, invoked_by in column.current()
         )
         return "\n".join(lines)
 
@@ -169,13 +191,15 @@ class UserInfoView(discord.ui.LayoutView):
         )
         now = discord.utils.utcnow()
         is_timed_out = bool(self.info.timed_out and self.info.timed_out > now)
+        locked = not self.can_ban()
 
         return discord.ui.ActionRow(
-            UnbanButton(self.bot, member) if self.info.banned else BanButton(self.bot, member),
+            UnbanButton(self.bot, member, disabled=locked) if self.info.banned
+            else BanButton(self.bot, member, disabled=locked),
             UntimeoutButton(self.bot, member) if is_timed_out else TimeoutButton(self.bot, member),
-            KickButton(self.bot, member),
+            KickButton(self.bot, member, disabled=locked),
             # disabled while the menu is open, its "Cancel" button closes it
-            RemoveEntryButton(disabled=not has_entries or self.removal_step is not None),
+            ManageEntriesButton(disabled=not has_entries or self.menu_step is not None),
         )
 
 

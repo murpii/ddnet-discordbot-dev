@@ -40,6 +40,14 @@ def humanize_points(points: int) -> str:
     return f"{points}K"
 
 
+def difficulty_stars(difficulty) -> str:
+    try:
+        filled = max(0, min(5, int(difficulty)))
+    except (TypeError, ValueError):
+        return ""
+    return "★" * filled + "☆" * (5 - filled)
+
+
 def slugify2(name: str) -> str:
     x = "[\t !\"#$%&'()*-/<=>?@[\\]^_`{|},.:]+"
     return "".join(f"-{ord(c)}-" if c in x or ord(c) >= 128 else c for c in name)

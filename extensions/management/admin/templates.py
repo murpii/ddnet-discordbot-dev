@@ -6,6 +6,7 @@ import os
 import discord
 
 from constants import Channels
+from utils.containers import markup_kwargs
 from utils.text import render_constants
 
 log = logging.getLogger()
@@ -18,10 +19,6 @@ GRAPHICS_DIR = "data/assets/graphics"
 def load_manifest() -> dict:
     with open(os.path.join(TEMPLATE_DIR, "manifest.json"), encoding="utf-8") as file:
         return json.load(file)
-
-
-def template_names() -> list:
-    return list(load_manifest().keys())
 
 
 def section_names() -> list:
@@ -109,7 +106,7 @@ async def send_template(bot, name: str) -> str:
             for section in message.get("sections", []):
                 # mentions render properly but never ping anyone
                 last_message = await channel.send(
-                    content=render(read_section(section)),
+                    **markup_kwargs(render(read_section(section))),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
                 sent += 1

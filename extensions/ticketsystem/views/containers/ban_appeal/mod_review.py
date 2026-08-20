@@ -23,7 +23,7 @@ class ModReviewContainer(discord.ui.LayoutView):
         intro: list[str] = []
         if resolved:
             intro.append(
-                f"{' '.join(m.mention for m in resolved)} -- a ban appeal was opened for an IP **you** banned."
+                f"{' '.join(m.mention for m in resolved)} a ban appeal was opened for an IP **you** banned."
             )
         if unresolved:
             intro.append(
@@ -48,7 +48,7 @@ class ModReviewContainer(discord.ui.LayoutView):
             for ban in bans:
                 expiry = to_discord_timestamp(ban["expires"], style="R") if ban.get("expires") else "unknown"
                 ban_lines.append(
-                    f"-# `{ban.get('name') or 'Unknown'}` -- {ban.get('reason') or 'no reason'} (expires {expiry})"
+                    f"- `{ban.get('name') or 'Unknown'}`: {ban.get('reason') or 'no reason'} (expires {expiry})"
                 )
             items.append(large_seperator())
             items.append(discord.ui.TextDisplay("**Matching ban(s):**\n" + "\n".join(ban_lines)))

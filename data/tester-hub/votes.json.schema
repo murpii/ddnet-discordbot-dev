@@ -1,0 +1,18 @@
+{
+    "<vote panel message id>": {
+        "candidate_id": 0,
+        "candidate_name": "name shown in the panel",
+        "nominator_id": 0,
+        "nominator_name": "who started the vote",
+        "reason": "the nomination text",
+        "started_ts": 0,
+        "thread_id": 0,
+        "votes": {
+            "<voter user id>": {"for": true, "name": "display name"}
+        },
+        "decided": null,
+        "rendered_ready": false,
+        "dm_message_id": null,
+        "role_assigned": null
+    }
+}

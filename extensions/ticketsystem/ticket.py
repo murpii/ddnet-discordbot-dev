@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from pprint import pformat
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -6,7 +7,10 @@ from typing import Optional, Union
 
 import discord
 from discord import PermissionOverwrite
+from extensions.ticketsystem.cooldown import global_cooldown
 from utils.profile import PlayerProfile
+
+log = logging.getLogger("tickets")
 
 
 @dataclass(slots=True, kw_only=True)
@@ -14,6 +18,7 @@ class AppealData:
     name: str
     address: str
     dnsbl: str
+    cloudflare: bool = False
     reason: str
     appeal: str
     profile: PlayerProfile | None = None
@@ -130,5 +135,15 @@ class Ticket:
         """
         self.state = state
         prefix = state.value
-        if not self.channel.name.startswith(prefix):
-            await self.channel.edit(name=f"{prefix}{self.channel.name}")
+        if not prefix or self.channel.name.startswith(prefix):
+            return
+
+        on_cooldown, _ = global_cooldown.check(self.channel.id)
+        if on_cooldown:
+            log.warning(
+                "Skipped the %s name prefix on #%s, the channel hit Discord's rename limit.",
+                state.name, self.channel.name,
+            )
+            return
+        global_cooldown.update_cooldown(self.channel.id)
+        await self.channel.edit(name=f"{prefix}{self.channel.name}")

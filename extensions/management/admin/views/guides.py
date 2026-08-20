@@ -54,8 +54,13 @@ def style_options(default: str | None = None) -> list:
     ]
 
 
-def helper_cog(interaction: discord.Interaction):
-    return interaction.client.get_cog("Help Commands")
+def name_conflict(token: str, exclude: str = None) -> str | None:
+    for name, guide in load_guides().items():
+        if name == exclude:
+            continue
+        if token == name or token in [alias.lower() for alias in guide.get("aliases", [])]:
+            return name
+    return None
 
 
 class EditGuideModal(discord.ui.Modal):
@@ -80,11 +85,10 @@ class EditGuideModal(discord.ui.Modal):
         ),
     )
 
-    def __init__(self, name: str, lang: str, bot):
+    def __init__(self, name: str, lang: str):
         super().__init__(timeout=600, title=f"Edit {name} [{lang}]"[:45])
         self.name = name
         self.lang = lang
-        self.bot = bot
         guide = get_guide(name) or {}
         # prefill with the actual text for THIS language (empty if not written yet)
         self.text.component.default = guide.get("text", {}).get(lang, "")
@@ -106,7 +110,6 @@ class EditGuideModal(discord.ui.Modal):
             await interaction.response.send_message(view=NoticeView(alias_error), ephemeral=True)
             return
 
-        old_aliases = (get_guide(self.name) or {}).get("aliases", [])
         upsert_guide(
             self.name,
             new_aliases,
@@ -115,27 +118,19 @@ class EditGuideModal(discord.ui.Modal):
             self.text.component.value,
         )
 
-        note = f"Saved `{self.name}` [{self.lang}]."
-        if sorted(new_aliases) != sorted(old_aliases):
-            if cog := helper_cog(interaction):
-                cog.unregister_guide(self.name)
-                if not cog.register_guide(self.name):
-                    note += " (Aliases saved, but the live command could not be re-registered. Check the logs.)"
-
         log.info("AdminHub: %s edited guide %r [%s]", interaction.user, self.name, self.lang)
-        await interaction.response.send_message(view=NoticeView(note), ephemeral=True)
+        await interaction.response.send_message(
+            view=NoticeView(f"Saved `{self.name}` [{self.lang}]."), ephemeral=True
+        )
 
     def validate_aliases(self, aliases: list) -> str | None:
         if self.name in aliases:
-            return f"`{self.name}` is the command name; it can't also be an alias."
-        # the guide's own command owns its current aliases, so don't flag those as collisions
-        own = self.bot.get_command(self.name)
+            return f"`{self.name}` is the guide name, it can't also be an alias."
         for token in aliases:
             if not NAME_RE.match(token):
                 return f"Invalid alias `{token}`. Use only lowercase letters, digits, `_` or `-`."
-            cmd = self.bot.get_command(token)
-            if cmd is not None and cmd is not own:
-                return f"`{token}` is already a registered command. Pick another alias."
+            if taken := name_conflict(token, exclude=self.name):
+                return f"`{token}` already belongs to the `{taken}` guide. Pick another alias."
         return None
 
 
@@ -148,8 +143,7 @@ class PreviewGuideButton(discord.ui.Button):
         if not name:
             await interaction.response.send_message(view=NoticeView("Pick a command first."), ephemeral=True)
             return
-        # fallback=False: preview the text actually written for THIS language.
-        # if it isn't translated yet, say so instead of showing the English text
+
         result = render_guide(name, self.view.language, fallback=False)
         if result is None:
             await interaction.response.send_message(
@@ -173,7 +167,7 @@ class EditGuideButton(discord.ui.Button):
         if not name:
             await interaction.response.send_message(view=NoticeView("Pick a command first."), ephemeral=True)
             return
-        await interaction.response.send_modal(EditGuideModal(name, self.view.language, interaction.client))
+        await interaction.response.send_modal(EditGuideModal(name, self.view.language))
 
 
 class GuideEditView(discord.ui.LayoutView):
@@ -253,9 +247,8 @@ class GuideAddModal(discord.ui.Modal, title="Add a guide"):
         component=discord.ui.TextInput(required=False, max_length=200, placeholder="e.g. deepfly.txt"),
     )
 
-    def __init__(self, bot):
+    def __init__(self):
         super().__init__(timeout=600)
-        self.bot = bot
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         name = self.name.component.value.strip().lower()
@@ -278,34 +271,24 @@ class GuideAddModal(discord.ui.Modal, title="Add a guide"):
             DEFAULT_LANG, self.text.component.value, attachment=attachment,
         )
 
-        cog = helper_cog(interaction)
-        registered = cog.register_guide(name) if cog else False
-        log.info("AdminHub: %s added guide %r (registered=%s)", interaction.user, name, registered)
+        log.info("AdminHub: %s added guide %r", interaction.user, name)
+        await interaction.response.send_message(
+            view=NoticeView(f"Added guide `{name}`."), ephemeral=True
+        )
 
-        note = f"Added guide `{name}`."
-        if not registered:
-            note += " (Saved, but the live command could not be registered -- check the logs.)"
-        await interaction.response.send_message(view=NoticeView(note), ephemeral=True)
-
-    def validate(self, name: str, aliases: list) -> str | None:
+    @staticmethod
+    def validate(name: str, aliases: list) -> str | None:
         if not NAME_RE.match(name):
             return "Invalid name. Use only lowercase letters, digits, `_` or `-`."
-        if name in load_guides():
-            return f"A guide named `{name}` already exists."
-        return next(
-            (
-                f"`{token}` is already a registered command. Pick another name/alias."
-                for token in [name, *aliases]
-                if self.bot.get_command(token) is not None
-            ),
-            None,
-        )
+        for token in [name, *aliases]:
+            if taken := name_conflict(token):
+                return f"`{token}` already belongs to the `{taken}` guide. Pick another name/alias."
+        return None
 
 
 class DeleteGuideButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self):
         super().__init__(label="Delete", style=discord.ButtonStyle.danger)  # noqa
-        self.bot = bot
 
     async def callback(self, interaction: discord.Interaction) -> None:
         name = self.view.command
@@ -313,8 +296,6 @@ class DeleteGuideButton(discord.ui.Button):
             await interaction.response.send_message(view=NoticeView("Pick a command first."), ephemeral=True)
             return
 
-        if cog := self.bot.get_cog("Help Commands"):
-            cog.unregister_guide(name)
         removed = delete_guide(name)
         log.info("AdminHub: %s deleted guide %r (existed=%s)", interaction.user, name, removed)
         message = f"Deleted guide `{name}`." if removed else f"No guide named `{name}`."
@@ -322,22 +303,21 @@ class DeleteGuideButton(discord.ui.Button):
 
 
 class GuideDeleteView(discord.ui.LayoutView):
-    """Pick a command, then remove it"""
+    """Pick a guide, then remove it"""
 
-    def __init__(self, bot):
+    def __init__(self):
         super().__init__(timeout=300)
-        self.bot = bot
         self.command = None
 
         self.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     "## Delete a guide\n"
-                    "Removes the entry from `data/config/guides.json` and unregisters its "
-                    "`$`-command immediately."
+                    "Removes the entry from `data/config/guides.json`. It disappears "
+                    "from /guide immediately."
                 ),
                 discord.ui.ActionRow(OptionSelect("Pick a command", "command", guide_options())),
-                discord.ui.ActionRow(DeleteGuideButton(bot)),
+                discord.ui.ActionRow(DeleteGuideButton()),
                 accent_colour=INFO_ACCENT,
             )
         )
@@ -352,33 +332,31 @@ class _MenuEditButton(discord.ui.Button):
 
 
 class _MenuAddButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self):
         super().__init__(label="Add", style=discord.ButtonStyle.success)  # noqa
-        self.bot = bot
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(GuideAddModal(self.bot))
+        await interaction.response.send_modal(GuideAddModal())
 
 
 class _MenuDeleteButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self):
         super().__init__(label="Delete", style=discord.ButtonStyle.danger)  # noqa
-        self.bot = bot
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(view=GuideDeleteView(self.bot), ephemeral=True)
+        await interaction.response.send_message(view=GuideDeleteView(), ephemeral=True)
 
 
 class GuidesMenuView(discord.ui.LayoutView):
-    def __init__(self, bot):
+    def __init__(self):
         super().__init__(timeout=300)
         self.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     "## Manage guides\n"
-                    "Edit a guide's text per language, add a new `$`-command, or remove one."
+                    "Edit a guide's text per language, add a new guide, or remove one."
                 ),
-                discord.ui.ActionRow(_MenuEditButton(), _MenuAddButton(bot), _MenuDeleteButton(bot)),
+                discord.ui.ActionRow(_MenuEditButton(), _MenuAddButton(), _MenuDeleteButton()),
                 accent_colour=INFO_ACCENT,
             )
         )

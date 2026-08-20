@@ -1,9 +1,10 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import ipaddress
 import aiohttp
 from typing import Iterable
-from constants import Roles, Guilds
+from constants import Roles, Guilds, WIKI_CURATOR_ROLES
 
 
 def ddnet_only(ctx: commands.Context) -> bool:
@@ -19,32 +20,85 @@ async def check_dm_channel(user: discord.Member) -> bool | None:
         return True
 
 
-def is_staff(member: discord.abc.User, *, roles: Iterable[int] = None) -> bool:
+def staff_roles(group: str = "staff") -> list[int]:
+    """Role IDs of a named staff group. is_staff() takes these names directly.
+
+    Args:
+        group (str): Which group to return.
+            "staff"        == every staff role, testers included.
+            "admins"       == admins only.
+            "mods"         == admins and both kinds of moderator.
+            "discord_mods" == runs the Discord server itself, so bans, unbans, kicks,
+                              channel tools and the blacklist. Roles.MODERATOR is a
+                              game-server moderator and stays out of this group.
+            "game_mods"    == admins and game-server moderators, for the player finder
+                              and the game-server logs.
+            "testers"      == admins and full testers.
+            "wiki_curators" == admins and the wiki curators, who hand out the
+                              Wiki Contributor role.
+
+    Returns:
+        list[int]: The role IDs in that group.
+    """
+
+    groups = {
+        "staff": [
+            Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR,
+            Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS,
+            Roles.TRIAL_TESTER, Roles.TRIAL_TESTER_EXCL_TOURNAMENTS,
+        ],
+        "mods": [Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR],
+        "discord_mods": [Roles.ADMIN, Roles.DISCORD_MODERATOR],
+        "game_mods": [Roles.ADMIN, Roles.MODERATOR],
+        "testers": [Roles.ADMIN, Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS],
+        "admins": [Roles.ADMIN],
+        "wiki_curators": [Roles.ADMIN, *WIKI_CURATOR_ROLES],
+    }
+    return groups[group]
+
+
+def is_staff(member: discord.abc.User, *, roles: Iterable[int] | str = None) -> bool:
     """Check if a member has staff roles.
 
     Args:
         member (discord.Member): The Discord member to check.
-        roles (Iterable[int], optional): A collection of role IDs to check against. Defaults to all Staff IDs from DDNet.
+        roles (optional): A collection of role IDs to check against, or the name of a
+            staff_roles() group. Defaults to all Staff IDs from DDNet.
 
     Returns:
         bool: True if the member has at least one of the specified roles, False otherwise.
     """
-
-    staff = [
-        Roles.ADMIN,
-        Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS,
-        Roles.TRIAL_TESTER, Roles.TRIAL_TESTER_EXCL_TOURNAMENTS,
-        Roles.MODERATOR, Roles.DISCORD_MODERATOR
-    ]
 
     # Users don’t have roles, so immediately return False
     if not isinstance(member, discord.Member):
         return False
 
     if roles is None:
-        roles = staff
+        wanted = staff_roles()
+    elif isinstance(roles, str):
+        wanted = staff_roles(roles)
+    else:
+        wanted = list(roles)
 
-    return any(r.id in roles for r in member.roles)
+    return any(r.id in wanted for r in member.roles)
+
+
+def staff_only(group: str = "staff"):
+    """App command decorator gating on a staff_roles() group.
+
+    It also records the group name on the callback, so /help can hide the command
+    from members who could not run it anyway. Use this instead of applying
+    app_commands.checks.has_any_role directly, otherwise /help has no way to tell
+    the command is staff only.
+    """
+
+    def decorator(func):
+        # applied above @app_commands.command it gets a Command, below it a function
+        target = getattr(func, "callback", func)
+        target.__staff_group__ = group
+        return app_commands.checks.has_any_role(*staff_roles(group))(func)
+
+    return decorator
 
 
 def check_public_ip(ip: str) -> (bool, str | None):

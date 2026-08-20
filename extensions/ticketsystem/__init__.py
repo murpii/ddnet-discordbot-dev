@@ -1,5 +1,6 @@
 from .commands import TicketSystem
 from .listener import TicketListeners
+from .manager import TicketManager
 from .scores import TicketScores
 from .ticket import TicketCategory
 from .views import confirm
@@ -12,6 +13,8 @@ from extensions.ticketsystem.views.containers.rename.rename import RenameContain
 
 
 async def setup(bot):
+    if bot.ticket_manager is None:
+        bot.ticket_manager = TicketManager(bot)
     bot.add_view(view=MainMenuContainer(bot))
     bot.add_view(CloseContainer.for_category(TicketCategory.REPORT))
     bot.add_view(CloseContainer.for_category(TicketCategory.RENAME))

@@ -17,7 +17,6 @@ __pycache__/
 # Local config & secrets (copy from the *_example templates)
 config.ini
 constants.py
-constants_ddnet.py
 
 # Runtime data & caches (schema files are kept)
 data/cache/
@@ -28,15 +27,15 @@ data/ticket-system/*
 !data/ticket-system/attachments-temp
 !data/ticket-system/transcripts-temp
 data/events/*
-!data/events/teeguesser/
-data/events/teeguesser/*
-!data/events/teeguesser/*.json.schema
+data/teeguesser/
 data/tester-hub/*
 !data/tester-hub/*.json.schema
 data/assets/map_backgrounds/*
 !data/assets/map_backgrounds/.gitkeep
 data/tools/dontuse/
 data/tools/render_map/
+data/mapres
+data/archives-temp/
 
 # Player finder
 find_players.json
@@ -53,3 +52,4 @@ ddnet-todo.txt
 # Debug scripts and migration tools
 /scripts/
 /migrations/
+/debug/

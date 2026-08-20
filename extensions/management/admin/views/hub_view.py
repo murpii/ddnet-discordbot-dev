@@ -382,7 +382,7 @@ class ManageGuidesButton(HubButton):
         super().__init__(bot, label="Manage Guides", custom_id="AdminHub:guides")
 
     async def run(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(view=GuidesMenuView(self.bot), ephemeral=True)
+        await interaction.response.send_message(view=GuidesMenuView(), ephemeral=True)
 
 
 class ImportBansButton(HubButton):

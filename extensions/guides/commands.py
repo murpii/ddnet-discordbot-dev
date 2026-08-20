@@ -1,4 +1,3 @@
-import contextlib
 import logging
 
 import discord
@@ -7,12 +6,26 @@ from discord.app_commands import Choice
 from discord.ext import commands
 from discord.utils import utcnow
 
+from constants import URLs
 from utils.containers import GuideView, NoticeView, avatar_file
 from . import rtfm
 from .render import render_guide
-from .store import DEFAULT_LANG, get_guide, load_guides, normalize_lang
+from .store import LANGUAGES, load_guides, normalize_lang
 
 log = logging.getLogger()
+
+
+def guide_names() -> dict:
+    names = {}
+    for name, guide in load_guides().items():
+        names[name] = name
+        for alias in guide.get("aliases", []):
+            names[alias.lower()] = name
+    return names
+
+
+def language_choices() -> list:
+    return [Choice(name=lang, value=lang) for lang in LANGUAGES]
 
 
 class HelperCommands(commands.Cog, name="Help Commands"):
@@ -20,92 +33,65 @@ class HelperCommands(commands.Cog, name="Help Commands"):
 
     def __init__(self, bot):
         self.bot = bot
-        self.commands = []
+        self.settings = []
         self.tables = rtfm.load_tables()
-        # names of the prefix commands generated from data/config/guides.json, so we
-        # can remove them again on reload.
-        self.generated: list[str] = []
 
-    async def send_view(self, ctx: commands.Context, view: discord.ui.LayoutView, files: list | None = None):
+    async def send_view(self, interaction: discord.Interaction, view: discord.ui.LayoutView, files: list | None = None):
         kwargs = {"view": view}
         if files:
             kwargs["files"] = files
-        with contextlib.suppress(discord.Forbidden):
-            if ctx.interaction:
-                await ctx.interaction.followup.send(**kwargs)
-            else:
-                await self.bot.reply(message=ctx.message, **kwargs)
+        await interaction.followup.send(**kwargs)
 
-    async def build_guide(self, ctx: commands.Context, text: str, *, style: str = "guide"):
+    async def build_guide(self, interaction: discord.Interaction, text: str, *, style: str = "guide"):
         if style == "notice":
-            await self.send_view(ctx, NoticeView(text))
+            await self.send_view(interaction, NoticeView(text))
         else:
-            await self.send_view(ctx, GuideView(text), [avatar_file()])
+            await self.send_view(interaction, GuideView(text), [avatar_file()])
 
-    def make_guide_command(self, name: str, aliases: list) -> commands.Command:
-        async def callback(ctx: commands.Context, lang: str = None):
-            chosen = normalize_lang(lang) if lang else DEFAULT_LANG
-            result = render_guide(name, chosen)
-            if result is None:
-                return
-            view, files = result
-            await self.send_view(ctx, view, files)
+    async def guide_autocomplete(self, _: discord.Interaction, current: str) -> list[Choice[str]]:
+        current = current.lower()
+        matched = []
+        for token, name in guide_names().items():
+            if current in token and name not in matched:
+                matched.append(name)
+        return [Choice(name=name, value=name) for name in matched[:25]]
 
-        callback.__name__ = f"guide_{name}"
-        return commands.Command(callback, name=name, aliases=list(aliases))
-
-    def register_guide(self, name: str) -> bool:
-        guide = get_guide(name)
-        if guide is None:
-            return False
-        cmd = self.make_guide_command(name, guide.get("aliases", []))
-        try:
-            self.bot.add_command(cmd)
-        except commands.CommandRegistrationError as error:
-            log.warning("Guides: could not register %r: %s", name, error)
-            return False
-        # listed under this cog in /help (get_commands() reads __cog_commands__),
-        # without setting cmd.cog (which would break invoke).
-        self.__cog_commands__ = (*self.__cog_commands__, cmd)
-        self.generated.append(name)
-        return True
-
-    def unregister_guide(self, name: str) -> None:
-        cmd = self.bot.remove_command(name)
-        if cmd is not None:
-            self.__cog_commands__ = tuple(c for c in self.__cog_commands__ if c is not cmd)
-        if name in self.generated:
-            self.generated.remove(name)
-
-    def register_all_guides(self) -> None:
-        for name in load_guides():
-            self.register_guide(name)
-
-    async def rtfm_autocomplete(self, _: discord.Interaction, name: str) -> list[Choice[str | int | float]]:
-        setting_names = self.commands
-        filtered_settings = [
-            setting for setting in setting_names if name.lower() in setting.lower()
-        ]
-        return [
-            app_commands.Choice(name=setting, value=setting)
-            for setting in filtered_settings[:20]
-        ]
+    async def rtfm_autocomplete(self, _: discord.Interaction, current: str) -> list[Choice[str]]:
+        filtered = [setting for setting in self.settings if current.lower() in setting.lower()]
+        return [Choice(name=setting, value=setting) for setting in filtered[:20]]
 
     @commands.Cog.listener()
     async def on_ready(self):
-        self.commands = rtfm.get_setting_names(self.tables)
+        self.settings = rtfm.get_setting_names(self.tables)
 
-    @commands.hybrid_command(
+    @app_commands.command(name="guide", description="Show one of the DDNet help guides")
+    @app_commands.describe(
+        name="Which guide to show",
+        language="Show it in this language, defaults to your Discord language")
+    @app_commands.autocomplete(name=guide_autocomplete)
+    @app_commands.choices(language=language_choices())
+    async def guide(self, interaction: discord.Interaction, name: str, language: str = None):
+        await interaction.response.defer()
+        chosen = normalize_lang(language or interaction.locale)
+
+        result = render_guide(guide_names().get(name.lower(), name), chosen)
+        if result is None:
+            await interaction.followup.send(f"There is no guide named `{name}`.", ephemeral=True)
+            return
+
+        view, files = result
+        await self.send_view(interaction, view, files)
+
+    @app_commands.command(
         name="rtfm",
-        with_app_command=True,
         description="Displays a server or client setting along with its description")
     @app_commands.autocomplete(setting=rtfm_autocomplete)
     @app_commands.describe(setting="The setting you're looking for")
-    async def rtfm(self, ctx: commands.Context, setting: str):
-        await ctx.defer(ephemeral=bool(ctx.interaction))
+    async def rtfm(self, interaction: discord.Interaction, setting: str):
+        await interaction.response.defer(ephemeral=True)
         result = rtfm.get_setting_description(self.tables, setting)
         if not result:
-            await ctx.send("Setting not found.")
+            await interaction.followup.send("Setting not found.")
             return
 
         rtfm.floats_to_int(result)
@@ -114,40 +100,17 @@ class HelperCommands(commands.Cog, name="Help Commands"):
             for key, value in result.items()
             if not isinstance(value, float) and value != '""'
         )
-        await self.build_guide(ctx, (
+        await self.build_guide(interaction, (
             f"## {setting}\n"
             f"{resp}\n"
-            f"**URL:** {rtfm.URL}"
+            f"**URL:** {URLs.DDNET_SETTINGS_COMMANDS}"
         ))
 
-    @commands.command(aliases=["kog", "login", "registration"])
-    async def kog_login(self, ctx: commands.Context):
-        title = "KoG affiliation" if ctx.invoked_with == "kog" else "KoG Account Registration and Migration"
-        text = (
-            f"## {title}\n"
-            "First and foremost: DDNet and KoG aren't affiliated.\n\n"
-            "If you need help on a server related to KoG, "
-            "join their Discord server by clicking on the link below.\n\n"
-            "**URL:** https://discord.kog.tw/"
-        )
-        if ctx.invoked_with in ["login", "registration"]:
-            text += (
-                "\n\n**Registration process:**\n"
-                "https://discord.com/channels/342003344476471296/941355528242749440/1129043200527569018\n"
-                "**Migration process:**\n"
-                "https://discord.com/channels/342003344476471296/941355528242749440/1129043332211945492\n"
-                "**How to login on KoG servers:**\n"
-                "https://discord.com/channels/342003344476471296/941355528242749440/1129043447517564978\n"
-                "**Video Guide:**\n"
-                "https://www.youtube.com/watch?v=d1kbt-srlac"
-            )
-        text += "\n-# You are not required to log-in on a DDNet server."
-        await self.build_guide(ctx, text)
-
-    @commands.command(aliases=["utc", "utc-time", "utc-now"])
-    async def utc_now(self, ctx: commands.Context):
+    @app_commands.command(name="utc", description="Show the current UTC time")
+    async def utc(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         await self.build_guide(
-            ctx,
+            interaction,
             f"Current UTC Time: `{utcnow().strftime('%YY-%mM-%dD %HH:%MM')}`",
             style="notice",
         )

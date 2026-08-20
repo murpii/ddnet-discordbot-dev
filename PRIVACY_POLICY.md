@@ -44,14 +44,14 @@ voluntarily, as part of asking us to process that appeal.
 ## 3. Automated moderation
 
 To keep the server safe, the bot automatically detects things like message spam,
-disruptive pings, and prohibited words, and may remove messages or temporarily time
-out an account without a human reviewing it first. Staff can review these actions,
-and you can contact us if you believe one was a mistake.
+@mention spam, and prohibited words, and may remove messages or temporarily time
+out an account without a human reviewing it first. Our staff can review these actions,
+and you can (and are encouraged to!) contact us if you believe one was a mistake.
 
 ## 4. Third parties
 
-The bot runs on Discord, so your interactions are necessarily processed by Discord.
-When you submit an IP address in a ban appeal, it is sent to a third-party IP
+The bot runs on Discord, so your interactions are processed by Discord.
+When you submit an IP address in a vpn ban appeal, it is sent to a third-party IP
 reputation service to check whether it is a VPN, proxy, or data center.
 
 ## 5. How long we keep it

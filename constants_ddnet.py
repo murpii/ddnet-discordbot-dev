@@ -37,11 +37,15 @@ class Channels(IntEnum):
     MEDIA_ONLY = 1388810491538968657
     QUESTIONS = 745926398140612678
     WIKI = 871738312849752104
+    WIKI_THREAD = 0
     OFF_TOPIC = 252358080522747904
     MAPPING = 746534464984973323
     BOT_CMDS = 1247016109614567464
+    ROLE_HUB = 0
 
     # Tickets
+    # 0 = unset: the bot then finds/creates a category named "Community Applications" by name
+    CAT_COMMUNITY_APPS = 0
     TICKETS_INFO = 1124657351442579486
     TICKETS_TRANSCRIPTS = 1156217891063074836
     TH_REPORTS = 1156218166914060288
@@ -49,6 +53,7 @@ class Channels(IntEnum):
     TH_RENAMES = 1156218426633769032
     TH_COMPLAINTS = 1156218705701785660
     TH_ADMIN_MAIL = 1156218815164723261
+    TH_COMMUNITY_APPS = 0
 
     # Skin submissions
     SKIN_INFO = 985554143525601350
@@ -63,6 +68,12 @@ class Channels(IntEnum):
     MATRIX_MOD = 1062150244013445221
     LOGS = 968485530230743050
 
+    # Log sub-threads inside LOGS; 0 = fall back to posting in the LOGS channel
+    LOG_MESSAGES = 0  # message deletions + edits
+    LOG_MOD_ACTIONS = 0  # bans/kicks/timeouts, testing bans, guild pauses
+    LOG_MOD_ALERTS = 0  # blacklist hits, automod spam alerts
+    LOG_NAMES = 0  # nickname and display name changes
+
     # Internal
     MOD_C = 534520700548022272
     TESTER_C = 1205896646353752075
@@ -76,6 +87,11 @@ class Channels(IntEnum):
     TESTER_VOTES = 1272588513954496573
     TESTING_INFO = 1201860080463511612
     TESTING_SUBMIT = 455392372663123989
+
+    # Hub control channels, each holds one persistent staff panel. 0 disables that hub.
+    MOD_HUB = 0
+    ADMIN_HUB = 0
+    TESTER_HUB = 0
 
 
 class Forums(IntEnum):
@@ -106,6 +122,19 @@ class Roles(IntEnum):
     TOURNAMENT_WINNER = 400715872647249920
     MAPPER = 1452194772344373268
 
+    # Self-assign roles handed out by the role hub. Created by hand, fill in the IDs.
+    # 0 = that role is left off the hub panel, -1 = shown on the panel but disabled.
+    ANNOUNCEMENT_PING = 0
+    SKIN_SUBMIT_ACCESS = 0
+    DEV_CORNER_ACCESS = 0
+
+
+ALL_TESTER_ROLES: list = [
+    Roles.TESTER,
+    Roles.TESTER_EXCL_TOURNAMENTS,
+    Roles.TRIAL_TESTER,
+    Roles.TRIAL_TESTER_EXCL_TOURNAMENTS
+]
 
 WIKI_CURATOR_ROLES: tuple[int, ...] = (
     97739437772902400,
@@ -171,4 +200,14 @@ class URLs(StrEnum):
     DDNET_MAPPING_GUIDELINES = "https://ddnet.org/mapping/guidelines/"
     DDNET_MASTER_RULES = "https://ddnet.org/rules/master/"
     DDNET_COMMUNITY_RULES = "https://ddnet.org/rules/community/"
+    CLOUDFLARE_WARP_DOCS = "https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/remove-warp/"
+    WIKI_API = "https://wiki.ddnet.org/w/api.php"
+    WIKI_PAGE_URL = "https://wiki.ddnet.org/wiki/"
+    DDNET_SETTINGS_COMMANDS = "https://ddnet.org/settingscommands/"  # tables the /rtfm lookup reads
     CONSTANTS_URL = "https://github.com/murpii/ddnet-discordbot-dev/blob/master/constants_ddnet.py"
+    DDNET_RELEASES_MAPS = "https://ddnet.org/releases/maps.json"
+    DDNET_INFO = "https://info.ddnet.org/info"  # what the game client reads on startup
+    DDNET_CONNECT = "https://ddnet.org/connect-to/"  # use utils.misc.connect_url
+
+
+DIFF_THREAD_NAME = "Changes vs previous version"

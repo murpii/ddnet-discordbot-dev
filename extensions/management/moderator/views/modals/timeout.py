@@ -104,4 +104,6 @@ class TimeoutModal(discord.ui.Modal, title="Timeout member"):
             await interaction.edit_original_response(view=NoUserInfoView(notice=notice))
             return
 
-        await interaction.edit_original_response(view=UserInfoView(self.bot, info, notice=notice))
+        await interaction.edit_original_response(
+            view=UserInfoView(self.bot, info, interaction.user, notice=notice)
+        )

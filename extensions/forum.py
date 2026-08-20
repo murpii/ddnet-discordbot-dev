@@ -3,36 +3,39 @@ import contextlib
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 from constants import Guilds, Forums, ForumTags, Channels
-from utils.checks import ddnet_only
 
 
 def is_questions_thread():
-    def predicate(ctx: commands.Context) -> bool:
+    def predicate(interaction: discord.Interaction) -> bool:
         return (
-                isinstance(ctx.channel, discord.Thread)
-                and ctx.channel.parent_id == Forums.QUESTIONS
+                isinstance(interaction.channel, discord.Thread)
+                and interaction.channel.parent_id == Forums.QUESTIONS
         )
 
-    return commands.check(predicate)
+    return app_commands.check(predicate)
 
 
-def is_thread(ctx) -> bool:
-    return isinstance(ctx.channel, discord.Thread)
+def solved_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+    """The thread owner can always mark their own thread, everyone else waits."""
+    thread = interaction.channel
+    if isinstance(thread, discord.Thread) and interaction.user.id == thread.owner_id:
+        return None
+    return app_commands.Cooldown(1, 300)
 
 
 class SolvedReactionCheck:
-    def __init__(self, message_id: int, owner: Union[discord.Member, discord.User]):
+    def __init__(self, message_id: int, owner_id: int):
         self.message_id = message_id
-        self.owner = owner
+        self.owner_id = owner_id
 
     def __call__(self, reaction: discord.Reaction, member: Union[discord.Member, discord.User]) -> bool:
         return (
                 reaction.message.id == self.message_id and
                 str(reaction.emoji) == "✅" and
-                member == self.owner
+                member.id == self.owner_id
         )
 
 
@@ -40,24 +43,6 @@ class Forum(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.solved_prompts: dict[int, discord.Message] = {}
-
-    @staticmethod
-    def owner_exempt_channel_cooldown(rate, per):
-        cooldown = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.channel)  # type: ignore
-
-        async def predicate(ctx):
-            if not is_thread(ctx):
-                return False
-            thread = ctx.channel
-            if ctx.author == thread.owner:
-                return True
-            bucket = cooldown.get_bucket(ctx.message)
-            retry_after = bucket.update_rate_limit()
-            if retry_after:
-                raise commands.CommandOnCooldown(bucket, retry_after, commands.BucketType.channel)  # type: ignore
-            return True
-
-        return commands.check(predicate)
 
     @commands.Cog.listener("on_thread_create")
     async def pin_initial_message(self, thread: discord.Thread) -> None:
@@ -99,55 +84,63 @@ class Forum(commands.Cog):
             reason=f"Marked as solved by {user} (ID: {user.id})",  # audit log entry
         )
 
-    @commands.command(name="solved", aliases=["is_solved"])
-    @owner_exempt_channel_cooldown(1, 300)
+    @app_commands.command(
+        name="solved",
+        description="Marks a thread in the questions forum as solved"
+    )
+    @app_commands.guilds(Guilds.DDNET)
     @is_questions_thread()
-    async def solved(self, ctx: commands.Context) -> None:
-        """Marks a thread in the #questions forum as solved."""
-        if not is_thread(ctx):
-            return
+    @app_commands.checks.dynamic_cooldown(
+        solved_cooldown, key=lambda interaction: interaction.channel_id
+    )
+    async def solved(self, interaction: discord.Interaction) -> None:
+        thread = interaction.channel
 
-        thread = ctx.channel
-        owner = thread.owner
-
-        if ctx.author == owner:
-            self.solved.reset_cooldown(ctx)
+        if interaction.user.id == thread.owner_id:
             if old_prompt := self.solved_prompts.pop(thread.id, None):
                 with contextlib.suppress(discord.NotFound):
                     await old_prompt.delete()
-            await ctx.message.add_reaction("✅")
-            await ctx.channel.send(content="Marked thread as solved.")
-            await self.mark_as_solved(thread, ctx.author)
+            await interaction.response.send_message("Marked thread as solved.")
+            await self.mark_as_solved(thread, interaction.user)
             return
 
-        await ctx.message.delete()
-        prompt = await ctx.send(
-            f"{owner.mention} has your question been answered?\n"
-            f"Click on the checkmark reaction to mark this thread as solved or use the command $solved."
+        await interaction.response.send_message(
+            "Asked the thread owner to confirm.", ephemeral=True
+        )
+        prompt = await thread.send(
+            f"<@{thread.owner_id}> has your question been answered?\n"
+            f"Click on the checkmark reaction to mark this thread as solved, or use /solved."
         )
         await prompt.add_reaction("✅")
         self.solved_prompts[thread.id] = prompt
 
         try:
-            check = SolvedReactionCheck(prompt.id, owner)
-            await self.bot.wait_for("reaction_add", timeout=300.0, check=check)
+            check = SolvedReactionCheck(prompt.id, thread.owner_id)
+            _, member = await self.bot.wait_for("reaction_add", timeout=300.0, check=check)
         except asyncio.TimeoutError:
             await prompt.edit(content="Timed out waiting for a response. Not marking as resolved.")
         else:
             with contextlib.suppress(discord.NotFound):
                 await prompt.edit(content="Marked thread as solved.")
-            with contextlib.suppress(discord.NotFound):
-                await ctx.message.delete()
-            await self.mark_as_solved(thread, owner)
+            await self.mark_as_solved(thread, member)
         finally:
             self.solved_prompts.pop(thread.id, None)
 
     @solved.error
-    async def on_solved_error(self, ctx, error: commands.CommandOnCooldown) -> None:
-        if isinstance(error, commands.CommandOnCooldown):
-            await ctx.message.delete()
-            await ctx.author.send(content="You've been rate-limited.", delete_after=60)
-            return
+    async def on_solved_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
+        if isinstance(error, app_commands.CommandOnCooldown):
+            message = "You've been rate-limited."
+        elif isinstance(error, app_commands.CheckFailure):
+            message = "This only works inside a thread in the questions forum."
+        else:
+            raise error
+
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
 
     @commands.Cog.listener("on_thread_create")
     async def quality_control(self, thread: discord.Thread) -> None:
@@ -171,33 +164,35 @@ class Forum(commands.Cog):
         with contextlib.suppress(discord.HTTPException):
             await message.pin()
 
-    @commands.hybrid_command(
+    @app_commands.command(
         name="create_thread",
-        with_app_command=True,
-        description="Makes the bot create a thread in a given forum.",
-        usage="$create_thread <ForumID> <ThreadName> <Text>",
-        hidden=True
+        description="Makes the bot create a thread in a given forum."
     )
-    @commands.check(ddnet_only)
-    @commands.has_permissions(ban_members=True)
-    @app_commands.guilds(discord.Object(Guilds.DDNET))
+    @app_commands.guilds(Guilds.DDNET)
+    @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
     @app_commands.describe(
-        forum_channel_id="The forums channel identifier",
+        forum="The forum to create the thread in",
         thread_name="The thread title",
         initial_message="The initial message of the thread")
-    async def create_thread(self, ctx, forum_channel_id: int, thread_name: str, *, initial_message: str):
-        forum_channel = self.bot.get_channel(forum_channel_id)
-        if not isinstance(forum_channel, discord.ForumChannel):
-            await ctx.send("The provided channel ID is not a forum channel.")
+    async def create_thread(
+        self,
+        interaction: discord.Interaction,
+        forum: discord.ForumChannel,
+        thread_name: str,
+        initial_message: str,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await forum.create_thread(name=thread_name, content=initial_message)
+        except discord.HTTPException as error:
+            await interaction.followup.send(f"An error occurred: {error}", ephemeral=True)
             return
 
-        try:
-            await forum_channel.create_thread(name=thread_name, content=initial_message)
-            await ctx.send(f'Thread "{thread_name}" created successfully.')
-        except Exception as e:
-            await ctx.send(f"An error occurred: {str(e)}")
+        await interaction.followup.send(
+            f'Thread "{thread_name}" created successfully.', ephemeral=True
+        )
 
 
-async def setup(bot: commands.bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(Forum(bot))

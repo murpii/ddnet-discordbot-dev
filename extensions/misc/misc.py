@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-import logging
 import zipfile
-from datetime import datetime, timedelta
 from io import BytesIO
 
 import discord
@@ -12,12 +10,8 @@ import psutil
 from discord import app_commands
 from discord.ext import commands
 
-from constants import Emojis
-from datetime import timezone
 from utils.misc import run_process_shell
 from utils.text import human_timedelta
-
-log = logging.getLogger(__name__)
 
 GH_URL = "https://github.com/murpii/ddnet-discordbot"
 
@@ -28,7 +22,6 @@ class Misc(commands.Cog):
         self.session = None
         self.process = psutil.Process()
         self.start_time = discord.utils.utcnow()
-        self.api_key = self.bot.config.get("WEATHER_API", "KEY")
 
     async def cog_load(self):
         self.session = await self.bot.session_manager.get_session(self.__class__.__name__)
@@ -103,108 +96,6 @@ class Misc(commands.Cog):
             return
 
         await interaction.followup.send(display_avatar)
-
-    async def fetch_weather_data(self, city: str) -> dict:
-        url = "https://api.openweathermap.org/data/2.5/weather"
-        params = {"APPID": self.api_key, "q": city, "units": "metric"}
-
-        async with self.session.get(url, params=params) as resp:
-            js = await resp.json()
-            if resp.status == 200:
-                return js
-            if resp.status == 404:
-                raise ValueError(f'City "{city}" not found.')
-
-            fmt = "Failed to fetch weather data for city %r: %s (status code: %d %s)"
-            log.error(fmt, city, js["message"], resp.status, resp.reason)
-            raise RuntimeError("Could not fetch weather information")
-
-    @app_commands.command(
-        name="weather", description="Show weather information of a city"
-    )
-    @app_commands.describe(
-        city="Enter the city for which you'd like to view the weather information."
-    )
-    async def weather(self, interaction: discord.Interaction, *, city: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
-        try:
-            data = await self.fetch_weather_data(city)
-        except Exception as exc:
-            await interaction.followup.send(exc)
-            return
-
-        city = data["name"]
-        country = data["sys"].get("country")
-        condition = data["weather"][0]["id"]
-        description = data["weather"][0]["description"]
-        temp = data["main"]["temp"]  # °C
-        feels_like = data["main"]["feels_like"]  # °C
-        wind = data["wind"]["speed"]  # m/s
-        humidity = data["main"]["humidity"]  # %
-        cloudiness = data["clouds"]["all"]  # %
-
-        if country is None:
-            flag = f"<:flag_unk:{Emojis.FLAG_UNK}>"
-        else:
-            flag = f":flag_{country.lower()}:"
-            city += f", {country}"
-
-        # https://openweathermap.org/weather-conditions
-        conditions = {
-            (200, 299): "🌩️",  # thunderstorm
-            (300, 399): "🌧️",  # drizzle
-            (500, 599): "🌧️",  # rain
-            (600, 699): "❄️",  # snow
-            (700, 799): "💨",  # atmosphere
-            (800, 800): "☀️",  # clear
-            (801, 809): "☁️",  # clouds
-        }
-
-        emoji = next(
-            (e for c, e in conditions.items() if c[0] <= condition <= c[1]), ""
-        )
-
-        msg = (
-            f"{flag} |  **Weather for {city}**\n"
-            f"**Weather:** {emoji} ({description})\n"
-            f"**Temp:** {temp} °C **Feels like:** {feels_like} °C\n"
-            f"**Wind:** {wind} m/s **Humidity:** {humidity}% **Cloudiness:** {cloudiness}%"
-        )
-
-        await interaction.followup.send(msg)
-
-        if interaction.response.is_done():  # noqa
-            return
-
-    @app_commands.command(name="time", description="Show the date and time of a city")
-    @app_commands.describe(
-        city="Enter the city for which you'd like to check the date and time."
-    )
-    async def time(self, interaction: discord.Interaction, *, city: str):
-        await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
-
-        try:
-            data = await self.fetch_weather_data(city)
-        except Exception as exc:
-            await interaction.followup.send(exc)
-            return
-        now = datetime.now(timezone.utc)
-
-        offset = data["timezone"]
-        sunrise = data["sys"]["sunrise"]
-        sunset = data["sys"]["sunset"]
-
-        emoji = "🌞" if sunrise <= now.timestamp() < sunset else "🌝"
-        timestamp = now + timedelta(seconds=offset)
-        hours, minutes = divmod(offset / 60, 60)
-
-        await interaction.followup.send(
-            f"{emoji} **{timestamp:%d/%m/%Y %H:%M:%S}** (UTC {hours:+03.0f}:{minutes:02.0f})"
-        )
-
-        if interaction.response.is_done():  # noqa
-            return
 
     @app_commands.command(
         name="emojis", description="Returns a zip file with all guild emojis")

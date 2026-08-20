@@ -4,7 +4,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from constants import Channels, Roles
+from constants import Channels
 from utils.activity import build_playing_view, collect_games
 from utils.misc import log_to
 from utils.text import to_discord_timestamp, clip
@@ -13,12 +13,11 @@ from extensions.management.hub import HubButton, staff_guard
 from extensions.management.moderator.views.containers.channel_tools import SlowmodeView, PurgeView, LockView
 from extensions.management.moderator.views.containers.messaging import EchoPanel, EditMessageModal, DeleteMessageModal
 from extensions.management.moderator.player_finder.controls import playerfinder_action_rows
+from extensions.management.moderator.server_logs import ServerLogsButton
 
 log = logging.getLogger()
 
 PLAYING_OVERVIEW = " overview"
-DISCORD_ROLES = [Roles.ADMIN, Roles.DISCORD_MODERATOR]
-SHARED_ROLES = [Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
 
 
 class PlayingModal(discord.ui.Modal, title="Who is playing?"):
@@ -113,7 +112,7 @@ class UserLookupModal(discord.ui.Modal, title="User lookup"):
             await interaction.edit_original_response(view=NoUserInfoView())
             return
 
-        await interaction.edit_original_response(view=UserInfoView(self.bot, info))
+        await interaction.edit_original_response(view=UserInfoView(self.bot, info, interaction.user))
 
 
 class BlacklistAddModal(discord.ui.Modal, title="Blacklist a word"):
@@ -176,7 +175,7 @@ class UserLookupButton(HubButton):
     def __init__(self, bot):
         super().__init__(
             bot, label="User Lookup", custom_id="DiscordHub:user",
-            style=discord.ButtonStyle.primary, roles=SHARED_ROLES,  # noqa
+            style=discord.ButtonStyle.primary, roles="mods",  # noqa
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -185,7 +184,7 @@ class UserLookupButton(HubButton):
 
 class SlowmodeButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Slowmode", custom_id="DiscordHub:slowmode", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Slowmode", custom_id="DiscordHub:slowmode", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=SlowmodeView(), ephemeral=True)
@@ -193,7 +192,7 @@ class SlowmodeButton(HubButton):
 
 class PurgeButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Purge", custom_id="DiscordHub:purge", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Purge", custom_id="DiscordHub:purge", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=PurgeView(), ephemeral=True)
@@ -201,7 +200,7 @@ class PurgeButton(HubButton):
 
 class LockButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Lock / Unlock", custom_id="DiscordHub:lock", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Lock / Unlock", custom_id="DiscordHub:lock", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=LockView(), ephemeral=True)
@@ -209,7 +208,7 @@ class LockButton(HubButton):
 
 class EchoButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Echo Message", custom_id="DiscordHub:echo", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Echo Message", custom_id="DiscordHub:echo", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=EchoPanel(), ephemeral=True)
@@ -217,7 +216,7 @@ class EchoButton(HubButton):
 
 class EditMessageButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Edit Message", custom_id="DiscordHub:msg-edit", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Edit Message", custom_id="DiscordHub:msg-edit", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(EditMessageModal(self.bot))
@@ -225,7 +224,7 @@ class EditMessageButton(HubButton):
 
 class DeleteMessageButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Delete Message", custom_id="DiscordHub:msg-delete", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Delete Message", custom_id="DiscordHub:msg-delete", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(DeleteMessageModal(self.bot))
@@ -233,7 +232,7 @@ class DeleteMessageButton(HubButton):
 
 class BlacklistShowButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Show list", custom_id="DiscordHub:bl-list", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Show list", custom_id="DiscordHub:bl-list", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         cog = self.bot.get_cog("Blacklist")
@@ -253,7 +252,7 @@ class BlacklistShowButton(HubButton):
 
 class BlacklistAddButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Add word", custom_id="DiscordHub:bl-add", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Add word", custom_id="DiscordHub:bl-add", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(BlacklistAddModal(self.bot))
@@ -261,7 +260,7 @@ class BlacklistAddButton(HubButton):
 
 class BlacklistRemoveButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Remove word", custom_id="DiscordHub:bl-remove", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Remove word", custom_id="DiscordHub:bl-remove", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(BlacklistRemoveModal(self.bot))
@@ -276,7 +275,7 @@ class RaidActionButton(HubButton):
         super().__init__(
             bot, label=label.replace("dms", "DMs"),
             custom_id=f"DiscordHub:{what}-{'pause' if pause else 'resume'}",
-            style=style, roles=DISCORD_ROLES,
+            style=style, roles="discord_mods",
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -313,7 +312,7 @@ class RaidActionButton(HubButton):
 
 class WhoIsPlayingButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Activity Scan", custom_id="DiscordHub:playing", roles=SHARED_ROLES)
+        super().__init__(bot, label="Activity Scan", custom_id="DiscordHub:playing", roles="mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         games = collect_games(self.bot)
@@ -327,7 +326,7 @@ class WhoIsPlayingButton(HubButton):
 
 class RecentJoinsButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Recent joins", custom_id="DiscordHub:joins", roles=DISCORD_ROLES)
+        super().__init__(bot, label="Recent joins", custom_id="DiscordHub:joins", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
         members = [m for m in interaction.guild.members if m.joined_at]
@@ -376,6 +375,15 @@ class ModHubView(discord.ui.LayoutView):
                     "start/stop the live search."
                 ),
                 *playerfinder_action_rows(bot),
+                separator(),
+                discord.ui.TextDisplay(
+                    "## Server logs\n"
+                    "Pull the recent log of an official game server: player chat, "
+                    "joins, leaves, votes and kicks. Pick the location and type the port, "
+                    "or type the server as you see it, e.g. `GER:8303` for "
+                    "DDNet GER - Brutal on port 8303, or the exact `ip:port`."
+                ),
+                discord.ui.ActionRow(ServerLogsButton(bot)),
                 accent_colour=INFO_ACCENT,
             )
         )
@@ -403,8 +411,10 @@ class DiscordModHubView(discord.ui.LayoutView):
                     "Look up a user's moderation history and name changes (contains Ban / "
                     "Timeout / Kick / Remove Entry controls), or see who is playing what "
                     "right now.\n\n"
-                    "-# Available to **Moderators** and **Discord Moderators**. Also /info, /ban, "
-                    "/unban, /timeout, /kick and the \"Ban user\" context menu."
+                    "-# Available to **Moderators** and **Discord Moderators**, also as /info "
+                    "and /timeout. Ban, unban and kick are **Discord Moderator** only, so those "
+                    "controls are greyed out for Moderators, as are /ban, /unban, /kick and the "
+                    "\"Ban user\" context menu."
                 ),
                 discord.ui.ActionRow(UserLookupButton(bot), WhoIsPlayingButton(bot)),
                 separator(),
@@ -452,4 +462,4 @@ class DiscordModHubView(discord.ui.LayoutView):
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await staff_guard(self.cooldown, interaction, roles=SHARED_ROLES)
+        return await staff_guard(self.cooldown, interaction, roles="mods")

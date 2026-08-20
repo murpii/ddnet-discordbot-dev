@@ -1,5 +1,6 @@
 import discord
 
+from utils.containers import markup_kwargs
 from utils.text import resolve_role_mentions, resolve_user_mentions
 
 
@@ -20,6 +21,7 @@ class EchoModal(discord.ui.Modal, title="Echo Message"):
 
     text_input = discord.ui.Label(
         text="Message content",
+        description="Wrap a block in [embed] ... [/embed] lines to render it inside a container.",
         component=discord.ui.TextInput(
             style=discord.TextStyle.paragraph,  # noqa
             required=True,
@@ -69,7 +71,7 @@ class EchoModal(discord.ui.Modal, title="Echo Message"):
         content, mentioned_users = resolve_user_mentions(content, interaction.guild)
 
         await self.channel.send(
-            content=content,
+            **markup_kwargs(content),
             reference=self.target_message,
             mention_author=ping,
             allowed_mentions=discord.AllowedMentions(

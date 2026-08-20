@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 import contextlib
 import logging
 import sqlite3
@@ -12,6 +13,7 @@ log = logging.getLogger(__name__)
 
 # Synced active-ban list exported from YADDB
 BANS_DB_PATH = "data/ticket-system/db.sqlite"
+category_lock = asyncio.Lock()
 
 
 def ban_to_dict(row) -> dict:
@@ -63,28 +65,39 @@ async def find_or_create_category(
     Finds an available category or creates a new one
     A category is considered available if it has fewer than 50 channels
     """
-    if len(category.channels) < 50:
-        return category
-
-    try:
-        new_category = await guild.create_category(
-            name=category.name,
-            overwrites=category.overwrites,
-            reason="Cloned from existing category",
+    async with category_lock:
+        candidates = sorted(
+            (cat for cat in guild.categories if cat.name == category.name),
+            key=lambda cat: cat.position,
         )
-    except discord.Forbidden:
-        log.error(f"Failed to create new ticket category in guild {guild.id}. Bot lacks 'Manage Channels' permission.")
-        return None
-    except discord.HTTPException as e:
-        log.error(f"An HTTP error occurred while creating a category in guild {guild.id}: {e}")
-        return None
+        if category not in candidates:
+            candidates.insert(0, category)
 
-    # create_category doesn't reliably honour a position arg (the clone sometimes lands
-    # above the original because.. only discord knows), so move it right below the original via the reorder endpoint.
-    with contextlib.suppress(discord.HTTPException):
-        await new_category.move(after=category, reason="Keep the overflow category below the original")
+        for candidate in candidates:
+            if len(candidate.channels) < 50:
+                return candidate
 
-    return new_category
+        last_category = candidates[-1]
+        try:
+            new_category = await guild.create_category(
+                name=category.name,
+                overwrites=category.overwrites,
+                reason="Cloned from existing category",
+            )
+        except discord.Forbidden:
+            log.error(
+                f"Failed to create new ticket category in guild {guild.id}. Bot lacks 'Manage Channels' permission."
+            )
+            return None
+        except discord.HTTPException as e:
+            log.error(f"An HTTP error occurred while creating a category in guild {guild.id}: {e}")
+            return None
+
+        with contextlib.suppress(discord.HTTPException):
+            await new_category.move(after=last_category, reason="Keep the overflow category below the original")
+
+        log.info(f"Created overflow ticket category '{new_category.name}' ({new_category.id})")
+        return new_category
 
 
 async def fetch_rank_from_demo(bot, message: discord.Message, session: aiohttp.ClientSession):

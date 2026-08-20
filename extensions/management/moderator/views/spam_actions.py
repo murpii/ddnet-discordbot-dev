@@ -1,11 +1,9 @@
 import discord
 
-from constants import Roles
 from extensions.management.moderator.manager import PendingAction, ModAction
 from utils.checks import is_staff
 from utils.containers import NoticeView, ALERT_ACCENT
 
-SPAM_ACTION_ROLES = [Roles.ADMIN, Roles.DISCORD_MODERATOR]
 BAN_DELETE_SECONDS = 3600
 SPAM_REASON = "Spam/scam across multiple channels"
 
@@ -103,17 +101,80 @@ class SpamConfirmView(discord.ui.LayoutView):
         await interaction.response.edit_message(view=NoticeView(result))
 
 
+class SpamDealtButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"spammod:dealt:(?P<state>[01])",
+):
+    """Checkbox so mods can see an alert was already handled. State lives in the
+    message itself, the callback round-trips the components via from_message."""
+
+    def __init__(self, checked: bool = False, moderator: str | None = None):
+        self.checked = checked
+        if checked:
+            label = f"[✓] Resolved by {moderator}" if moderator else "[✓] Resolved"
+            style = discord.ButtonStyle.success
+        else:
+            label = "[ ] Resolved?"
+            style = discord.ButtonStyle.secondary
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                style=style,  # noqa
+                custom_id=f"spammod:dealt:{int(checked)}",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["state"] == "1")
+
+    async def callback(self, interaction: discord.Interaction):
+        if not is_staff(interaction.user, roles="discord_mods"):
+            await interaction.response.send_message(
+                "You do not have permission to do that.", ephemeral=True
+            )
+            return
+
+        checked = not self.checked
+        if checked:
+            label = f"[✓] Resolved by {interaction.user.display_name}"
+            style = discord.ButtonStyle.success
+            accent = discord.Colour.green().value
+        else:
+            label = "[ ] Resolved?"
+            style = discord.ButtonStyle.secondary
+            accent = discord.Colour.orange().value
+
+        layout = discord.ui.LayoutView.from_message(interaction.message)
+        for item in layout.walk_children():
+            if isinstance(item, discord.ui.Container):
+                item.accent_colour = accent
+            custom_id = getattr(item, "custom_id", None)
+            if isinstance(custom_id, str) and custom_id.startswith("spammod:dealt:"):
+                item.label = label
+                item.style = style
+                item.custom_id = f"spammod:dealt:{int(checked)}"
+
+        await interaction.response.edit_message(view=layout)
+
+
 class SpamModButton(
     discord.ui.DynamicItem[discord.ui.Button],
-    template=r"spammod:(?P<action>kick|ban):(?P<user_id>\d+)",
+    template=r"spammod:(?P<action>kick|ban|info):(?P<user_id>\d+)",
 ):
     def __init__(self, action: str, user_id: int):
         self.action = action
         self.user_id = user_id
+        if action == "info":
+            label, style = "User Info", discord.ButtonStyle.green
+        elif action == "ban":
+            label, style = "Ban", discord.ButtonStyle.danger
+        else:
+            label, style = "Kick", discord.ButtonStyle.secondary
         super().__init__(
             discord.ui.Button(
-                label="Ban" if action == "ban" else "Kick",
-                style=discord.ButtonStyle.danger if action == "ban" else discord.ButtonStyle.secondary,  # noqa
+                label=label,
+                style=style,  # noqa
                 custom_id=f"spammod:{action}:{user_id}",
             )
         )
@@ -122,12 +183,29 @@ class SpamModButton(
     async def from_custom_id(cls, interaction, item, match):
         return cls(match["action"], int(match["user_id"]))
 
+    async def show_user_info(self, interaction: discord.Interaction):
+        bot = interaction.client
+        info = await bot.moddb.fetch_user_info(discord.Object(id=self.user_id))
+
+        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        if not info:
+            await interaction.response.send_message(view=NoUserInfoView(), ephemeral=True)
+            return
+        await interaction.response.send_message(
+            view=UserInfoView(bot, info, interaction.user), ephemeral=True
+        )
+
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=SPAM_ACTION_ROLES):
+        if not is_staff(interaction.user, roles="discord_mods"):
             await interaction.response.send_message(
                 "You do not have permission to do that.", ephemeral=True
             )
             return
+
+        if self.action == "info":
+            await self.show_user_info(interaction)
+            return
+
         await interaction.response.send_message(
             view=SpamConfirmView(self.user_id, self.action), ephemeral=True
         )

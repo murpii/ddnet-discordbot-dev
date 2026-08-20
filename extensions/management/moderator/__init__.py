@@ -7,11 +7,15 @@ from extensions.management.moderator.commands.context_menu import ModeratorCtxMe
 from extensions.management.moderator.views.containers.hub import ModHubView, DiscordModHubView
 from extensions.management.moderator.views.containers.mod_log import ModLogView
 from extensions.management.moderator.views.info import ModeratorInfoButtons
-from extensions.management.moderator.views.spam_actions import SpamModButton
+from extensions.management.moderator.views.buttons.user_info import UserInfoButton
+from extensions.management.moderator.views.spam_actions import SpamModButton, SpamDealtButton
 from extensions.management.moderator.listeners import ModListeners
+from extensions.management.moderator.manager import ModeratorDB
 
 
 async def setup(bot):
+    if bot.moddb is None:
+        bot.moddb = ModeratorDB(bot)
     await bot.add_cog(AutoMod(bot))
     await bot.add_cog(Blacklist(bot))
     await bot.add_cog(ModAppCommands(bot))
@@ -24,4 +28,4 @@ async def setup(bot):
     bot.add_view(view=DiscordModHubView(bot))
     bot.add_view(view=ModLogView(bot))
     bot.add_view(view=ModeratorInfoButtons(bot))
-    bot.add_dynamic_items(SpamModButton)
+    bot.add_dynamic_items(SpamModButton, SpamDealtButton, UserInfoButton)

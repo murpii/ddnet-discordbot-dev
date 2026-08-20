@@ -165,7 +165,7 @@ class ModListeners(commands.Cog):
             f"Invoked by: {invoker.mention}"
         )
         await log_to(
-            self.bot, Channels.LOG_MOD_ACTIONS,
+            self.bot, Channels.LOG_NAMES,
             view=ModLogView(self.bot, msg, thumbnail_url=after.display_avatar.url),
             allowed_mentions=discord.AllowedMentions.none(),
         )
@@ -205,7 +205,7 @@ class ModListeners(commands.Cog):
             f"Invoked by: {invoker.mention}"
         )
         await log_to(
-            self.bot, Channels.LOG_MOD_ACTIONS,
+            self.bot, Channels.LOG_NAMES,
             view=ModLogView(self.bot, msg, thumbnail_url=member.display_avatar.url),
             allowed_mentions=discord.AllowedMentions.none(),
         )

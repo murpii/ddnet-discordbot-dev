@@ -9,7 +9,7 @@ from .manager import Player
 from constants import Channels
 from utils.master_parser import Server, Client, fetch_master_list, find_servers_by_community
 from utils.text import to_discord_timestamp, inline_code, escape_link_label
-from utils.misc import name_filter
+from utils.misc import connect_url, name_filter
 from .layoutview import PlayerfinderView, CustomView
 
 log = logging.getLogger()
@@ -239,7 +239,7 @@ class Overseer(commands.Cog):
             if len(links) >= max_links:
                 break
             if addr := server.normalized_address or "":
-                links.append(f"[[{i}]](https://ddnet.org/connect-to/?addr={addr})")
+                links.append(f"[[{i}]]({connect_url(addr)})")
 
         servers_str = " ".join(links) if links else ""
 

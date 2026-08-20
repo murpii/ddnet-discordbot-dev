@@ -3,9 +3,9 @@ import logging
 import discord
 from discord.ext import commands
 
+from constants import Channels
 from utils.containers import INFO_ACCENT, NoticeView, separator
 from extensions.management.hub import HubButton, staff_guard
-from extensions.management.tester.bans import TESTER_HUB_ROLES
 from extensions.management.tester.views.bans import (
     TestingBanView,
     TestingUnbanView,
@@ -13,7 +13,7 @@ from extensions.management.tester.views.bans import (
     changelog_view,
 )
 from extensions.management.tester.views.channel_tools import TestingReadOnlyView, TestingSlowmodeView
-from extensions.management.tester.views.promote import PromoteStartView
+from extensions.management.tester.views.promote import PROMOTION_ROLES, PromoteStartView
 
 log = logging.getLogger()
 
@@ -23,6 +23,7 @@ class TestingBanButton(HubButton):
         super().__init__(
             bot, label="Ban", custom_id="TesterHub:ban",
             style=discord.ButtonStyle.danger,  # noqa
+            roles="testers",
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -31,7 +32,7 @@ class TestingBanButton(HubButton):
 
 class TestingUnbanButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Unban", custom_id="TesterHub:unban")
+        super().__init__(bot, label="Unban", custom_id="TesterHub:unban", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
         cog = self.bot.get_cog("TesterBans")
@@ -50,7 +51,7 @@ class TestingUnbanButton(HubButton):
 
 class BannedListButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Who is banned", custom_id="TesterHub:banned-list")
+        super().__init__(bot, label="Who is banned", custom_id="TesterHub:banned-list", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
         cog = self.bot.get_cog("TesterBans")
@@ -64,7 +65,7 @@ class BannedListButton(HubButton):
 
 class BanChangelogButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Changelog", custom_id="TesterHub:ban-log")
+        super().__init__(bot, label="Changelog", custom_id="TesterHub:ban-log", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -73,7 +74,7 @@ class BanChangelogButton(HubButton):
 
 class TestingSlowmodeButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Slowmode", custom_id="TesterHub:slowmode")
+        super().__init__(bot, label="Slowmode", custom_id="TesterHub:slowmode", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=TestingSlowmodeView(interaction.guild), ephemeral=True)
@@ -81,21 +82,23 @@ class TestingSlowmodeButton(HubButton):
 
 class TestingReadOnlyButton(HubButton):
     def __init__(self, bot):
-        super().__init__(bot, label="Read-only", custom_id="TesterHub:read-only")
+        super().__init__(bot, label="Read-only", custom_id="TesterHub:read-only", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=TestingReadOnlyView(interaction.guild), ephemeral=True)
 
 
-class SuggestTrialTesterButton(HubButton):
+class SuggestPromotionButton(HubButton):
     def __init__(self, bot):
         super().__init__(
-            bot, label="Suggest Trial Tester", custom_id="TesterHub:promote",
+            bot, label="Suggest promotion", custom_id="TesterHub:promote",
             style=discord.ButtonStyle.primary,  # noqa
         )
 
     async def run(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(view=PromoteStartView(), ephemeral=True)
+        await interaction.response.send_message(
+            view=PromoteStartView(interaction.user), ephemeral=True
+        )
 
 
 class TesterHubView(discord.ui.LayoutView):
@@ -132,17 +135,15 @@ class TesterHubView(discord.ui.LayoutView):
                 discord.ui.ActionRow(TestingSlowmodeButton(bot), TestingReadOnlyButton(bot)),
                 separator(),
                 discord.ui.TextDisplay(
-                    "## Trial Tester suggestion\n"
-                    "Suggest someone for the Trial Tester role. This opens a "
-                    "private vote thread in the tester chat where every "
-                    "Tester can vote. After 3 days, if the vote is in favour, "
-                    "the promotion can be carried out from the thread; the "
-                    "candidate then picks their role variant via DM."
+                    "## Promotions\n"
+                    "Suggest someone for the Trial Tester or Tester role.\n"
+                    "This opens a private vote thread where every Tester can vote.\n"
+                    "After 3 days, if the vote is in favour, the promotion can be carried out from the thread."
                 ),
-                discord.ui.ActionRow(SuggestTrialTesterButton(bot)),
+                discord.ui.ActionRow(SuggestPromotionButton(bot)),
                 accent_colour=INFO_ACCENT,
             )
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await staff_guard(self.cooldown, interaction, roles=TESTER_HUB_ROLES)
+        return await staff_guard(self.cooldown, interaction, roles=PROMOTION_ROLES)

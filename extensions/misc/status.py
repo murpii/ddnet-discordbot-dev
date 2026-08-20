@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from constants import Emojis
-from utils.countryflags import COUNTRYFLAGS
+from utils.countryflags import flag_by_code
 from utils.containers import NoticeView
 from utils.text import to_discord_timestamp
 
@@ -57,16 +57,9 @@ class ServerInfo:
     @property
     def flag(self) -> str:
         if str(self) in {"MAIN", "MASTER", "DB"}:
-            return "🇪🇺"
+            return flag_by_code("EU")
         else:
-            return next(
-                (
-                    value
-                    for key, value in COUNTRYFLAGS.items()
-                    if str(self)[:3] == key[1]
-                ),
-                f"<:flag_unk:{Emojis.FLAG_UNK}>",
-            )
+            return flag_by_code(str(self)[:3], f"<:flag_unk:{Emojis.FLAG_UNK}>")
 
 
 class ServerStatus:

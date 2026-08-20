@@ -1,13 +1,13 @@
 import discord
 
-from extensions.management.hub import HubCog
+from utils.hub import HubCog
 from extensions.management.tester.views.hub_view import TesterHubView
 
 
 class TesterHub(HubCog):
     """Keeps the tester hub message alive in Channels.TESTER_HUB (0 keeps
     the hub disabled until the channel exists). The shared upkeep logic
-    (HubCog) lives in extensions/management/hub.py; channel cleanup is
+    (HubCog) lives in utils/hub.py; channel cleanup is
     NoChat's job (extensions/management/moderator/no_chat.py)."""
 
     hub_channel_attr = "TESTER_HUB"

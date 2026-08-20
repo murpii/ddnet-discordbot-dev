@@ -45,10 +45,12 @@ async def open_user_info_panel(bot, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(view=NoUserInfoView(), ephemeral=True)
         return
 
-    await interaction.response.send_message(view=UserInfoView(bot, info), ephemeral=True)
+    await interaction.response.send_message(
+        view=UserInfoView(bot, info, interaction.user), ephemeral=True
+    )
 
 
-class UserInfoButton(discord.ui.Button):
+class ModLogInfoButton(discord.ui.Button):
     def __init__(self, bot):
         super().__init__(
             label="User Info",
@@ -79,18 +81,18 @@ class ModLogView(discord.ui.LayoutView):
         else:
             entry = discord.ui.TextDisplay(f"{header}\n{text}")
 
-        timestamp = discord.ui.TextDisplay(f"-# {to_discord_timestamp(discord.utils.utcnow(), 'f')}")
+        footer = discord.ui.TextDisplay(f"-# {to_discord_timestamp(discord.utils.utcnow(), 'f')}")
 
         self.add_item(
             discord.ui.Container(
                 entry,
                 separator(),
-                timestamp,
+                discord.ui.ActionRow(ModLogInfoButton(bot)),
                 separator(),
-                discord.ui.ActionRow(UserInfoButton(bot)),
+                footer,
                 accent_colour=ALERT_ACCENT,
             )
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await staff_guard(self.cooldown, interaction)
+        return await staff_guard(self.cooldown, interaction, roles="mods")

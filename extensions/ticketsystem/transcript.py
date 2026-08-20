@@ -1,90 +1,40 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import logging
-import os
-import zipfile
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional, TypeAlias
+from typing import Optional
 
 import discord
 
 from .mappings import TRANSCRIPT_THREADS
 from .ticket import Ticket, TicketCategory
 from .views.containers.transcript import TranscriptContainer
-from constants import Roles
 from utils.checks import is_staff
 from utils.misc import resolve_active_thread
 from utils.text import mask_ip
+from utils.transcript import ChannelTranscript, TranscriptBundle
 
 log = logging.getLogger("tickets")
 
-DEFAULT_MAX_ZIP_SIZE_MB = 8
-DEFAULT_MAX_ATTACHMENT_SIZE_MB = 8
 
-
-def _config_size_bytes(config, option: str, default_mb: int) -> int:
-    """
-    Read an integer megabyte value from the [TRANSCRIPTS] config section and return it
-    in bytes. Falls back to default_mb when the section/option is missing or not a valid
-    integer (e.g. left blank), so a partial config never crashes the close flow.
-    """
-    try:
-        mb = config.getint("TRANSCRIPTS", option, fallback=default_mb)
-    except ValueError:
-        mb = default_mb
-    return mb * 1024 * 1024
-
-
-AttachmentBytes: TypeAlias = bytes
-AttachmentItem: TypeAlias = tuple[str, AttachmentBytes]
-
-
-class FileTooLargeError(Exception):
-    pass
-
-
-@dataclass(slots=True)
-class TranscriptBundle:
-    transcript_path: Path
-    zip_paths: list[Path]
-
-    def __repr__(self) -> str:
-        return json.dumps(
-            {
-                "transcript_path": str(self.transcript_path),
-                "zip_paths": str(self.zip_paths),
-            },
-            indent=4
-        )
-
-
-class TicketTranscript:
+class TicketTranscript(ChannelTranscript):
     """
     Create transcripts + attachment zips for a ticket channel and its threads, then upload them.
     """
 
     def __init__(self, bot, ticket: Ticket):
-        self.bot = bot
-        self.ticket = ticket
-
-        # upload limits are configurable in config.ini (in MB)
-        self.max_zip_size = _config_size_bytes(bot.config, "MAX_ZIP_SIZE_MB", DEFAULT_MAX_ZIP_SIZE_MB)
-        self.max_attachment_size = _config_size_bytes(
-            bot.config, "MAX_ATTACHMENT_SIZE_MB", DEFAULT_MAX_ATTACHMENT_SIZE_MB
+        ticket_dir = Path("data/ticket-system")
+        super().__init__(
+            bot,
+            transcripts_dir=ticket_dir / "transcripts-temp",
+            attachments_dir=ticket_dir / "attachments-temp",
         )
 
-        self.ticket_dir = Path("data/ticket-system")
-        self.transcripts_dir = self.ticket_dir / "transcripts-temp"
-        self.attachments_dir = self.ticket_dir / "attachments-temp"
-
-        self.files_to_cleanup: set[Path] = set()
+        self.ticket = ticket
         self.main_transcript: TranscriptBundle | None = None
         self.thread_transcripts: list[TranscriptBundle] = []
-        self.seen_attachment_names: set[str] = set()
         self.closer: Optional[discord.abc.User] = None
 
     async def run(
@@ -103,10 +53,9 @@ class TicketTranscript:
         await self.send_or_edit(interaction, content="Collecting messages...")
 
         # build ticket channel transcript
-        main_transcript = await self.build_transcript(
-            target=self.ticket.channel,
-            transcript_name=f"{self.sanitize_name(self.ticket.channel.name)}-{self.ticket.channel.id}",
-            interaction=interaction,
+        main_transcript = await self.build(
+            self.ticket.channel,
+            name=f"{self.sanitize_name(self.ticket.channel.name)}-{self.ticket.channel.id}",
             skip_lines=2,
             header_lines=self.info_header(),
         )
@@ -117,208 +66,15 @@ class TicketTranscript:
         self.main_transcript = main_transcript
 
         # Threads transcript if any exist
-        for thread in await self.collect_threads():
-            thread_transcript = await self.build_transcript(
-                target=thread,
-                transcript_name=f"{self.sanitize_name(thread.name)}-{thread.id}",
-                interaction=None,
-                skip_lines=0,
-                header_lines=None,
+        for thread in await self.collect_threads(self.ticket.channel):
+            thread_transcript = await self.build(
+                thread,
+                name=f"{self.sanitize_name(thread.name)}-{thread.id}",
             )
             if thread_transcript:
                 self.thread_transcripts.append(thread_transcript)
 
         await self.upload_files(interaction)
-
-    async def collect_threads(self) -> list[discord.Thread]:
-        threads = list(self.ticket.channel.threads)
-        async for thread in self.ticket.channel.archived_threads(limit=None):
-            threads.append(thread)
-        return threads
-
-    async def build_transcript(
-            self,
-            *,
-            target: discord.abc.Messageable,
-            transcript_name: str,
-            interaction: Optional[discord.Interaction],
-            skip_lines: int,
-            header_lines: Optional[list[str]],
-    ) -> TranscriptBundle | None:
-        messages: list[str] = []
-        attachments: list[AttachmentItem] = []
-
-        if header_lines:
-            messages.extend(header_lines)
-
-        processed_count = 0
-        async for msg in target.history(limit=None, oldest_first=True):
-            # Skips lines (usually the first 2 template messages of a ticket channel)
-            processed_count += 1
-            if processed_count <= skip_lines:
-                continue
-
-            content, attachment_items = await self.process_message(msg)
-            messages.append(content)
-            attachments.extend(attachment_items)
-
-        if not messages:
-            return None
-
-        # Zip attachments (if any) and annotate transcript lines with zip info
-        zip_paths: list[Path] = []
-        if attachments:
-            if interaction:
-                await self.send_or_edit(interaction, content="Compressing files...")
-            zip_paths, name_to_zip = self.compress_files(
-                transcript_name=transcript_name,
-                attachments=attachments,
-            )
-            messages = [self.format_transcript_with_zip_locations(m, name_to_zip) for m in messages]
-
-        # write transcript
-        transcript_path = self.transcripts_dir / f"{transcript_name}.txt"
-        transcript_path.write_text("\n".join(messages), encoding="utf-8")
-
-        # for the cleanup later
-        self.tracked_files(transcript_path)
-        for z in zip_paths:
-            self.tracked_files(z)
-        return TranscriptBundle(transcript_path=transcript_path, zip_paths=zip_paths)
-
-    def compress_files(
-            self, *, transcript_name: str, attachments: Iterable[AttachmentItem]
-    ) -> tuple[list[Path], dict[str, Path]]:
-        zip_paths: list[Path] = []
-        name_to_zip: dict[str, Path] = {}
-
-        zip_number = 1
-        current_size = 0
-        current_zip: zipfile.ZipFile | None = None
-        current_zip_path: Path | None = None
-
-        def open_new_zip() -> tuple[zipfile.ZipFile, Path]:
-            nonlocal zip_number
-            path = self.attachments_dir / f"{transcript_name}_{zip_number}.zip"
-            zip_number += 1
-            return zipfile.ZipFile(path, "w", zipfile.ZIP_STORED), path
-
-        try:
-            for name, data in attachments:
-                data_size = len(data)
-
-                if data_size > self.max_zip_size:
-                    raise ValueError(f"Attachment {name} exceeds MAX_ZIP_SIZE_MB")
-
-                if current_zip is None or current_size + data_size > self.max_zip_size:
-                    if current_zip is not None:
-                        current_zip.close()
-                        zip_paths.append(current_zip_path)
-
-                    current_size = 0
-                    current_zip, current_zip_path = open_new_zip()
-
-                current_zip.writestr(name, data)
-                name_to_zip[name] = current_zip_path
-                current_size += data_size
-
-            if current_zip is not None:
-                current_zip.close()
-                zip_paths.append(current_zip_path)
-
-        finally:
-            with contextlib.suppress(Exception):
-                if current_zip is not None:
-                    current_zip.close()
-
-        return zip_paths, name_to_zip  # noqa
-
-    @staticmethod
-    def format_transcript_with_zip_locations(message: str, name_to_zip: dict[str, Path]) -> str:
-        lines = message.split("\n")
-        out: list[str] = []
-
-        for line in lines:
-            if line.startswith("Attachments:"):
-                out.append(line)
-                continue
-
-            if zip_path := name_to_zip.get(line):
-                out.append(f"{line} (Stored in: {zip_path.name})")
-            else:
-                out.append(line)
-
-        return "\n".join(out)
-
-    async def process_message(self, message: discord.Message) -> tuple[str, list[AttachmentItem]]:
-        created_at = message.created_at.replace(second=0, microsecond=0, tzinfo=None)
-        content = f"{created_at} {message.author}: {message.content}"
-        attachment_items: list[AttachmentItem] = []
-
-        if component_text := self.extract_component_text(message.components):
-            block = "\n".join(component_text)
-            content += block if not message.content else f"\n{block}"
-
-        if message.attachments:
-            content += "\nAttachments:\n"
-            for a in message.attachments:
-                if a.size > self.max_attachment_size:
-                    raise FileTooLargeError(
-                        f"Attachment {a.filename!r} is {a.size / 1024 / 1024:.1f} MB, over the "
-                        f"{self.max_attachment_size // 1024 // 1024} MB limit.\n"
-                        f"Raise MAX_ATTACHMENT_SIZE_MB in config.ini, or delete the attachment "
-                        f"({message.jump_url}) and try again."
-                    )
-                name = self.unique_attachment_name(a.filename)
-                content += f"{name}\n"
-                attachment_items.append((name, await a.read()))
-
-        if message.embeds and message.author.bot:
-            embed = message.embeds[0]
-            content += "\nEmbeds:\n"
-            if embed.title:
-                content += f"Title: {embed.title}\n"
-            if embed.description:
-                content += f"Description: {embed.description}\n"
-            for field in (embed.fields or []):
-                content += f"{field.name}: {field.value}\n"
-
-        return content, attachment_items
-
-    @staticmethod
-    def extract_component_text(components) -> list[str]:
-        lines: list[str] = []
-
-        def walk(items) -> None:
-            for item in items:
-                text = getattr(item, "content", None)
-                if isinstance(text, str) and text:
-                    lines.append(text)
-                if children := getattr(item, "children", None):
-                    walk(children)
-
-        walk(components)
-        return lines
-
-    def unique_attachment_name(self, filename: str) -> str:
-        if filename not in self.seen_attachment_names:
-            self.seen_attachment_names.add(filename)
-            return filename
-
-        if "." in filename:
-            base, ext = filename.rsplit(".", 1)
-            ext = f".{ext}"
-        else:
-            base, ext = filename, ""
-
-        counter = 1
-        new_filename = f"{base}_{counter}{ext}"
-        while new_filename in self.seen_attachment_names:
-            counter += 1
-            new_filename = f"{base}_{counter}{ext}"
-
-        self.seen_attachment_names.add(new_filename)
-        return new_filename
 
     def info_header(self) -> list[str]:
         cat = self.ticket.category
@@ -378,23 +134,8 @@ class TicketTranscript:
             f"and closed by {closed_by}"
         )
 
-        allowed = discord.AllowedMentions(users=False)
-
-        # main transcript first
-        if self.main_transcript:
-            await target_channel.send(
-                header,
-                files=[discord.File(self.main_transcript.transcript_path)],
-                allowed_mentions=allowed,
-            )
-            for zp in self.main_transcript.zip_paths:
-                await target_channel.send(files=[discord.File(zp)], allowed_mentions=allowed)
-
-        # then thread transcripts + zips
-        for bundle in self.thread_transcripts:
-            await target_channel.send(files=[discord.File(bundle.transcript_path)], allowed_mentions=allowed)
-            for zp in bundle.zip_paths:
-                await target_channel.send(files=[discord.File(zp)], allowed_mentions=allowed)
+        bundles = ([self.main_transcript] if self.main_transcript else []) + self.thread_transcripts
+        await self.upload(target_channel, bundles, header)
 
     async def send_or_edit(self, interaction: Optional[discord.Interaction], content: str) -> None:
         # progress is only shown when a user is waiting on an interaction. For an
@@ -412,7 +153,7 @@ class TicketTranscript:
             self.closer
             and is_staff(
                 self.closer,
-                roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR],
+                roles="mods",
             )
         )
 
@@ -436,16 +177,3 @@ class TicketTranscript:
                     transcript_filename=filename,
                 ),
             )
-
-    def cleanup(self) -> None:
-        for path in list(self.files_to_cleanup):
-            with contextlib.suppress(FileNotFoundError):
-                path.unlink()
-
-    def tracked_files(self, path: Path) -> None:
-        self.files_to_cleanup.add(path)
-
-    @staticmethod
-    def sanitize_name(name: str) -> str:
-        # Windows-safe filename sanitization
-        return "".join(c for c in name if c not in r'\/:*?"<>|').strip() or "thread"

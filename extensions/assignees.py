@@ -2,7 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from constants import Guilds, Roles, Channels, WIKI_CURATOR_ROLES
+from constants import Guilds, Roles, Channels
+from utils.checks import staff_only
 
 
 @app_commands.guilds(discord.Object(Guilds.DDNET))
@@ -21,7 +22,7 @@ class Assign(commands.GroupCog):
 
     @app_commands.command(name="wikicontributor", description="Assigns or removes the Wiki Contributor role.")
     @app_commands.describe(member="@mention the user")
-    @app_commands.checks.has_any_role(*WIKI_CURATOR_ROLES, Roles.ADMIN)
+    @staff_only("wiki_curators")
     async def wiki_contributor(
             self,
             interaction: discord.Interaction,

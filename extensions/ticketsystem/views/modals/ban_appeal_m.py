@@ -6,7 +6,12 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from extensions.ticketsystem.channel import build_ticket_channel
-from extensions.ticketsystem.lang.ban_appeal_m import ban_appeal_m, BAN_APPEAL_GATE
+from constants import URLs
+from extensions.ticketsystem.lang.ban_appeal_m import (
+    ban_appeal_m,
+    BAN_APPEAL_GATE,
+    BAN_APPEAL_CLOUDFLARE,
+)
 from extensions.ticketsystem.utils import find_active_bans
 from extensions.ticketsystem.views.containers.ban_appeal.gate import GateContainer, NoticeContainer
 from extensions.ticketsystem.views.containers.ban_appeal.mod_review import ModReviewContainer
@@ -113,6 +118,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         data = AppealData(
             address=self.public_ip.value,
             dnsbl=dnsbl,
+            cloudflare=cloudflare,
             name=self.ingame_name.value,
             reason=self.ban_reason.value if self.ban_reason else "",
             appeal=self.appeal.value if self.appeal else "",
@@ -145,6 +151,20 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
                     ephemeral=True,
                 )
                 return False
+
+            if data.cloudflare:
+                cf_lang = BAN_APPEAL_CLOUDFLARE.get(self.language, BAN_APPEAL_CLOUDFLARE["en"])
+                description = (
+                    f"{cf_lang['description']}\n\n"
+                    f"**{cf_lang['title']}**\n"
+                    f"[{cf_lang['value']}]({URLs.CLOUDFLARE_WARP_DOCS})"
+                )
+                await interaction.followup.send(
+                    view=GateContainer("Cloudflare WARP", description, discord.Colour.red()),
+                    ephemeral=True,
+                )
+                return False
+
             return True
 
         # regular ban appeals gate on an active manual ban

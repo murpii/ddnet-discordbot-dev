@@ -2,12 +2,9 @@ from typing import Optional
 
 import discord
 
-from constants import Roles
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from utils.checks import is_staff
-
-STAFF_ROLES = [Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
 
 
 class BaseConfirmView(discord.ui.LayoutView):
@@ -45,7 +42,7 @@ class BaseConfirmView(discord.ui.LayoutView):
         ticket = await self.ticket_manager.get_ticket(interaction.channel)
         if ticket is None:
             return None
-        if interaction.user != ticket.creator and not is_staff(interaction.user, roles=STAFF_ROLES):
+        if interaction.user != ticket.creator and not is_staff(interaction.user, roles="mods"):
             await interaction.response.send_message(content="This ticket does not belong to you.", ephemeral=True)
             return None
         if ticket.being_closed:

@@ -3,12 +3,12 @@ import difflib
 import json
 import logging
 import os
-import re
 from datetime import datetime, timezone
 from urllib.parse import quote
 
 import aiohttp
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 
 from constants import Channels, URLs
@@ -19,8 +19,6 @@ from utils.text import clip, to_discord_timestamp
 log = logging.getLogger()
 
 STATE_FILE = "data/wiki/wiki_state.json"
-HEADERS = {"User-Agent": "DDNetDiscordBot/1.0 (+https://ddnet.org/)"}
-HEADING_RE = re.compile(r"==+\s*([^=]+?)\s*==+\s*(?:<!--.*?-->\s*)?$")
 
 
 async def fetch_json(session: aiohttp.ClientSession, **params) -> dict:
@@ -28,7 +26,7 @@ async def fetch_json(session: aiohttp.ClientSession, **params) -> dict:
     params.update(format="json", formatversion="2")
     query = {key: str(value) for key, value in params.items()}
 
-    async with session.get(URLs.WIKI_API, params=query, headers=HEADERS) as resp:
+    async with session.get(URLs.WIKI_API, params=query) as resp:
         resp.raise_for_status()
         data = await resp.json()
 
@@ -51,29 +49,6 @@ def format_section_link(title: str, section: str) -> str:
     return f"[`{label}`]({page_url(title, section)})"
 
 
-def find_matching_sections(wikitext: str, keywords: list) -> list:
-    keywords = [keyword.lower() for keyword in keywords]
-    matches = []
-    current = ""
-
-    def add(section: str):
-        if section not in matches:
-            matches.append(section)
-
-    for line in wikitext.splitlines():
-        if heading := HEADING_RE.match(line):
-            current = heading[1].strip()
-            if any(keyword in current.lower() for keyword in keywords):
-                add(current)
-            continue
-
-        lowered = line.lower()
-        if all(keyword in lowered for keyword in keywords):
-            add(current)
-
-    return matches
-
-
 def count_changed_lines(old_text: str, new_text: str) -> tuple:
     """\"added\" and \"removed\" line counts between two revisions"""
     added = removed = 0
@@ -86,7 +61,7 @@ def count_changed_lines(old_text: str, new_text: str) -> tuple:
 
 
 class Wiki(commands.Cog):
-    """$wiki <keyword>: searches the DDNet wiki and links the articles and sections where the keywords appear."""
+    """Searches the DDNet wiki and links the articles and sections where the keywords appear."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -98,60 +73,48 @@ class Wiki(commands.Cog):
     async def cog_unload(self):
         await self.bot.session_manager.close_session(self.__class__.__name__)
 
-    async def search(self, query: str, max_articles: int = 5, max_sections_per_article: int = 3) -> str:
+    async def search(self, query: str, max_results: int = 5) -> str:
         data = await fetch_json(
             self.session,
-            action="query", list="search", srsearch=query, srlimit="10",
+            action="query", list="search",
+            srsearch=query, srlimit="10",
+            srprop="sectiontitle",
         )
         hits = data.get("query", {}).get("search", [])
-        # subpages like "Dragger/es" are translations of the main article
-        hits = [hit for hit in hits if "/" not in hit["title"]][:max_articles]
-        if not hits:
-            return "No articles found."
 
-        data = await fetch_json(
-            self.session,
-            action="query", prop="revisions",
-            rvprop="content", rvslots="main",
-            titles="|".join(hit["title"] for hit in hits),
-        )
-        contents = {}
-        for page in data.get("query", {}).get("pages", []):
-            if revisions := page.get("revisions"):
-                contents[page["title"]] = revisions[0].get("slots", {}).get("main", {}).get("content", "")
-
-        keywords = query.split()
         lines = []
         for hit in hits:
             title = hit["title"]
-            sections = find_matching_sections(contents.get(title, ""), keywords)
-            lines.extend(
-                format_section_link(title, section)
-                for section in sections[:max_sections_per_article]
-            )
-        return "\n".join(lines) if lines else "No matching sections found."
+            if "/" in title:  # skip translated subpages
+                continue
+            lines.append(format_section_link(title, hit.get("sectiontitle", "")))
+            if len(lines) >= max_results:
+                break
 
-    @commands.command(
+        return "\n".join(lines) if lines else "No articles found."
+
+    @app_commands.command(
         name="wiki",
-        description="Search for wiki articles based on a keyword.",
-        usage="<keyword>"
+        description="Search for wiki articles based on a keyword."
     )
-    async def wiki(self, ctx, *keywords):
-        """Usage: $wiki <keyword>"""
-        query = " ".join(keywords)
-
-        if len(query) < 3:
-            await ctx.send("Please enter a keyword that is at least 3 characters long.")
+    @app_commands.describe(keyword="What to search the wiki for")
+    async def wiki(self, interaction: discord.Interaction, keyword: str):
+        if len(keyword) < 3:
+            await interaction.response.send_message(
+                view=NoticeView("Please enter a keyword that is at least 3 characters long."),
+                ephemeral=True,
+            )
             return
 
+        await interaction.response.defer()
         try:
-            text = await self.search(query)
+            text = await self.search(keyword)
         except (aiohttp.ClientError, ValueError) as error:
-            log.warning("Wiki search for %r failed: %s", query, error)
+            log.warning("Wiki search for %r failed: %s", keyword, error)
             text = f"Wiki search failed: {error}"
 
         with contextlib.suppress(discord.Forbidden):
-            await self.bot.reply(message=ctx.message, view=NoticeView(text))
+            await interaction.followup.send(view=NoticeView(text))
 
 
 class WikiChanges(commands.Cog):
@@ -266,7 +229,7 @@ class WikiChanges(commands.Cog):
         text = (
                 f"## {action}: [{change['title']}]({url})\n"
                 f"{clip(summary, 200)}\n"
-                f"-# By {change['user']} -- {to_discord_timestamp(timestamp)} -- revision {rev_id}\n"
+                f"-# By {change['user']} && {to_discord_timestamp(timestamp)}\n"
                 + "\n".join(stats)
         )
 

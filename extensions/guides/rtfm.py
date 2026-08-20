@@ -1,7 +1,7 @@
 import numpy as np
 import pandas
 
-URL = "https://ddnet.org/settingscommands/"
+from constants import URLs
 
 
 def floats_to_int(dictionary: dict) -> None:
@@ -13,7 +13,7 @@ def floats_to_int(dictionary: dict) -> None:
 
 
 def load_tables() -> list:
-    return pandas.read_html(URL)
+    return pandas.read_html(URLs.DDNET_SETTINGS_COMMANDS)
 
 
 def get_setting_names(tables: list) -> list[str]:

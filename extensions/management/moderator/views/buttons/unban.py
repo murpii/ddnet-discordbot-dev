@@ -1,17 +1,24 @@
 from typing import Optional
 import discord
 
+from utils.checks import is_staff
 from extensions.management.moderator.manager import MemberInfo, ModAction, PendingAction
 
 
 class UnbanButton(discord.ui.Button):
-    def __init__(self, bot, member: discord.abc.User):
-        super().__init__(label="Unban", style=discord.ButtonStyle.success)  # noqa
+    def __init__(self, bot, member: discord.abc.User, *, disabled: bool = False):
+        super().__init__(label="Unban", style=discord.ButtonStyle.success, disabled=disabled)  # noqa
         self.bot = bot
         self.db = bot.moddb
         self.member = member
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        if not is_staff(interaction.user, roles="discord_mods"):
+            await interaction.response.send_message(
+                "Only Discord Moderators can unban.", ephemeral=True
+            )
+            return
+
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -51,4 +58,6 @@ class UnbanButton(discord.ui.Button):
             await interaction.response.edit_message(view=NoUserInfoView(notice=notice))
             return
 
-        await interaction.response.edit_message(view=UserInfoView(self.bot, info, notice=notice))
+        await interaction.response.edit_message(
+            view=UserInfoView(self.bot, info, interaction.user, notice=notice)
+        )

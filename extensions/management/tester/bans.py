@@ -15,8 +15,6 @@ log = logging.getLogger()
 
 # channels considered "testing" by the ban system and the channel tools.
 TESTING_CATEGORIES = (Channels.CAT_TESTING, Channels.CAT_WAITING, Channels.CAT_EVALUATED)
-# roles allowed to use the tester hub (checked via staff_guard).
-TESTER_HUB_ROLES = [Roles.ADMIN, Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS]
 
 # users holding any of these cannot be banned from testing.
 PROTECTED_ROLES = [

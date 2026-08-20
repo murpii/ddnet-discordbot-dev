@@ -1,6 +1,6 @@
 import discord
 
-from extensions.management.hub import HubCog
+from utils.hub import HubCog
 from extensions.management.admin.views.hub_view import AdminHubView
 
 

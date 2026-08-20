@@ -1,12 +1,10 @@
 import discord
 
-from constants import Roles
 from utils.checks import is_staff
 from extensions.ticketsystem import actions
 from extensions.ticketsystem.ticket import Ticket, TicketCategory
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 
-STAFF_ROLES = [Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]
 
 CATEGORY_CHOICES = [
     ("Report", TicketCategory.REPORT),
@@ -30,7 +28,7 @@ class CategorySelect(discord.ui.Select):
         super().__init__(placeholder="Change category", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=STAFF_ROLES):
+        if not is_staff(interaction.user, roles="mods"):
             await interaction.response.send_message("Only staff can use this.", ephemeral=True)
             return
 
@@ -52,7 +50,7 @@ class InviteSelect(discord.ui.MentionableSelect):
         super().__init__(placeholder="Invite a user or role", min_values=1, max_values=5)
 
     async def callback(self, interaction: discord.Interaction):
-        if not is_staff(interaction.user, roles=STAFF_ROLES):
+        if not is_staff(interaction.user, roles="mods"):
             await interaction.response.send_message("Only staff can use this.", ephemeral=True)
             return
 

@@ -11,7 +11,8 @@ import discord
 from discord import app_commands, PermissionOverwrite
 from discord.ext import commands
 
-from constants import Guilds, Roles, Emojis
+from constants import Guilds, Emojis
+from utils.checks import staff_only
 from extensions.map_awards import queries
 from extensions.map_awards.container import CategoryResultsView, StatsResultsView
 from utils.misc import get_mapper_urls
@@ -22,10 +23,6 @@ DATA_DIR = "data/events/map-awards"
 file_lock = asyncio.Lock()
 
 log = logging.getLogger(__name__)
-
-
-def predicate(interaction: discord.Interaction) -> bool:
-    return Roles.ADMIN in [role.id for role in interaction.user.roles]
 
 
 class DDNetMapAwards(commands.Cog):
@@ -46,7 +43,7 @@ class DDNetMapAwards(commands.Cog):
         self.year = None
 
     @app_commands.guilds(discord.Object(Guilds.DDNET))
-    @app_commands.check(predicate)
+    @staff_only("admins")
     @app_commands.command(name="map-awards")
     async def generate_poll_menu(self, interaction: discord.Interaction, year: int):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -155,7 +152,7 @@ class DDNetMapAwards(commands.Cog):
         )
 
     @app_commands.guilds(discord.Object(Guilds.DDNET))
-    @app_commands.check(predicate)
+    @staff_only("admins")
     @app_commands.command(name="poll_results")
     async def poll_results(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)

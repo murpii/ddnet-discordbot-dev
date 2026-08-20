@@ -1,14 +1,87 @@
+import re
 from typing import List, Optional
 
 import discord
+from discord.components import Container as ContainerComponent, TextDisplay as TextDisplayComponent
 
 from utils.paginator import Pages, page_nav_row
 from utils.text import clip
 
-# Accent colours shared across the staff containers
-INFO_ACCENT = 3619648  # similar to embeds
-ALERT_ACCENT = discord.Colour.red().value  # log entries and alerts
-AVATAR_PATH = "data/assets/avatar.png"
+INFO_ACCENT = 3619648  # similar to default discord embeds
+ALERT_ACCENT = discord.Colour.red().value
+EMBED_BLOCK = re.compile(
+    r"^[ \t]*\[embed(?::[ \t]*#?(?P<accent>[0-9A-Fa-f]{6}))?\][ \t]*\n"
+    r"(?P<body>.*?)"
+    r"\n[ \t]*\[/embed\][ \t]*$",
+    re.IGNORECASE | re.DOTALL | re.MULTILINE,
+)
+
+
+def has_embed_blocks(text: str) -> bool:
+    return EMBED_BLOCK.search(text) is not None
+
+
+def parse_embed_segments(text: str) -> list:
+    segments = []
+    pos = 0
+    for match in EMBED_BLOCK.finditer(text):
+        if match.start() > pos:
+            segments.append(("text", text[pos:match.start()], None))
+        accent = int(match["accent"], 16) if match["accent"] else None
+        segments.append(("embed", match["body"], accent))
+        pos = match.end()
+    if pos < len(text):
+        segments.append(("text", text[pos:], None))
+    return segments
+
+
+def markup_view(text: str) -> discord.ui.LayoutView:
+    items = []
+    for kind, chunk, accent in parse_embed_segments(text):
+        chunk = chunk.strip("\n")
+        if not chunk.strip():
+            continue
+        if kind == "embed":
+            items.append(discord.ui.Container(
+                discord.ui.TextDisplay(chunk),
+                accent_colour=INFO_ACCENT if accent is None else accent,
+            ))
+        else:
+            items.append(discord.ui.TextDisplay(chunk))
+    if not items:
+        items = [discord.ui.TextDisplay(text.strip() or "...")]
+
+    view = discord.ui.LayoutView(timeout=None)
+    for item in items:
+        view.add_item(item)
+    return view
+
+
+def markup_kwargs(text: str) -> dict:
+    if has_embed_blocks(text):
+        return {"view": markup_view(text)}
+    return {"content": text}
+
+
+def message_markup(message: discord.Message) -> Optional[str]:
+    if not message.flags.components_v2:
+        return None
+    parts = []
+    for component in message.components:
+        if isinstance(component, TextDisplayComponent):
+            parts.append(component.content)
+        elif isinstance(component, ContainerComponent):
+            texts = []
+            for child in component.children:
+                if not isinstance(child, TextDisplayComponent):
+                    return None
+                texts.append(child.content)
+            colour = component.accent_colour
+            accent = f":#{colour.value:06X}" if colour and colour.value != INFO_ACCENT else ""
+            parts.append(f"[embed{accent}]\n" + "\n".join(texts) + "\n[/embed]")
+        else:
+            return None
+    return "\n".join(parts) if parts else None
 
 
 def separator() -> discord.ui.Separator:
@@ -16,19 +89,10 @@ def separator() -> discord.ui.Separator:
 
 
 def avatar_file() -> discord.File:
-    """
-    The bot avatar. Send it together with a GuideView, whose thumbnail
-    references it as attachment://avatar.png
-    """
-    return discord.File(AVATAR_PATH, filename="avatar.png")
+    return discord.File("data/assets/avatar.png", filename="avatar.png")
 
 
 class GuideView(discord.ui.LayoutView):
-    """
-    The standard helper-guide container: markdown text with the bot avatar
-    as thumbnail. Send it together with avatar_file().
-    """
-
     def __init__(self, text: str, *, accent: int = INFO_ACCENT, attachment: Optional[str] = None):
         super().__init__(timeout=None)
         items = [
@@ -43,11 +107,6 @@ class GuideView(discord.ui.LayoutView):
 
 
 class NoticeView(discord.ui.LayoutView):
-    """
-    Bare-bones container with a single block of text. Used for error
-    messages and short statuses where a full panel is not applicable.
-    """
-
     def __init__(self, text: str, *, accent: int = INFO_ACCENT, attachment: Optional[str] = None):
         super().__init__(timeout=None)
         items = [discord.ui.TextDisplay(text)]
@@ -57,9 +116,6 @@ class NoticeView(discord.ui.LayoutView):
 
 
 class PagedLines(discord.ui.LayoutView):
-    """Generic paged list container: a title plus lines, with a Previous/Next
-    row appearing automatically when there is more than one page"""
-
     def __init__(self, title: str, lines: List[str], *, pages: Pages = None, per_page: int = 10):
         super().__init__(timeout=300)
         self.title = title
@@ -78,9 +134,6 @@ class PagedLines(discord.ui.LayoutView):
 
 
 def paged_pairs_view(title: str, pairs, *, empty_note: str, per_page: int = 10) -> PagedLines:
-    """Paged "`key` › value" overview for key/value tables, e.g. the word
-    blacklist (trigger -> response) and the auto-responses. One shared
-    builder instead of one list view class per table."""
     pairs = sorted(pairs)
     lines = [f"`{clip(key, 60)}` › {clip(value, 80)}" for key, value in pairs]
     if not lines:
@@ -89,11 +142,6 @@ def paged_pairs_view(title: str, pairs, *, empty_note: str, per_page: int = 10) 
 
 
 class TargetChannelSelect(discord.ui.ChannelSelect):
-    """
-    Channel picker shared by the channel tools. Stores the picked text
-    channel on the parent view as `target_channel`.
-    """
-
     def __init__(self):
         super().__init__(
             placeholder="Pick a channel",
@@ -109,8 +157,6 @@ class TargetChannelSelect(discord.ui.ChannelSelect):
 
 
 class OptionSelect(discord.ui.Select):
-    """Dropdown that just remembers the picked value on the parent view."""
-
     def __init__(self, placeholder: str, attr: str, options: List[discord.SelectOption]):
         super().__init__(placeholder=placeholder, min_values=1, max_values=1, options=options)
         self.attr = attr
@@ -121,9 +167,6 @@ class OptionSelect(discord.ui.Select):
 
 
 class ChannelToolView(discord.ui.LayoutView):
-    """Base for ephemeral channel tools: a short instruction, a channel
-    picker, and whatever extra rows the subclass adds."""
-
     title = "Channel tool"
     instructions = ""
 

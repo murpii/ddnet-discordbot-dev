@@ -1,48 +1,66 @@
-"""Trial Tester suggestion votes.
-
-The hub button opens PromoteStartView: pick a candidate, write a short
-nomination. Submitting creates a private thread in Channels.TESTER_CHAT
-holding one persistent vote panel (TrialVoteView). Every Tester is
-pulled into the thread and can vote For or Against; the buttons edit the
-panel in place, so the tally is always visible.
-
-The Promote button stays enabled: non-admins need more For than Against
-votes plus a 3-day minimum, while Admins can promote regardless of both
-(the click enforces this). Clicking Promote does
-not assign a role directly: the candidate gets a DM (RoleChoiceView)
-asking whether they want Trial Tester or Trial Tester (excl.
-tournaments); their choice assigns the role and announces it in the
-tester chat. Dismiss is always available and closes the vote without
-promoting.
-
-Vote state lives in data/tester-hub/votes.json keyed by the panel
-message id (see votes.py), so all buttons keep working after restarts:
-setup() registers bare TrialVoteView and RoleChoiceView instances whose
-custom_ids route the clicks of every panel and DM.
-"""
 import logging
 import time
 
 import discord
 from discord.ext import commands, tasks
 
-from constants import Channels, Guilds, Roles
+from constants import Channels, Guilds, Roles, Forums
 from utils.containers import INFO_ACCENT, NoticeView, separator
 from utils.text import clip
-from utils.checks import is_staff
+from utils.checks import is_staff, staff_roles
 from extensions.management.hub import staff_guard
 from extensions.management.tester import votes
-from extensions.management.tester.bans import TESTER_HUB_ROLES
 
 log = logging.getLogger()
 
 # how long a vote has to run before "Promote" can unlock
 PROMOTE_DELAY = 3 * 24 * 60 * 60
 
+# everyone who may open the promotion flow. Trial Testers can only suggest
+# new Trial Testers, full Testers can also suggest Testers.
+PROMOTION_ROLES = staff_roles("testers") + [
+    Roles.TRIAL_TESTER, Roles.TRIAL_TESTER_EXCL_TOURNAMENTS,
+]
+
 ROLE_LABELS = {
     "TRIAL_TESTER": "Trial Tester",
     "TRIAL_TESTER_EXCL_TOURNAMENTS": "Trial Tester (excl. tournaments)",
+    "TESTER": "Tester",
+    "TESTER_EXCL_TOURNAMENTS": "Tester (excl. tournaments)",
 }
+
+TRACKS = {
+    "trial": {
+        "label": "Trial Tester",
+        "channel_id": Channels.TESTER_CHAT,
+        "role_keys": {"normal": "TRIAL_TESTER", "excl": "TRIAL_TESTER_EXCL_TOURNAMENTS"},
+        "blocked_roles": (Roles.TRIAL_TESTER, Roles.TRIAL_TESTER_EXCL_TOURNAMENTS,
+                          Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS),
+        "already_is": "already is a Tester or Trial Tester",
+    },
+    "tester": {
+        "label": "Tester",
+        "channel_id": Channels.TESTER_C,
+        "role_keys": {"normal": "TESTER", "excl": "TESTER_EXCL_TOURNAMENTS"},
+        "blocked_roles": (Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS),
+        "already_is": "already is a Tester",
+    },
+}
+
+
+def track_of(state: dict) -> dict:
+    return TRACKS[state.get("track", "trial")]
+
+
+async def assign_promotion_role(guild, member: discord.Member, role_key: str, *, reason: str) -> None:
+    await member.add_roles(guild.get_role(getattr(Roles, role_key)), reason=reason)
+    if role_key in ("TESTER", "TESTER_EXCL_TOURNAMENTS"):
+        held_trial_roles = [
+            role for role in member.roles
+            if role.id in (Roles.TRIAL_TESTER, Roles.TRIAL_TESTER_EXCL_TOURNAMENTS)
+        ]
+        if held_trial_roles:
+            await member.remove_roles(*held_trial_roles, reason=reason)
 
 
 def vote_counts(state: dict) -> tuple:
@@ -66,61 +84,55 @@ def names_line(label: str, entries: list) -> str:
     return f"**{label} ({len(entries)}):** {clip(names, 600) if names else '-'}"
 
 
-def render_vote_text(state: dict | None) -> str:
-    if not state:  # the bare instance registered for persistence
-        return "# Trial Tester vote"
-
-    in_favour = [vote["name"] for vote in state["votes"].values() if vote["for"]]
-    against = [vote["name"] for vote in state["votes"].values() if not vote["for"]]
-
-    lines = [
-        "# Trial Tester vote",
-        f"**Candidate:** <@{state['candidate_id']}> ({state['candidate_name']})\n",
-        f"Nominated by <@{state['nominator_id']}> <t:{state['started_ts']}:R>",
-        f"**Reasoning:**\n{state['reason']}",
-        "### Votes",
-        names_line("For", in_favour),
-        names_line("Against", against),
-    ]
-
+def vote_status_text(state: dict) -> str:
+    """The closing paragraph of the vote message, depends on how far the vote is"""
     decided = state.get("decided")
+
     if decided is None:
         unlock_ts = state["started_ts"] + PROMOTE_DELAY
         if time.time() < unlock_ts:
-            promote_note = (
-                f"Promote unlocks <t:{unlock_ts}:R> if \"For\" outweighs \"Against\" "
-                "(Admins can override)"
-            )
+            promote_note = f"Promote unlocks <t:{unlock_ts}:R> if \"For\" outweighs \"Against\""
         else:
             promote_note = "Promote is available once \"For\" outweighs \"Against\""
-        lines += [
-            "",
-            f"-# {promote_note}. \nVoting again replaces your previous vote, "
-            "\"Dismiss\" is always available.",
-        ]
-    elif decided["outcome"] == "dismissed":
-        lines += [
-            "",
-            f"**Outcome:** {state['candidate_name']} was not promoted "
-            f"(decided by {decided['by_name']} <t:{decided['ts']}:R>).",
-        ]
-    elif state.get("role_assigned"):
-        lines += [
-            "",
+        return (
+            f"-# {promote_note}.\n"
+            f"-# Voting again replaces your previous vote, \"Dismiss\" is always available."
+        )
+
+    decided_by = f"decided by {decided['by_name']} <t:{decided['ts']}:R>"
+
+    if decided["outcome"] == "dismissed":
+        return f"**Outcome:** {state['candidate_name']} was not promoted ({decided_by})."
+    if state.get("role_assigned"):
+        return (
             f"**Outcome:** {state['candidate_name']} was promoted and got the "
-            f"{ROLE_LABELS[state['role_assigned']]} role "
-            f"(decided by {decided['by_name']} <t:{decided['ts']}:R>).",
-        ]
-    else:
-        lines += [
-            "",
-            f"**Outcome:**\n"
-            f"Promotion approved by {decided['by_name']} "
-            f"<t:{decided['ts']}:R>.\n"
-            f"{state['candidate_name']} picks their "
-            "role via DM, the announcement follows in the tester chat.",
-        ]
-    return "\n".join(lines)
+            f"{ROLE_LABELS[state['role_assigned']]} role ({decided_by})."
+        )
+    return (
+        f"**Outcome:**\n"
+        f"Promotion approved by {decided['by_name']} <t:{decided['ts']}:R>.\n"
+        f"{state['candidate_name']} picks their role via DM, "
+        f"the announcement follows in the tester chat."
+    )
+
+
+def vote_header_text(state: dict) -> str:
+    track = track_of(state)
+    return "\n".join([
+        f"# {track['label']} vote",
+        f"**Candidate:** <@{state['candidate_id']}> ({state['candidate_name']})\n",
+        f"**Reasoning:**\n{state['reason']}",
+    ])
+
+
+def vote_results_text(state: dict) -> str:
+    in_favour = [vote["name"] for vote in state["votes"].values() if vote["for"]]
+    against = [vote["name"] for vote in state["votes"].values() if not vote["for"]]
+    return "\n".join([
+        "### Votes",
+        names_line("For", in_favour),
+        names_line("Against", against),
+    ])
 
 
 class VoteButton(discord.ui.Button):
@@ -151,7 +163,7 @@ class VoteButton(discord.ui.Button):
         }
         state["rendered_ready"] = promote_ready(state)[0]
         votes.set_vote(interaction.message.id, state)
-        await interaction.response.edit_message(view=TrialVoteView(state))
+        await interaction.response.edit_message(view=PromotionVoteView(state))
 
 
 class RetractVoteButton(discord.ui.Button):
@@ -177,12 +189,12 @@ class RetractVoteButton(discord.ui.Button):
 
         state["rendered_ready"] = promote_ready(state)[0]
         votes.set_vote(interaction.message.id, state)
-        await interaction.response.edit_message(view=TrialVoteView(state))
+        await interaction.response.edit_message(view=PromotionVoteView(state))
 
 
 class PromoteButton(discord.ui.Button):
     """
-    Concludes a successful vote. 
+    Concludes a successful vote.
     Note: Does not assign a role itself. The candidate picks the role variant via DM (RoleChoiceView).
     """
 
@@ -244,6 +256,10 @@ class PromoteButton(discord.ui.Button):
 
         await interaction.response.defer()
 
+        track = track_of(state)
+        normal_label = ROLE_LABELS[track["role_keys"]["normal"]]
+        excl_label = ROLE_LABELS[track["role_keys"]["excl"]]
+
         state["decided"] = {
             "outcome": "promoted",
             "by": interaction.user.id,
@@ -252,41 +268,44 @@ class PromoteButton(discord.ui.Button):
         }
 
         try:
-            dm_message = await member.send(view=RoleChoiceView())
+            dm_message = await member.send(view=RoleChoiceView(state.get("track", "trial")))
         except discord.Forbidden:
             # DMs closed: assign the regular role directly so nothing stalls
-            role = interaction.guild.get_role(Roles.TRIAL_TESTER)
+            normal_key = track["role_keys"]["normal"]
             try:
-                await member.add_roles(role, reason=f"Trial Tester vote, concluded by {interaction.user}")
+                await assign_promotion_role(
+                    interaction.guild, member, normal_key,
+                    reason=f"{track['label']} vote, concluded by {interaction.user}",
+                )
             except discord.Forbidden:
                 state["decided"] = None  # vote stays open
                 await interaction.followup.send(
-                    view=NoticeView("I am not allowed to assign the Trial Tester role."),
+                    view=NoticeView(f"I am not allowed to assign the {normal_label} role."),
                     ephemeral=True,
                 )
                 return
 
-            state["role_assigned"] = "TRIAL_TESTER"
-            await announce_promotion(interaction.client, member, "TRIAL_TESTER", chose=False)
+            state["role_assigned"] = normal_key
+            await announce_promotion(interaction.client, member, normal_key, chose=False)
             next_steps = (
                 f"{member.mention} could not be reached via DM, so they got the "
-                "regular Trial Tester role right away. The tester chat has been notified."
+                f"regular {normal_label} role right away. The tester chat has been notified."
             )
         else:
             state["dm_message_id"] = dm_message.id
             next_steps = (
                 f"Vote concluded. {member.mention} received a DM to choose between "
-                "Trial Tester and Trial Tester (excl. tournaments); as soon as they "
+                f"{normal_label} and {excl_label}; as soon as they "
                 "pick, the role is assigned and a message is posted in the tester chat."
             )
 
         votes.set_vote(interaction.message.id, state)
-        await interaction.edit_original_response(view=TrialVoteView(state))
+        await interaction.edit_original_response(view=PromotionVoteView(state))
         await interaction.followup.send(view=NoticeView(next_steps), ephemeral=True)
 
         log.info(
-            "TesterHub: %s concluded the Trial Tester vote for %s: promoted",
-            interaction.user, state["candidate_name"],
+            "TesterHub: %s concluded the %s vote for %s: promoted",
+            interaction.user, track["label"], state["candidate_name"],
         )
         thread = interaction.message.channel
         if isinstance(thread, discord.Thread):
@@ -323,17 +342,17 @@ class DismissButton(discord.ui.Button):
         votes.set_vote(interaction.message.id, state)
 
         log.info(
-            "TesterHub: %s dismissed the Trial Tester vote for %s",
-            interaction.user, state["candidate_name"],
+            "TesterHub: %s dismissed the %s vote for %s",
+            interaction.user, track_of(state)["label"], state["candidate_name"],
         )
-        await interaction.response.edit_message(view=TrialVoteView(state))
+        await interaction.response.edit_message(view=PromotionVoteView(state))
 
         thread = interaction.message.channel
         if isinstance(thread, discord.Thread):
             await thread.edit(archived=True)
 
 
-class TrialVoteView(discord.ui.LayoutView):
+class PromotionVoteView(discord.ui.LayoutView):
     """The vote panel"""
 
     def __init__(self, state: dict = None):
@@ -342,7 +361,16 @@ class TrialVoteView(discord.ui.LayoutView):
             1.0, 2.0, lambda i: i.user.id
         )
 
-        items = [discord.ui.TextDisplay(render_vote_text(state))]
+        if state:
+            items = [
+                discord.ui.TextDisplay(vote_header_text(state)),
+                separator(),
+                discord.ui.TextDisplay(vote_results_text(state)),
+                separator(),
+                discord.ui.TextDisplay(vote_status_text(state)),
+            ]
+        else:
+            items = [discord.ui.TextDisplay("# Promotion vote")]
         if not (state and state.get("decided")):
             items += [
                 separator(),
@@ -359,7 +387,7 @@ class TrialVoteView(discord.ui.LayoutView):
         self.add_item(discord.ui.Container(*items, accent_colour=INFO_ACCENT))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await staff_guard(self.cooldown, interaction, roles=TESTER_HUB_ROLES)
+        return await staff_guard(self.cooldown, interaction, roles="testers")
 
 
 async def announce_promotion(bot, member: discord.Member, role_key: str, *, chose: bool) -> None:
@@ -368,23 +396,29 @@ async def announce_promotion(bot, member: discord.Member, role_key: str, *, chos
         return
     label = ROLE_LABELS[role_key]
     if chose:
-        text = f"🎉 {member.mention} accepted the promotion and chose the {label} role. Welcome aboard!"
+        text = (
+            f"## A new {label} arrived!\n"
+            f"{member.mention} has joined as official {label}. Welcome!\n"
+            f"If you haven't done so already, make sure to read <#{Forums.TESTER_ONBOARDING}>")
     else:
         text = (
-            f"🎉 {member.mention} was promoted to {label}. Welcome aboard!\n"
-            "-# They could not be reached via DM, so they got the regular role."
+            f"## A new {label} arrived!\n"
+            f"{member.mention} was promoted to {label}. Welcome!\n"
+            f"-# They could not be reached via DM, so they got the regular role.\n\n"
+            f"If you haven't done so already, make sure to read <#{Forums.TESTER_ONBOARDING}>"
         )
     await channel.send(view=NoticeView(text), allowed_mentions=discord.AllowedMentions.none())
 
 
 class RoleChoiceButton(discord.ui.Button):
-    def __init__(self, *, excl: bool):
+    def __init__(self, track_key: str = "trial", *, excl: bool):
+        role_key = TRACKS[track_key]["role_keys"]["excl" if excl else "normal"]
         super().__init__(
-            label=ROLE_LABELS["TRIAL_TESTER_EXCL_TOURNAMENTS" if excl else "TRIAL_TESTER"],
+            label=ROLE_LABELS[role_key],
             style=discord.ButtonStyle.secondary if excl else discord.ButtonStyle.primary,  # noqa
             custom_id=f"TrialRoleChoice:{'excl' if excl else 'normal'}",
         )
-        self.role_key = "TRIAL_TESTER_EXCL_TOURNAMENTS" if excl else "TRIAL_TESTER"
+        self.excl = excl
 
     async def callback(self, interaction: discord.Interaction) -> None:
         # this runs in a DM: find the vote this message belongs to
@@ -415,9 +449,13 @@ class RoleChoiceButton(discord.ui.Button):
             )
             return
 
-        role = guild.get_role(getattr(Roles, self.role_key))
+        track = track_of(state)
+        role_key = track["role_keys"]["excl" if self.excl else "normal"]
         try:
-            await member.add_roles(role, reason="Trial Tester vote, role chosen via DM")
+            await assign_promotion_role(
+                guild, member, role_key,
+                reason=f"{track['label']} vote, role chosen via DM",
+            )
         except discord.Forbidden:
             await interaction.response.send_message(
                 view=NoticeView("I am not allowed to assign the role. Please contact a Tester."),
@@ -425,42 +463,60 @@ class RoleChoiceButton(discord.ui.Button):
             )
             return
 
-        state["role_assigned"] = self.role_key
+        state["role_assigned"] = role_key
         all_votes[panel_id] = state
         votes.save_votes(all_votes)
 
-        log.info("TesterHub: %s chose the %s role", member, self.role_key)
-        await interaction.response.edit_message(
-            view=NoticeView(f"You now have the {ROLE_LABELS[self.role_key]} role. Welcome aboard!")
+        log.info("TesterHub: %s chose the %s role", member, role_key)
+        access_lines = (
+            f"<#{Forums.TESTER_ONBOARDING}> for everything guidelines related.\n"
+            f"<#{Channels.TESTER_CHAT}> to chat with all testers internally.\n"
+            f"<#{Channels.TESTER_VOTES}> to vote on decisions.\n"
+            f"<#{Channels.TESTER_HUB}> for Testing channel related controls/moderation."
         )
-        await announce_promotion(interaction.client, member, self.role_key, chose=True)
+
+        if not role_key.startswith("TRIAL"):
+            access_lines += f"\n<#{Channels.TESTER_C}> to chat about promoting other Testers."
+
+        await interaction.response.edit_message(
+            view=NoticeView(
+                f"## Welcome aboard!\n"
+                f"You now have the {ROLE_LABELS[role_key]} role.\n"
+                f"You received access to:\n"
+                f"{access_lines}"
+            )
+        )
+        await announce_promotion(interaction.client, member, role_key, chose=True)
 
 
 class RoleChoiceView(discord.ui.LayoutView):
     """Sent to the candidate via DM after a successful vote"""
 
-    def __init__(self):
+    def __init__(self, track_key: str = "trial"):
         super().__init__(timeout=None)
+        track = TRACKS[track_key]
+        normal_label = ROLE_LABELS[track["role_keys"]["normal"]]
+        excl_label = ROLE_LABELS[track["role_keys"]["excl"]]
         self.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
-                    "# You have been promoted to Trial Tester!\n"
+                    f"# You have been promoted to {track['label']}!\n"
                     "The DDNet testing team voted in your favour. "
                     "Pick which role you would like:\n"
-                    "- **Trial Tester**: the regular role, including access to tournament test maps.\n"
-                    "Keep in mind choosing this map will **disqualify** from taking part in them.\n"
-                    "- **Trial Tester (excl. tournaments)**: the same role, just without the tournament map access."
+                    f"- **{normal_label}**: the regular role, including access to tournament test maps. "
+                    "Keep in mind choosing this role will **disqualify** you from taking part in them.\n"
+                    f"- **{excl_label}**: the same role, just without the tournament map access."
                 ),
                 separator(),
                 discord.ui.ActionRow(
-                    RoleChoiceButton(excl=False), RoleChoiceButton(excl=True)
+                    RoleChoiceButton(track_key, excl=False), RoleChoiceButton(track_key, excl=True)
                 ),
                 accent_colour=INFO_ACCENT,
             )
         )
 
 
-class TrialVotes(commands.Cog):
+class PromotionVotes(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.refresh_panels.start()
@@ -488,12 +544,12 @@ class TrialVotes(commands.Cog):
             try:
                 message = await thread.fetch_message(int(message_id))
                 state["rendered_ready"] = ready
-                await message.edit(view=TrialVoteView(state))
+                await message.edit(view=PromotionVoteView(state))
             except discord.HTTPException:
                 continue  # deleted panel or archived thread
 
             votes.set_vote(int(message_id), state)
-            log.info("TrialVotes: refreshed the vote panel %s (ready=%s)", message_id, ready)
+            log.info("PromotionVotes: refreshed the vote panel %s (ready=%s)", message_id, ready)
 
     @refresh_panels.before_loop
     async def before_refresh(self):
@@ -509,37 +565,59 @@ class CandidateSelect(discord.ui.UserSelect):
         await interaction.response.defer()
 
 
-class NominationModal(discord.ui.Modal, title="Suggest a Trial Tester"):
+class TrackSelect(discord.ui.Select):
+    def __init__(self, allowed_tracks: list):
+        options = [
+            discord.SelectOption(
+                label=TRACKS[track_key]["label"],
+                value=track_key,
+                default=len(allowed_tracks) == 1,
+            )
+            for track_key in allowed_tracks
+        ]
+        super().__init__(
+            placeholder="Pick the role to suggest for",
+            min_values=1, max_values=1, options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.view.track_key = self.values[0]
+        await interaction.response.defer()
+
+
+class NominationModal(discord.ui.Modal):
     reason = discord.ui.Label(
-        text="Why should they become Trial Tester?",
+        text="Why should they be promoted?",
         component=discord.ui.TextInput(
             style=discord.TextStyle.paragraph,  # noqa
             max_length=500,
         ),
     )
 
-    def __init__(self, candidate: discord.Member):
-        super().__init__(timeout=300)
+    def __init__(self, candidate: discord.Member, track_key: str):
+        super().__init__(timeout=300, title=f"Suggest a {TRACKS[track_key]['label']}")
         self.candidate = candidate
+        self.track_key = track_key
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        channel = interaction.client.get_channel(Channels.TESTER_CHAT)
+        track = TRACKS[self.track_key]
+        channel = interaction.client.get_channel(track["channel_id"])
         if channel is None:
             await interaction.edit_original_response(
-                view=NoticeView("The tester chat channel was not found.")
+                view=NoticeView("The vote channel was not found.")
             )
             return
 
         candidate = self.candidate
         try:
             thread = await channel.create_thread(
-                name=f"Trial Tester vote: {candidate.display_name}"[:100],
+                name=f"{track['label']} vote: {candidate.display_name}"[:100],
                 type=discord.ChannelType.private_thread,  # noqa
                 invitable=True,
                 auto_archive_duration=10080,  # 7 days, the maximum
-                reason=f"Trial Tester suggestion by {interaction.user}",
+                reason=f"{track['label']} suggestion by {interaction.user}",
             )
         except discord.Forbidden:
             await interaction.edit_original_response(
@@ -553,6 +631,7 @@ class NominationModal(discord.ui.Modal, title="Suggest a Trial Tester"):
             return
 
         state = {
+            "track": self.track_key,
             "candidate_id": candidate.id,
             "candidate_name": candidate.display_name,
             "nominator_id": interaction.user.id,
@@ -567,7 +646,7 @@ class NominationModal(discord.ui.Modal, title="Suggest a Trial Tester"):
             "role_assigned": None,
         }
         panel = await thread.send(
-            view=TrialVoteView(state),
+            view=PromotionVoteView(state),
             allowed_mentions=discord.AllowedMentions.none(),
         )
         votes.set_vote(panel.id, state)
@@ -578,8 +657,8 @@ class NominationModal(discord.ui.Modal, title="Suggest a Trial Tester"):
         await ping.delete()
 
         log.info(
-            "TesterHub: %s suggested %s as Trial Tester (thread %d)",
-            interaction.user, candidate, thread.id,
+            "TesterHub: %s suggested %s as %s (thread %d)",
+            interaction.user, candidate, track["label"], thread.id,
         )
         await interaction.edit_original_response(
             view=NoticeView(f"Vote thread created: {thread.mention}")
@@ -592,43 +671,51 @@ class StartVoteButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         candidate = self.view.candidate
+        track_key = self.view.track_key
 
         problem = None
-        if candidate is None:
+        if track_key is None:
+            problem = "Pick which role to suggest them for first."
+        elif candidate is None:
             problem = "Pick a candidate first."
         elif not isinstance(candidate, discord.Member):
             problem = "That user is not on this server."
         elif candidate.bot:
             problem = "Bots make poor testers."
-        elif any(role.id in (Roles.TRIAL_TESTER, Roles.TRIAL_TESTER_EXCL_TOURNAMENTS,
-                             Roles.TESTER, Roles.TESTER_EXCL_TOURNAMENTS) for role in candidate.roles):
-            problem = f"{candidate.mention} already is a Tester or Trial Tester."
+        elif any(role.id in TRACKS[track_key]["blocked_roles"] for role in candidate.roles):
+            problem = f"{candidate.mention} {TRACKS[track_key]['already_is']}."
         elif thread_id := votes.open_vote_thread(candidate.id):
             problem = f"There already is an open vote for {candidate.mention}: <#{thread_id}>"
 
         if problem:
             await interaction.response.send_message(view=NoticeView(problem), ephemeral=True)
             return
-        await interaction.response.send_modal(NominationModal(candidate))
+        await interaction.response.send_modal(NominationModal(candidate, track_key))
 
 
 class PromoteStartView(discord.ui.LayoutView):
     """Candidate picker and a button opening the nomination modal"""
 
-    def __init__(self):
+    def __init__(self, user: discord.Member):
         super().__init__(timeout=300)
         self.candidate = None
+
+        allowed_tracks = (
+            ["trial", "tester"] if is_staff(user, roles="testers") else ["trial"]
+        )
+        self.track_key = allowed_tracks[0] if len(allowed_tracks) == 1 else None
 
         self.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
-                    "## Suggest a Trial Tester\n"
-                    "Pick a member, then start the vote. This creates a "
-                    f"private thread in <#{Channels.TESTER_CHAT}> where every "
-                    "Tester is notified and can vote on the promotion."
+                    "## Suggest a promotion\n"
+                    "Pick a member and which role to suggest them for, then "
+                    "start the vote. This creates a private thread where "
+                    "every Tester is notified and can vote on the promotion."
                 ),
                 separator(),
                 discord.ui.ActionRow(CandidateSelect()),
+                discord.ui.ActionRow(TrackSelect(allowed_tracks)),
                 discord.ui.ActionRow(StartVoteButton()),
                 accent_colour=INFO_ACCENT,
             )

@@ -4,14 +4,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.checks import check_dm_channel, is_staff
+from utils.checks import check_dm_channel, is_staff, staff_only
 from . import actions
 from .ticket import TicketCategory
 from .views import buttons
 from .views.confirm import ConfirmView
 from .views.containers.MainMenu import MainMenuContainer
 from .views.modals import ban_appeal_m
-from constants import Guilds, Roles
+from constants import Guilds
 
 
 def predicate(interaction: discord.Interaction) -> bool:
@@ -49,6 +49,7 @@ class TicketSystem(commands.Cog):
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.check(predicate)
+    @staff_only("mods")
     @app_commands.command(name="invite", description="Adds a user or role to the ticket")
     @app_commands.describe(user="@mention the user OR role to invite")
     async def invite(self, interaction: discord.Interaction, user: Union[discord.Member, discord.Role]):
@@ -61,10 +62,6 @@ class TicketSystem(commands.Cog):
         """
         await interaction.response.defer(ephemeral=True, thinking=True)  # noqa
 
-        # technically not required
-        if not is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR]):
-            await interaction.followup.send("Only moderators are allowed to invite.")
-            return
         if (
                 isinstance(user, discord.Role)
                 and user.id == interaction.guild.default_role.id
@@ -88,7 +85,7 @@ class TicketSystem(commands.Cog):
             return
 
         if (
-                not is_staff(interaction.user, roles=[Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR])
+                not is_staff(interaction.user, roles="mods")
                 and interaction.user != ticket.creator
         ):
             await interaction.response.send_message("This ticket does not belong to you.", ephemeral=True)  # noqa
@@ -116,6 +113,7 @@ class TicketSystem(commands.Cog):
 
     @app_commands.guilds(Guilds.DDNET)
     @app_commands.check(predicate)
+    @staff_only("mods")
     @app_commands.command(name="change_category", description="Changes a ticket's category.")
     @app_commands.choices(category=[
         app_commands.Choice(name="Report", value=TicketCategory.REPORT.value),

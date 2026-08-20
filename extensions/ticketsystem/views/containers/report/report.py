@@ -3,6 +3,7 @@ import random
 import discord
 
 from constants import Roles
+from utils.checks import staff_roles
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 
@@ -15,7 +16,7 @@ class ReportContainer(discord.ui.LayoutView):
         # pull from the staff roles directly instead of scanning every guild member.
         staff = list({
             member
-            for role_id in (Roles.ADMIN, Roles.DISCORD_MODERATOR, Roles.MODERATOR)
+            for role_id in staff_roles("mods")
             if (role := guild.get_role(role_id))
             for member in role.members
         })
