@@ -5,6 +5,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from utils.checks import forbidden_report
+
 log = logging.getLogger()
 
 # Custom error handling mappings and messages.
@@ -35,7 +37,7 @@ error_dict = {
     commands.NotOwner: "You are not the owner of this bot.",
     commands.BotMissingPermissions: "The bot is missing the required permissions to use this command.",
     # general
-    discord.Forbidden: "I cannot perform that action. I might be missing permissions: {error}",
+    discord.Forbidden: "I cannot perform that action: {error}",
     discord.NotFound: "The resource I tried to access was not found: {error}",
     discord.HTTPException: "An HTTP error occurred while trying to perform the action: {error}",
 }
@@ -54,6 +56,25 @@ def unwrap_error(error: Exception) -> Exception:
             continue
 
         return error
+
+
+def build_message(error: Exception, fallback: str, channel=None, **fields) -> str:
+    """The message shown to the user for an error.
+
+    The real cause is looked up first, since app commands wrap everything in a
+    CommandInvokeError and that would otherwise hide the mapping. A Forbidden
+    also gets a report of which permission the blocked request needed.
+    """
+    real_error = unwrap_error(error)
+    template = error_dict.get(type(real_error)) or error_dict.get(type(error)) or fallback
+    message = template.format(error=real_error, **fields)
+
+    if isinstance(real_error, discord.Forbidden):
+        report = forbidden_report(real_error, channel)
+        if report:
+            message = f"{message}\n{report}"
+
+    return message
 
 
 # Full trace
@@ -87,7 +108,7 @@ class ErrorHandler(commands.Cog):
 
     async def on_app_command_error(self, interaction, error):
         wrapped_error = error
-        error_message = error_dict.get(type(wrapped_error), self.error_message).format(error=wrapped_error)
+        error_message = build_message(error, self.error_message, interaction.channel)
 
         with contextlib.suppress(discord.Forbidden, discord.HTTPException, discord.NotFound):
             if not interaction.response.is_done():
@@ -104,14 +125,11 @@ class ErrorHandler(commands.Cog):
         if isinstance(wrapped_error, commands.CommandNotFound):
             return
 
-        error_message = error_dict.get(type(wrapped_error), self.error_message).format(
-            error=wrapped_error,
-            ctx=ctx,
-        )
+        error_message = build_message(error, self.error_message, ctx.channel, ctx=ctx)
 
         log_traceback(wrapped_error)
 
-        if type(wrapped_error) not in error_dict:
+        if type(unwrap_error(error)) not in error_dict and type(error) not in error_dict:
             return
 
         await ctx.send(content=error_message, ephemeral=True)

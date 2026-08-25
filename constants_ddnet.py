@@ -37,7 +37,7 @@ class Channels(IntEnum):
     MEDIA_ONLY = 1388810491538968657
     QUESTIONS = 745926398140612678
     WIKI = 871738312849752104
-    WIKI_THREAD = 0
+    WIKI_THREAD = 1453732054444408926
     OFF_TOPIC = 252358080522747904
     MAPPING = 746534464984973323
     BOT_CMDS = 1247016109614567464
@@ -69,10 +69,10 @@ class Channels(IntEnum):
     LOGS = 968485530230743050
 
     # Log sub-threads inside LOGS; 0 = fall back to posting in the LOGS channel
-    LOG_MESSAGES = 0  # message deletions + edits
-    LOG_MOD_ACTIONS = 0  # bans/kicks/timeouts, testing bans, guild pauses
-    LOG_MOD_ALERTS = 0  # blacklist hits, automod spam alerts
-    LOG_NAMES = 0  # nickname and display name changes
+    LOG_MESSAGES = 1541405294914052197  # message deletions + edits
+    LOG_MOD_ACTIONS = 1541405607586963466  # bans/kicks/timeouts, testing bans, guild pauses
+    LOG_MOD_ALERTS = 1541405688243298404  # blacklist hits, automod spam alerts
+    LOG_NAMES = 1541405541505699890  # nickname and display name changes
 
     # Internal
     MOD_C = 534520700548022272

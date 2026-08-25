@@ -2,6 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import ipaddress
+import re
+from urllib.parse import urlsplit
+
 import aiohttp
 from typing import Iterable
 from constants import Roles, Guilds, WIKI_CURATOR_ROLES
@@ -99,6 +102,113 @@ def staff_only(group: str = "staff"):
         return app_commands.checks.has_any_role(*staff_roles(group))(func)
 
     return decorator
+
+
+def missing_permissions(channel, *required: str) -> list[str]:
+    """Which of the required permissions the bot does not have in a channel.
+
+    Args:
+        channel: Any guild channel or thread.
+        *required: discord.Permissions attribute names, e.g. "manage_messages".
+
+    Returns:
+        The missing names, in the order they were passed.
+    """
+    permissions = channel.permissions_for(channel.guild.me)
+    return [name for name in required if not getattr(permissions, name)]
+
+
+def permission_report(channel, *required: str) -> str:
+    """What the bot is missing in a channel and what it has there.
+
+    Meant to be appended to a Forbidden error message, so whoever sees it can
+    fix the channel overwrites without guessing. With no required names it
+    only lists what the bot has.
+    """
+    permissions = channel.permissions_for(channel.guild.me)
+    granted = sorted(name for name, allowed in permissions if allowed)
+
+    lines = []
+    if required:
+        missing = missing_permissions(channel, *required)
+        lines.append(
+            f"Missing in {channel.mention}: {', '.join(missing)}" if missing else
+            f"Has all of {', '.join(required)}, so this is more likely role hierarchy "
+            f"or an overwrite on the target than a channel permission."
+        )
+    lines.append(f"-# {channel.mention} permissions: {', '.join(granted) or 'none'}")
+    return "\n".join(lines)
+
+
+def api_routes() -> list[tuple]:
+    return [
+        ("POST", r"/channels/\d+/messages/bulk-delete$", ("manage_messages", "read_message_history")),
+        ("DELETE", r"/channels/\d+/messages/\d+/reactions", ("manage_messages",)),
+        ("PUT", r"/channels/\d+/messages/\d+/reactions/", ("add_reactions", "read_message_history")),
+        ("POST", r"/channels/\d+/messages/\d+/threads$", ("create_public_threads",)),
+        ("DELETE", r"/channels/\d+/messages/\d+$", ("manage_messages",)),
+        ("POST", r"/channels/\d+/messages$", ("view_channel", "send_messages")),
+        ("GET", r"/channels/\d+/messages", ("view_channel", "read_message_history")),
+        ("PUT|DELETE", r"/channels/\d+/permissions/\d+$", ("manage_roles",)),
+        ("PUT|DELETE", r"/channels/\d+/pins/\d+$", ("manage_messages",)),
+        ("GET|POST", r"/channels/\d+/webhooks$", ("manage_webhooks",)),
+        ("POST", r"/channels/\d+/invites$", ("create_instant_invite",)),
+        ("POST", r"/channels/\d+/threads$", ("create_public_threads",)),
+        ("POST", r"/channels/\d+/typing$", ("send_messages",)),
+        ("PATCH|DELETE", r"/channels/\d+$", ("manage_channels",)),
+        ("PUT|DELETE", r"/guilds/\d+/bans/\d+$", ("ban_members",)),
+        ("DELETE", r"/guilds/\d+/members/\d+$", ("kick_members",)),
+        ("PUT|DELETE", r"/guilds/\d+/members/\d+/roles/\d+$", ("manage_roles",)),
+        # one route covers nickname, roles and timeouts, so all three are candidates
+        ("PATCH", r"/guilds/\d+/members/\d+$", ("manage_roles", "manage_nicknames", "moderate_members")),
+        ("POST", r"/guilds/\d+/channels$", ("manage_channels",)),
+        ("GET", r"/guilds/\d+/audit-logs$", ("view_audit_log",)),
+        ("PATCH", r"/guilds/\d+$", ("manage_guild",)),
+    ]
+
+
+def route_permissions(method: str, url: str) -> list[str]:
+    """Permissions Discord checks for an API route.
+
+    Discord's 403 body never says which permission was missing, but the route
+    it blocked does, so map that route back to what it needs.
+
+    Args:
+        method: HTTP method of the blocked request.
+        url: Its URL or path.
+
+    Returns:
+        The permission names, empty if the route is not in api_routes().
+    """
+    path = urlsplit(str(url)).path
+    method = method.upper()
+    for methods, pattern, permissions in api_routes():
+        if method in methods.split("|") and re.search(pattern, path):
+            return list(permissions)
+    return []
+
+
+def forbidden_report(error, channel=None) -> str:
+    """Why a 403 probably happened, worked out from the request it blocked.
+
+    Args:
+        error: The discord.Forbidden that was raised.
+        channel: Where it happened, so the report can list real permissions.
+
+    Returns:
+        A short report, empty if the route is unknown and there is no channel.
+    """
+    response = getattr(error, "response", None)
+    method = (getattr(response, "method", "") or "").upper()
+    path = urlsplit(str(getattr(response, "url", "") or "")).path
+    needed = route_permissions(method, path)
+
+    if channel is None or getattr(channel, "guild", None) is None:
+        if not needed:
+            return ""
+        return f"Blocked request {method} {path} needs: {', '.join(needed)}"
+
+    return permission_report(channel, *needed)
 
 
 def check_public_ip(ip: str) -> (bool, str | None):
