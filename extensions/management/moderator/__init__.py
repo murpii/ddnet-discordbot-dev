@@ -12,8 +12,13 @@ from extensions.management.moderator.views.spam_actions import SpamModButton, Sp
 from extensions.management.moderator.listeners import ModListeners
 from extensions.management.moderator.manager import ModeratorDB
 
+from typing import TYPE_CHECKING
 
-async def setup(bot):
+if TYPE_CHECKING:
+    from bot import DDNet
+
+
+async def setup(bot: "DDNet"):
     if bot.moddb is None:
         bot.moddb = ModeratorDB(bot)
     await bot.add_cog(AutoMod(bot))

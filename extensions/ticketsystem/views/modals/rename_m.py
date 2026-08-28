@@ -7,9 +7,14 @@ from extensions.ticketsystem.queries import check_common_teamranks
 from extensions.ticketsystem.ticket import Ticket, TicketCategory, RenameData
 from utils.profile import PlayerProfile
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class RenameModal(discord.ui.Modal, title="Rename Ticket"):
-    def __init__(self, bot, ticket: Ticket | None = None):
+    def __init__(self, bot: "DDNet", ticket: Ticket | None = None):
         super().__init__(timeout=None)
         self.bot = bot
         self.ticket_manager = bot.ticket_manager

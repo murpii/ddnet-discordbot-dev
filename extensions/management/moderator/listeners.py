@@ -1,6 +1,6 @@
 import contextlib
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -11,9 +11,12 @@ from utils.misc import resolve_display_name, log_to
 from constants import Guilds, Channels
 from utils.text import to_discord_timestamp
 
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class ModListeners(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.db = bot.moddb
 

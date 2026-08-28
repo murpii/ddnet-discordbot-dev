@@ -3,9 +3,14 @@ import discord
 from utils.checks import is_staff
 from extensions.management.moderator.views.modals.ban import BanModal
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class BanButton(discord.ui.Button):
-    def __init__(self, bot, member: discord.abc.User, *, disabled: bool = False):
+    def __init__(self, bot: "DDNet", member: discord.abc.User, *, disabled: bool = False):
         super().__init__(label="Ban", style=discord.ButtonStyle.danger, disabled=disabled)  # noqa
         self.bot = bot
         self.member = member

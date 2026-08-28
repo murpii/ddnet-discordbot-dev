@@ -12,9 +12,14 @@ from extensions.ticketsystem.views.buttons import (
     CommunityAppButton
 )
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class MainMenuContainer(discord.ui.LayoutView):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         super().__init__(timeout=None)
 

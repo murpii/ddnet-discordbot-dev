@@ -4,6 +4,11 @@ from discord.ext import commands
 
 from extensions.management.admin.views.purge import ChoiceView
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 # noinspection PyUnresolvedReferences
 class Admin(commands.Cog):
@@ -13,7 +18,7 @@ class Admin(commands.Cog):
     run inside the channel that should be purged.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @app_commands.guild_only()

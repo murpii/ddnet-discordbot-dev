@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -7,6 +7,9 @@ from discord.ext import commands
 from utils.text import to_discord_timestamp
 from utils.containers import ALERT_ACCENT, separator
 from extensions.management.hub import staff_guard
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 MENTION_RE = re.compile(r"<@!?(\d+)>")
 
@@ -29,7 +32,7 @@ def find_first_mention_id(message: discord.Message) -> Optional[int]:
     return walk(message.components)
 
 
-async def open_user_info_panel(bot, interaction: discord.Interaction) -> None:
+async def open_user_info_panel(bot: "DDNet", interaction: discord.Interaction) -> None:
     user_id = find_first_mention_id(interaction.message)
     if user_id is None:
         await interaction.response.send_message(
@@ -51,7 +54,7 @@ async def open_user_info_panel(bot, interaction: discord.Interaction) -> None:
 
 
 class ModLogInfoButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             label="User Info",
             style=discord.ButtonStyle.green,  # noqa
@@ -64,7 +67,7 @@ class ModLogInfoButton(discord.ui.Button):
 
 
 class ModLogView(discord.ui.LayoutView):
-    def __init__(self, bot, text: str = "-# Moderation log entry", thumbnail_url: str = None):
+    def __init__(self, bot: "DDNet", text: str = "-# Moderation log entry", thumbnail_url: str = None):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(

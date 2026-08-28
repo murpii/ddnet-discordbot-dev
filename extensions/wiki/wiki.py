@@ -16,6 +16,11 @@ from utils.containers import NoticeView
 from utils.misc import resolve_active_thread
 from utils.text import clip, to_discord_timestamp
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 STATE_FILE = "data/wiki/wiki_state.json"
@@ -63,7 +68,7 @@ def count_changed_lines(old_text: str, new_text: str) -> tuple:
 class Wiki(commands.Cog):
     """Searches the DDNet wiki and links the articles and sections where the keywords appear."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
 
@@ -118,7 +123,7 @@ class Wiki(commands.Cog):
 
 
 class WikiChanges(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
         self.last_rev_id = self.load_last_rev_id()
@@ -240,6 +245,6 @@ class WikiChanges(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-async def setup(bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Wiki(bot))
     await bot.add_cog(WikiChanges(bot))

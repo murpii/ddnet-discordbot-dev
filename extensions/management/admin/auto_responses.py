@@ -6,13 +6,18 @@ from discord.ext import commands
 from constants import Guilds
 from utils.json_helpers import load_map, save_map
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 AUTO_RESPONSES_PATH = "data/config/auto_responses.json"
 
 
 class AutoResponses(commands.Cog):
     """Replies to messages containing configured trigger words"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.responses: dict[str, str] = {}
 
@@ -62,5 +67,5 @@ class AutoResponses(commands.Cog):
                 break
 
 
-async def setup(bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(AutoResponses(bot))

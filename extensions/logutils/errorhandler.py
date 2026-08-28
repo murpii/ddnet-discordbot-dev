@@ -7,6 +7,11 @@ from discord.ext import commands
 
 from utils.checks import forbidden_report
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 # Custom error handling mappings and messages.
@@ -90,7 +95,7 @@ def log_traceback(error: Exception):
 
 
 class ErrorHandler(commands.Cog):
-    def __init__(self, bot) -> None:
+    def __init__(self, bot: "DDNet") -> None:
         self.bot = bot
         self.error_message = "An error occurred. Please try again later."
         bot.tree.error(self.dispatch_to_app_command_handler)
@@ -135,5 +140,5 @@ class ErrorHandler(commands.Cog):
         await ctx.send(content=error_message, ephemeral=True)
 
 
-async def setup(bot: commands.Bot) -> None:
+async def setup(bot: "DDNet") -> None:
     await bot.add_cog(ErrorHandler(bot))

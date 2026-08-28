@@ -15,11 +15,16 @@ from extensions.management.tester.views.bans import (
 from extensions.management.tester.views.channel_tools import TestingReadOnlyView, TestingSlowmodeView
 from extensions.management.tester.views.promote import PROMOTION_ROLES, PromoteStartView
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
 class TestingBanButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Ban", custom_id="TesterHub:ban",
             style=discord.ButtonStyle.danger,  # noqa
@@ -31,7 +36,7 @@ class TestingBanButton(HubButton):
 
 
 class TestingUnbanButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Unban", custom_id="TesterHub:unban", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -50,7 +55,7 @@ class TestingUnbanButton(HubButton):
 
 
 class BannedListButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Who is banned", custom_id="TesterHub:banned-list", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -64,7 +69,7 @@ class BannedListButton(HubButton):
 
 
 class BanChangelogButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Changelog", custom_id="TesterHub:ban-log", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -73,7 +78,7 @@ class BanChangelogButton(HubButton):
 
 
 class TestingSlowmodeButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Slowmode", custom_id="TesterHub:slowmode", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -81,7 +86,7 @@ class TestingSlowmodeButton(HubButton):
 
 
 class TestingReadOnlyButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Read-only", custom_id="TesterHub:read-only", roles="testers")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -89,7 +94,7 @@ class TestingReadOnlyButton(HubButton):
 
 
 class SuggestPromotionButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Suggest promotion", custom_id="TesterHub:promote",
             style=discord.ButtonStyle.primary,  # noqa
@@ -105,7 +110,7 @@ class TesterHubView(discord.ui.LayoutView):
     """The persistent tester hub message. Every flow it opens is
     ephemeral, so the hub message itself never changes."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(

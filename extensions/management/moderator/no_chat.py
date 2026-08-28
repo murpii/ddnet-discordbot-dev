@@ -6,11 +6,16 @@ from discord.ext import commands
 
 from constants import Channels
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
 class NoChat(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @commands.Cog.listener("on_message")

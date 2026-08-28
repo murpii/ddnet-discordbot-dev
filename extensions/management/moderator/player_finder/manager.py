@@ -2,9 +2,12 @@ import ipaddress
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Union, Optional, Any
+from typing import Union, Optional, Any, TYPE_CHECKING
 
 import discord
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 
 @dataclass(slots=True, kw_only=True)
@@ -33,7 +36,7 @@ class Player:
 
 
 class PlayerfinderManager:
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.players = []
 

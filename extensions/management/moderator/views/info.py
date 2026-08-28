@@ -5,9 +5,14 @@ from discord.ui import Button
 from extensions.management.hub import staff_guard
 from extensions.management.moderator.views.containers.mod_log import open_user_info_panel
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class ModeratorInfoButtons(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(

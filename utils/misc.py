@@ -8,11 +8,14 @@ import functools
 import os
 from asyncio.subprocess import PIPE
 from datetime import datetime, timezone
-from typing import Callable, Tuple
+from typing import Callable, Tuple, TYPE_CHECKING
 
 from constants import Emojis, Channels, URLs
 from utils.countryflags import flag_by_ident
 from utils.text import difficulty_stars, slugify2
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +23,7 @@ log = logging.getLogger(__name__)
 DELETE_HISTORY_SECONDS = [0, 3600, 21600, 43200, 86400, 259200, 604800]
 
 
-async def resolve_active_thread(bot, channel_id):
+async def resolve_active_thread(bot: "DDNet", channel_id):
     """Resolve a channel or thread by id, even if it's an archived thread"""
     if not channel_id:
         return None
@@ -41,7 +44,7 @@ async def resolve_active_thread(bot, channel_id):
     return channel
 
 
-async def log_to(bot, thread_id, **send_kwargs):
+async def log_to(bot: "DDNet", thread_id, **send_kwargs):
     """
     Send a staff-log message to one of the LOGS sub-threads
     Falls back to the main LOGS channel when the id is unset (0) or can't be resolved

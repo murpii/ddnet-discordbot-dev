@@ -18,6 +18,11 @@ from extensions.map_awards.container import CategoryResultsView, StatsResultsVie
 from utils.misc import get_mapper_urls
 from utils.text import slugify2
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 ASSETS_DIR = "data/assets/map_backgrounds"
 DATA_DIR = "data/events/map-awards"
 file_lock = asyncio.Lock()
@@ -38,7 +43,7 @@ class DDNetMapAwards(commands.Cog):
         ("🎉", "Fun"),
     ]
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.year = None
 
@@ -318,7 +323,7 @@ class DDNetMapAwards(commands.Cog):
 
 
 class CreateSelects(discord.ui.View):
-    def __init__(self, bot, server, maps, mapper):
+    def __init__(self, bot: "DDNet", server, maps, mapper):
         self.bot = bot
         self.server = server
         self.maps = maps

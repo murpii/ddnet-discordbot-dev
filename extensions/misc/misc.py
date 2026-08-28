@@ -13,11 +13,16 @@ from discord.ext import commands
 from utils.misc import run_process_shell
 from utils.text import human_timedelta
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 GH_URL = "https://github.com/murpii/ddnet-discordbot"
 
 
 class Misc(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
         self.process = psutil.Process()
@@ -133,5 +138,5 @@ class Misc(commands.Cog):
             return
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Misc(bot))

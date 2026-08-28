@@ -5,10 +5,15 @@ from discord.ext import commands
 from constants import Guilds, Roles, Channels
 from utils.checks import staff_only
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 @app_commands.guilds(discord.Object(Guilds.DDNET))
 class Assign(commands.GroupCog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @staticmethod
@@ -66,5 +71,5 @@ class Assign(commands.GroupCog):
         await self.toggle_role(member, testing_role)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Assign(bot))

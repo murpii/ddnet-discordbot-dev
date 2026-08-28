@@ -11,6 +11,11 @@ from utils.checks import is_staff, staff_roles
 from extensions.management.hub import staff_guard
 from extensions.management.tester import votes
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 # how long a vote has to run before "Promote" can unlock
@@ -390,7 +395,7 @@ class PromotionVoteView(discord.ui.LayoutView):
         return await staff_guard(self.cooldown, interaction, roles="testers")
 
 
-async def announce_promotion(bot, member: discord.Member, role_key: str, *, chose: bool) -> None:
+async def announce_promotion(bot: "DDNet", member: discord.Member, role_key: str, *, chose: bool) -> None:
     channel = bot.get_channel(Channels.TESTER_CHAT)
     if channel is None:
         return
@@ -517,7 +522,7 @@ class RoleChoiceView(discord.ui.LayoutView):
 
 
 class PromotionVotes(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.refresh_panels.start()
 

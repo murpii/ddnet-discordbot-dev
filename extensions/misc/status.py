@@ -4,12 +4,15 @@ from discord import app_commands
 import logging
 from collections import namedtuple
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from constants import Emojis
 from utils.countryflags import flag_by_code
 from utils.containers import NoticeView
 from utils.text import to_discord_timestamp
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +101,7 @@ class ServerStatus:
 
 
 class Status(commands.Cog, name="DDNet Status"):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
 
@@ -138,5 +141,5 @@ class Status(commands.Cog, name="DDNet Status"):
             return
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Status(bot))

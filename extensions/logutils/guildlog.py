@@ -4,7 +4,7 @@ import itertools
 import time
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -15,6 +15,9 @@ from utils.containers import separator
 from utils.deletions import bot_deleted
 from extensions.management.moderator.views.buttons.user_info import UserInfoButton
 from constants import Guilds, Channels, Emojis
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 VALID_IMAGE_FORMATS = (".webp", ".jpeg", ".jpg", ".png", ".gif")
 
@@ -75,7 +78,7 @@ class DeletedMessageLog(discord.ui.LayoutView):
 
 
 class GuildLog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self._attachment_cache: dict[int, tuple[float, list[tuple[str, bytes]]]] = {}
         self._attachment_cache_bytes = 0
@@ -302,5 +305,5 @@ class GuildLog(commands.Cog):
                 await message.publish()
 
 
-async def setup(bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(GuildLog(bot))

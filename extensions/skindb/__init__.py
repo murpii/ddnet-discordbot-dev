@@ -24,6 +24,11 @@ from constants import Guilds, Channels, Roles, Emojis
 from utils.image import skin_renderer
 from utils.checks import is_staff
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger("skin_submits")
 
 ERROR_MAP = {
@@ -93,7 +98,7 @@ async def send_to_renderer(message):
 
 
 class SkinDB(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.cache = {}  # im using a dict to store all message ids for now
 
@@ -243,5 +248,5 @@ class SkinDB(commands.Cog):
             await payload.message.clear_reactions()
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(SkinDB(bot))

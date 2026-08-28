@@ -9,6 +9,11 @@ from datetime import datetime, timezone
 
 from utils.misc import get_filename_from_header, ip_matches
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger(__name__)
 
 # Synced active-ban list exported from YADDB
@@ -100,7 +105,7 @@ async def find_or_create_category(
         return new_category
 
 
-async def fetch_rank_from_demo(bot, message: discord.Message, session: aiohttp.ClientSession):
+async def fetch_rank_from_demo(bot: "DDNet", message: discord.Message, session: aiohttp.ClientSession):
     demo_names = []
     for attachment in message.attachments:
         if attachment.filename.endswith(".demo"):

@@ -1,11 +1,14 @@
 from datetime import timedelta
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import discord
 
 from extensions.management.moderator.manager import MemberInfo, PendingAction, ModAction
 from utils.containers import NoticeView
 from utils.text import clip
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 TIMEOUT_DURATION_OPTIONS: List[discord.SelectOption] = [
     discord.SelectOption(label="5 minutes", value="5"),
@@ -38,7 +41,7 @@ class TimeoutModal(discord.ui.Modal, title="Timeout member"):
         ),
     )
 
-    def __init__(self, bot, member: discord.Member):
+    def __init__(self, bot: "DDNet", member: discord.Member):
         super().__init__(timeout=300)
         self.bot = bot
         self.db = bot.moddb

@@ -10,11 +10,16 @@ from constants import Guilds, Roles
 
 from utils.text import datetime_to_unix
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
 class BannerIconEvents(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @staticmethod
@@ -140,7 +145,7 @@ class BannerIconEvents(commands.Cog):
 
 
 class Submit(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         super().__init__(timeout=None)
 
@@ -299,7 +304,7 @@ class Submit(discord.ui.View):
 
 
 class CloseButton(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
 
@@ -319,7 +324,7 @@ class CloseButton(discord.ui.View):
 
 
 class ConfirmButton(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
 
@@ -337,5 +342,5 @@ class ConfirmButton(discord.ui.View):
             return
 
 
-async def setup(bot: commands.Bot) -> None:
+async def setup(bot: "DDNet") -> None:
     await bot.add_cog(BannerIconEvents(bot))

@@ -1,7 +1,7 @@
 import contextlib
 import logging
 import re
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -12,6 +12,9 @@ from utils.json_helpers import load_map, save_map
 from utils.misc import log_to
 from utils.deletions import delete_messages
 from extensions.management.moderator.views.containers.blacklist import BlacklistAlertView
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 log = logging.getLogger()
 
@@ -30,7 +33,7 @@ class Blacklist(commands.Cog):
     Staff, ticket channels and other guilds are exempt.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.words: dict[str, str] = {}  # lowercased trigger -> response
         self.pattern: Optional[re.Pattern] = None

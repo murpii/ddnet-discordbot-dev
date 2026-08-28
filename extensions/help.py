@@ -4,6 +4,11 @@ from discord import app_commands
 
 from utils.checks import is_staff
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 MAX_FIELD_LENGTH = 1024
 MAX_FIELDS = 25
 
@@ -28,7 +33,7 @@ class HelpFormatter:
         return group is None or is_staff(user, roles=group)
 
     @classmethod
-    def collect_commands(cls, bot: commands.Bot, interaction: discord.Interaction) -> dict:
+    def collect_commands(cls, bot: "DDNet", interaction: discord.Interaction) -> dict:
         found = list(bot.tree.walk_commands())
         if interaction.guild is not None:
             found += bot.tree.walk_commands(guild=interaction.guild)
@@ -46,7 +51,7 @@ class HelpFormatter:
         return grouped
 
     @classmethod
-    def build_embed(cls, bot: commands.Bot, interaction: discord.Interaction) -> discord.Embed:
+    def build_embed(cls, bot: "DDNet", interaction: discord.Interaction) -> discord.Embed:
         embed = discord.Embed(
             title="Commands",
             description="Available slash commands",
@@ -66,7 +71,7 @@ class HelpFormatter:
 
 
 class HelpAppCommand(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @app_commands.command(name="help", description="Show available commands")
@@ -75,5 +80,5 @@ class HelpAppCommand(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(HelpAppCommand(bot))

@@ -1,10 +1,13 @@
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
 import discord
 
 from constants import Guilds
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 
 class ModAction(enum.Enum):
@@ -76,7 +79,7 @@ class MemberInfo:
 
 
 class ModeratorDB:
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.actions: dict[int, PendingAction] = {}
 

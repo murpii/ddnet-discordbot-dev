@@ -6,9 +6,14 @@ from extensions.chat.views.echo_modal import EchoModal
 from extensions.chat.views.edit_modal import EditMsgModal
 from utils.containers import message_markup
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class ChatCtxMenu(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: "DDNet") -> None:
         self.bot = bot
 
         # echo message context menu

@@ -3,6 +3,11 @@ from discord.ext import commands
 
 from bot import extensions
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 def chunked(iterable, size):
     for i in range(0, len(iterable), size):
@@ -10,7 +15,7 @@ def chunked(iterable, size):
 
 
 class ExtensionSelect(discord.ui.Select):
-    def __init__(self, bot, action, extensions, index):
+    def __init__(self, bot: "DDNet", action, extensions, index):
         self.bot = bot
         self.action = action
 
@@ -68,7 +73,7 @@ class ExtensionSelect(discord.ui.Select):
 
 
 class ExtensionSelectView(discord.ui.View):
-    def __init__(self, bot, action):
+    def __init__(self, bot: "DDNet", action):
         super().__init__(timeout=120)
         self.bot = bot
         self.action = action

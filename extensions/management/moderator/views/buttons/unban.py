@@ -1,12 +1,15 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import discord
 
 from utils.checks import is_staff
 from extensions.management.moderator.manager import MemberInfo, ModAction, PendingAction
 
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class UnbanButton(discord.ui.Button):
-    def __init__(self, bot, member: discord.abc.User, *, disabled: bool = False):
+    def __init__(self, bot: "DDNet", member: discord.abc.User, *, disabled: bool = False):
         super().__init__(label="Unban", style=discord.ButtonStyle.success, disabled=disabled)  # noqa
         self.bot = bot
         self.db = bot.moddb

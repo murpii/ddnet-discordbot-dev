@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import discord
 
@@ -7,6 +7,9 @@ from utils.containers import NoticeView
 from utils.misc import DELETE_HISTORY_SECONDS
 from utils.text import clip
 from extensions.management.moderator.views.modals.ban import DELETE_HISTORY_OPTIONS
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 
 class KickModal(discord.ui.Modal, title="Kick member"):
@@ -31,7 +34,7 @@ class KickModal(discord.ui.Modal, title="Kick member"):
         ),
     )
 
-    def __init__(self, bot, member: discord.Member):
+    def __init__(self, bot: "DDNet", member: discord.Member):
         super().__init__(timeout=300)
         self.bot = bot
         self.db = bot.moddb

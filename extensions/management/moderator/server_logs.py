@@ -20,6 +20,11 @@ from utils.master_parser import (
 )
 from utils.misc import log_to
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 LOG_DIR = "servers/servers"
@@ -42,7 +47,7 @@ KIND_LABELS = {
 }
 
 
-def location_hosts(bot) -> list[str]:
+def location_hosts(bot: "DDNet") -> list[str]:
     path = bot.config.get("GAMESERVERS", "ALL_LOCATIONS_FILE", fallback="")
     if not path:
         return []
@@ -66,7 +71,7 @@ async def resolve_ips(domain: str) -> list[str]:
     return ips
 
 
-def ssh_command(bot, ssh_host: str, remote_command: str) -> list[str]:
+def ssh_command(bot: "DDNet", ssh_host: str, remote_command: str) -> list[str]:
     command = ["ssh", *SSH_OPTIONS]
     ssh_port = bot.config.get("GAMESERVERS", "SSH_PORT", fallback="")
     if ssh_port:
@@ -80,7 +85,7 @@ def ssh_command(bot, ssh_host: str, remote_command: str) -> list[str]:
     return command
 
 
-async def fetch_log(bot, ssh_host: str, port: int) -> tuple[str, str]:
+async def fetch_log(bot: "DDNet", ssh_host: str, port: int) -> tuple[str, str]:
     remote_command = f"cat {LOG_DIR}/{port}.log 2>/dev/null | tail -c {FETCH_BYTE_CAP}"
     process = await asyncio.create_subprocess_exec(
         *ssh_command(bot, ssh_host, remote_command),
@@ -269,7 +274,7 @@ class ServerLogView(discord.ui.LayoutView):
 
 
 class ServerLogsModal(discord.ui.Modal, title="Fetch a server log"):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -428,7 +433,7 @@ class ServerLogsModal(discord.ui.Modal, title="Fetch a server log"):
 
 
 class ServerLogsButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Fetch logs", custom_id="ModHub:server-logs",
             style=discord.ButtonStyle.primary, roles="game_mods",  # noqa

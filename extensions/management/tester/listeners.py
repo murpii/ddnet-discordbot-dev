@@ -5,9 +5,14 @@ from discord.ext import commands
 
 from constants import Channels, Emojis
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class TesterListeners(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @commands.Cog.listener("on_message")

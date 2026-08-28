@@ -10,6 +10,11 @@ from utils.checks import forbidden_report, missing_permissions, permission_repor
 from utils.containers import markup_kwargs
 from utils.text import render_constants
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 TEMPLATE_DIR = "data/templates"
@@ -103,7 +108,7 @@ def rebuild_permissions() -> tuple:
     )
 
 
-async def send_template(bot, name: str) -> str:
+async def send_template(bot: "DDNet", name: str) -> str:
     """
     Hides the templates channel, purges and resends all of its messages,
     then restores the channels previous visibility.

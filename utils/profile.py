@@ -2,6 +2,11 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import json
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 @dataclass(slots=True, kw_only=True)
 class PlayerProfile:
@@ -21,7 +26,7 @@ class PlayerProfile:
         return json.dumps(data, indent=4)
 
     @classmethod
-    async def from_database(cls, bot, name: str) -> "PlayerProfile":
+    async def from_database(cls, bot: "DDNet", name: str) -> "PlayerProfile":
         fetch_stats = """
                       SELECT (SELECT Points FROM record_points WHERE Name = %s)                                  AS Points,
                              (SELECT Timestamp

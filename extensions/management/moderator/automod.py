@@ -21,6 +21,11 @@ from .views.containers.notices import GhostPingView, SpamAlertView
 from utils.text import extract_address
 from utils.checks import is_staff
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 # If the bot is running into KeyErrors, clear the sqlite cache via the admin hub's "Clear Cache" button.
 os.makedirs("data/cache", exist_ok=True)
 session = CachedSession(cache_name="data/cache/http_cache", expire_after=60 * 60 * 2)
@@ -142,7 +147,7 @@ def fetch_live_stats(addr):
 
 
 class AutoMod(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.message_cache = {}
         self.mod_call = []

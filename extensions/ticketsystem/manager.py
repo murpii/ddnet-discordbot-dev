@@ -3,7 +3,7 @@ import contextlib
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import discord
 
 import extensions.ticketsystem.queries as queries
@@ -14,6 +14,9 @@ from .ticket import Ticket, AppealData, TicketCategory, TicketState, RenameData
 from .transcript import TicketTranscript
 from .cooldown import global_cooldown
 from .views.containers.close import CloseContainer
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 log = logging.getLogger("tickets")
 
@@ -26,7 +29,7 @@ class TicketManager:
         lock (asyncio.Lock): A lock to manage concurrent access to ticket operations.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.tickets = {}
         self.lock = asyncio.Lock()

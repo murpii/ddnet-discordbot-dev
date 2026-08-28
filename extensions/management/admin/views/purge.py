@@ -3,9 +3,14 @@ from discord.ui import Button
 
 from utils.checks import forbidden_report
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class ChoiceView(discord.ui.View):
-    def __init__(self, bot, end, start=None):
+    def __init__(self, bot: "DDNet", end, start=None):
         super().__init__(timeout=None)
         self.bot = bot
         self.end = end

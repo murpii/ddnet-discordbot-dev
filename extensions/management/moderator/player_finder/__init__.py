@@ -1,8 +1,13 @@
 from .manager import PlayerfinderManager
 from .overseer import Overseer
 
+from typing import TYPE_CHECKING
 
-async def setup(bot):
+if TYPE_CHECKING:
+    from bot import DDNet
+
+
+async def setup(bot: "DDNet"):
     if bot.pfm is None:
         bot.pfm = PlayerfinderManager(bot)
     await bot.add_cog(Overseer(bot))

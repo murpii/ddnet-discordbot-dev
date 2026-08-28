@@ -13,6 +13,11 @@ from utils.image import (
 )
 from utils.text import escape_backticks, human_timedelta
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 tiles_filter = [
     "EHOOK_START",
     "HIT_END",
@@ -44,7 +49,7 @@ async def fetch_db(pool, query, *args):
 
 # noinspection PyTypeChecker
 class Profile(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     def source(self, url, timeout: int = 20):
@@ -432,5 +437,5 @@ class Profile(commands.Cog):
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Profile(bot))

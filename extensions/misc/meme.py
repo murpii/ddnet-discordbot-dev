@@ -3,7 +3,7 @@
 
 import asyncio
 from io import BytesIO
-from typing import List, Union
+from typing import List, Union, TYPE_CHECKING
 
 import discord
 from PIL import Image, ImageDraw, ImageFont
@@ -12,6 +12,9 @@ from discord.ext import commands
 
 from utils.image import save, wrap_new, TEXT_LAYOUT
 from constants import Emojis, Channels
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 DIR = "data/assets"
 
@@ -87,7 +90,7 @@ async def render_clown(text1: str, text2: str, text3: str, text4: str) -> BytesI
 
 
 class Memes(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @app_commands.command(
@@ -227,7 +230,7 @@ class Memes(commands.Cog):
 
 
 class Votes(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self._votes = {}
 
@@ -348,6 +351,6 @@ class Votes(commands.Cog):
             return
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Memes(bot))
     await bot.add_cog(Votes(bot))

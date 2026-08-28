@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import discord
 
@@ -6,6 +6,9 @@ from extensions.management.moderator.manager import MemberInfo, PendingAction, M
 from utils.containers import NoticeView
 from utils.misc import DELETE_HISTORY_SECONDS
 from utils.text import clip
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 DELETE_HISTORY_OPTIONS: List[discord.SelectOption] = [
     discord.SelectOption(label="Don't delete any messages", value="0"),
@@ -35,7 +38,7 @@ class BanModal(discord.ui.Modal, title="Ban member"):
         ),
     )
 
-    def __init__(self, bot, member: discord.abc.User):
+    def __init__(self, bot: "DDNet", member: discord.abc.User):
         super().__init__(timeout=None)
         self.bot = bot
         self.db = bot.moddb

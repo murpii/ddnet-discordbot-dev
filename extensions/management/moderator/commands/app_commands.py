@@ -13,6 +13,11 @@ from utils.text import choice_to_timedelta
 from utils.checks import staff_only
 from constants import Guilds
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
@@ -28,7 +33,7 @@ def slow_mode_choices() -> list:
 
 # TODO: Add changelogs for every command.
 class ModAppCommands(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     timeout_group = app_commands.Group(

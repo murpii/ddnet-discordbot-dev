@@ -4,13 +4,18 @@ from extensions.ticketsystem.channel import build_ticket_channel
 from extensions.ticketsystem.views.modals import ban_appeal_m, rename_m
 from extensions.ticketsystem.ticket import Ticket, TicketCategory
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class SimpleTicketButton(discord.ui.Button):
     """Main menu button that opens a ticket immediately, without a modal"""
 
     category: TicketCategory
 
-    def __init__(self, bot, *, label: str, style: discord.ButtonStyle, custom_id: str):
+    def __init__(self, bot: "DDNet", *, label: str, style: discord.ButtonStyle, custom_id: str):
         super().__init__(label=label, style=style, custom_id=custom_id)
         self.bot = bot
         self.ticket_manager = bot.ticket_manager
@@ -28,7 +33,7 @@ class SimpleTicketButton(discord.ui.Button):
 class ReportButton(SimpleTicketButton):
     category = TicketCategory.REPORT
 
-    def __init__(self, bot, label: str = TicketCategory.REPORT.value):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.REPORT.value):
         super().__init__(
             bot,
             label=label,
@@ -40,7 +45,7 @@ class ReportButton(SimpleTicketButton):
 class ComplaintButton(SimpleTicketButton):
     category = TicketCategory.COMPLAINT
 
-    def __init__(self, bot, label: str = TicketCategory.COMPLAINT.value):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.COMPLAINT.value):
         super().__init__(
             bot,
             label=label,
@@ -52,7 +57,7 @@ class ComplaintButton(SimpleTicketButton):
 class AdminMailButton(SimpleTicketButton):
     category = TicketCategory.ADMIN_MAIL
 
-    def __init__(self, bot, label: str = TicketCategory.ADMIN_MAIL.value):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.ADMIN_MAIL.value):
         super().__init__(
             bot,
             label=label,
@@ -64,7 +69,7 @@ class AdminMailButton(SimpleTicketButton):
 class CommunityAppButton(SimpleTicketButton):
     category = TicketCategory.COMMUNITY_APP
 
-    def __init__(self, bot, label: str = TicketCategory.COMMUNITY_APP.value):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.COMMUNITY_APP.value):
         super().__init__(
             bot,
             label=label,
@@ -74,7 +79,7 @@ class CommunityAppButton(SimpleTicketButton):
 
 
 class RenameButton(discord.ui.Button):
-    def __init__(self, bot, label: str = TicketCategory.RENAME.value, ticket=None):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.RENAME.value, ticket=None):
         super().__init__(
             label=label,
             style=discord.ButtonStyle.blurple,  # type: ignore
@@ -94,7 +99,7 @@ class RenameButton(discord.ui.Button):
 
 
 class BanAppealButton(discord.ui.Button):
-    def __init__(self, bot, label: str = TicketCategory.RENAME.value, ticket=None):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.RENAME.value, ticket=None):
         super().__init__(
             label=label,
             style=discord.ButtonStyle.blurple,  # type: ignore
@@ -115,7 +120,7 @@ class BanAppealButton(discord.ui.Button):
 
 
 class VpnBanAppealButton(discord.ui.Button):
-    def __init__(self, bot, label: str = TicketCategory.VPN_BAN_APPEAL.value, ticket=None):
+    def __init__(self, bot: "DDNet", label: str = TicketCategory.VPN_BAN_APPEAL.value, ticket=None):
         super().__init__(
             label=label,
             style=discord.ButtonStyle.blurple,  # type: ignore

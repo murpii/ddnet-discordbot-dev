@@ -12,6 +12,11 @@ from . import rtfm
 from .render import render_guide
 from .store import LANGUAGES, load_guides, normalize_lang
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
@@ -31,7 +36,7 @@ def language_choices() -> list:
 class HelperCommands(commands.Cog, name="Help Commands"):
     __doc__ = "Commands related to help, settings, and lookup utilities."
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.settings = []
         self.tables = rtfm.load_tables()

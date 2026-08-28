@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 
 import discord
 
@@ -7,12 +7,15 @@ from utils.containers import NoticeView, ChannelToolView
 from utils.text import parse_message_url, resolve_role_mentions, resolve_user_mentions
 from extensions.chat.views.echo_modal import EchoModal
 
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 MESSAGE_URL_NOTE = 'Right-click the message and use "Copy Message Link". A plain message ID will not work here.'
 
 
-async def fetch_message_from_url(bot, url: str) -> Tuple[Optional[discord.Message], Optional[str]]:
+async def fetch_message_from_url(bot: "DDNet", url: str) -> Tuple[Optional[discord.Message], Optional[str]]:
     parsed = parse_message_url(url)
     if parsed is None:
         return None, f"That doesn't look like a message URL. {MESSAGE_URL_NOTE}"
@@ -71,7 +74,7 @@ class EditMessageModal(discord.ui.Modal, title="Edit a bot message"):
         ),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -115,7 +118,7 @@ class DeleteMessageModal(discord.ui.Modal, title="Delete a message"):
         component=discord.ui.TextInput(max_length=200),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 

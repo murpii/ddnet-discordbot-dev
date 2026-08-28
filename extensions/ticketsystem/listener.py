@@ -6,13 +6,18 @@ from discord.ext import commands
 from constants import Guilds
 from extensions.ticketsystem.utils import fetch_rank_from_demo
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger("tickets")
 
 
 class TicketListeners(commands.Cog):
     """Holds the ticket system's gateway event listeners"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
         self.ticket_manager = bot.ticket_manager

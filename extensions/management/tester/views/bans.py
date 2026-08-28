@@ -6,6 +6,11 @@ from utils.containers import INFO_ACCENT, NoticeView, OptionSelect, PagedLines, 
 from utils.text import clip
 from extensions.management.tester import queries
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
@@ -20,7 +25,7 @@ def banned_list_view(cog) -> PagedLines:
     return PagedLines(f"Banned from testing: {len(bans)}", lines)
 
 
-async def changelog_view(bot) -> PagedLines:
+async def changelog_view(bot: "DDNet") -> PagedLines:
     """Paged changelog of the latest 200 ban and unban actions"""
     rows = await bot.fetch(queries.SELECT_BAN_LOG, fetchall=True)
 

@@ -16,6 +16,11 @@ from extensions.management.admin.views.extension_picker import ExtensionSelectVi
 from extensions.management.admin.views.templates import TemplateEditView, TemplateRebuildView
 from extensions.management.admin.views.guides import GuidesMenuView
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
@@ -47,7 +52,7 @@ class ActivityModal(discord.ui.Modal, title="Change bot activity"):
         component=discord.ui.TextInput(max_length=100),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -72,7 +77,7 @@ class ActivityModal(discord.ui.Modal, title="Change bot activity"):
 
 
 class ShutdownConfirmView(discord.ui.LayoutView):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=60)
         self.bot = bot
         self.add_item(
@@ -87,7 +92,7 @@ class ShutdownConfirmView(discord.ui.LayoutView):
 
 
 class ConfirmShutdownButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(label="Shut down", style=discord.ButtonStyle.danger)  # noqa
         self.bot = bot
 
@@ -115,7 +120,7 @@ class RenameModal(discord.ui.Modal, title="Rename a player"):
         component=discord.ui.TextInput(max_length=64),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -171,7 +176,7 @@ class AutoResponseAddModal(discord.ui.Modal, title="Add an auto-response"):
         ),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -198,7 +203,7 @@ class AutoResponseRemoveModal(discord.ui.Modal, title="Remove an auto-response")
         component=discord.ui.TextInput(max_length=100),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -219,7 +224,7 @@ class AutoResponseRemoveModal(discord.ui.Modal, title="Remove an auto-response")
 
 
 class BotStatusButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Bot Status", custom_id="AdminHub:status",
             style=discord.ButtonStyle.primary,  # noqa
@@ -250,7 +255,7 @@ class BotStatusButton(HubButton):
 
 
 class ActivityButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Change Activity", custom_id="AdminHub:activity")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -258,7 +263,7 @@ class ActivityButton(HubButton):
 
 
 class ClearCacheButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Clear Cache", custom_id="AdminHub:cache")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -274,7 +279,7 @@ class ClearCacheButton(HubButton):
 class ExtensionActionButton(HubButton):
     """Opens the extension picker"""
 
-    def __init__(self, bot, action: str):
+    def __init__(self, bot: "DDNet", action: str):
         self.action = action  # "load" | "unload" | "reload"
         super().__init__(bot, label=action.capitalize(), custom_id=f"AdminHub:ext-{action}")
 
@@ -287,7 +292,7 @@ class ExtensionActionButton(HubButton):
 
 
 class SyncCommandsButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Sync Commands", custom_id="AdminHub:sync")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -304,7 +309,7 @@ class SyncCommandsButton(HubButton):
 
 
 class ShutdownButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Shutdown", custom_id="AdminHub:shutdown",
             style=discord.ButtonStyle.danger,  # noqa
@@ -315,7 +320,7 @@ class ShutdownButton(HubButton):
 
 
 class RenameButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Rename Player", custom_id="AdminHub:rename",
             style=discord.ButtonStyle.primary,  # noqa
@@ -326,7 +331,7 @@ class RenameButton(HubButton):
 
 
 class AutoResponseListButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Show list", custom_id="AdminHub:ar-list")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -342,7 +347,7 @@ class AutoResponseListButton(HubButton):
 
 
 class AutoResponseAddButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Add", custom_id="AdminHub:ar-add")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -350,7 +355,7 @@ class AutoResponseAddButton(HubButton):
 
 
 class AutoResponseRemoveButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Remove", custom_id="AdminHub:ar-remove")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -360,7 +365,7 @@ class AutoResponseRemoveButton(HubButton):
 class TemplateEditButton(HubButton):
     """Opens the section picker"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Edit Text", custom_id="AdminHub:tpl-edit")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -370,7 +375,7 @@ class TemplateEditButton(HubButton):
 class TemplateRebuildButton(HubButton):
     """Opens the rebuild flow"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Rebuild Channel", custom_id="AdminHub:tpl-rebuild")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -378,7 +383,7 @@ class TemplateRebuildButton(HubButton):
 
 
 class ManageGuidesButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Manage Guides", custom_id="AdminHub:guides")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -386,7 +391,7 @@ class ManageGuidesButton(HubButton):
 
 
 class ImportBansButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Import Bans", custom_id="AdminHub:import-bans")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -400,7 +405,7 @@ class ImportBansButton(HubButton):
 
 
 class ReloadBlacklistButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Reload Blacklist", custom_id="AdminHub:bl-reload")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -423,7 +428,7 @@ class NeglectedReportsModal(discord.ui.Modal, title="Close neglected reports"):
         component=discord.ui.TextInput(placeholder="e.g. 48", max_length=5),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -451,7 +456,7 @@ class NeglectedReportsModal(discord.ui.Modal, title="Close neglected reports"):
 
 
 class ConfirmCloseNeglectedButton(discord.ui.Button):
-    def __init__(self, bot, hours: int):
+    def __init__(self, bot: "DDNet", hours: int):
         super().__init__(label="Close them", style=discord.ButtonStyle.danger)  # noqa
         self.bot = bot
         self.hours = hours
@@ -484,7 +489,7 @@ class CancelCloseNeglectedButton(discord.ui.Button):
 
 
 class ConfirmCloseNeglectedView(discord.ui.LayoutView):
-    def __init__(self, bot, hours: int, count: int):
+    def __init__(self, bot: "DDNet", hours: int, count: int):
         super().__init__(timeout=120)
         self.add_item(
             discord.ui.Container(
@@ -502,7 +507,7 @@ class ConfirmCloseNeglectedView(discord.ui.LayoutView):
 
 
 class CloseNeglectedReportsButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Close Neglected Reports", custom_id="AdminHub:close-neglected")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -510,7 +515,7 @@ class CloseNeglectedReportsButton(HubButton):
 
 
 class TicketCleanupButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Ticket DB Cleanup", custom_id="AdminHub:ticket-cleanup")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -523,7 +528,7 @@ class TicketCleanupButton(HubButton):
 class AdminHubView(discord.ui.LayoutView):
     """The persistent admin hub message and buttons are admin gated"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(

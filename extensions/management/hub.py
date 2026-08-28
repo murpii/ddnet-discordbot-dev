@@ -3,6 +3,11 @@ from discord.ext import commands
 
 from utils.checks import is_staff
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 async def staff_guard(
         cooldown: commands.CooldownMapping,
@@ -28,7 +33,7 @@ async def staff_guard(
 class HubButton(discord.ui.Button):
     """Base for the hubs' persistent buttons / subclasses set label/style/id and implement run()."""
 
-    def __init__(self, bot, *, label: str, custom_id: str,
+    def __init__(self, bot: "DDNet", *, label: str, custom_id: str,
                  style=discord.ButtonStyle.secondary, roles: list | str = None):
         super().__init__(label=label, style=style, custom_id=custom_id)
         self.bot = bot

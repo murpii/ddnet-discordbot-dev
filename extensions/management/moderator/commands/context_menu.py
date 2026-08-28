@@ -7,9 +7,14 @@ from utils.checks import staff_roles
 from extensions.management.moderator.views.modals.ban import BanModal
 from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class ModeratorCtxMenu(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: "DDNet") -> None:
         self.bot = bot
         self.guild = discord.Object(Guilds.DDNET)
 
@@ -58,5 +63,5 @@ class ModeratorCtxMenu(commands.Cog):
         )
 
 
-async def setup(bot: commands.Bot) -> None:
+async def setup(bot: "DDNet") -> None:
     await bot.add_cog(ModeratorCtxMenu(bot))

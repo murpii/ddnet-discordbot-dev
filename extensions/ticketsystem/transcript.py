@@ -4,7 +4,7 @@ import contextlib
 import logging
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import discord
 
@@ -16,6 +16,9 @@ from utils.misc import resolve_active_thread
 from utils.text import mask_ip
 from utils.transcript import ChannelTranscript, TranscriptBundle
 
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger("tickets")
 
 
@@ -24,7 +27,7 @@ class TicketTranscript(ChannelTranscript):
     Create transcripts + attachment zips for a ticket channel and its threads, then upload them.
     """
 
-    def __init__(self, bot, ticket: Ticket):
+    def __init__(self, bot: "DDNet", ticket: Ticket):
         ticket_dir = Path("data/ticket-system")
         super().__init__(
             bot,

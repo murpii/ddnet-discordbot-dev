@@ -6,6 +6,11 @@ from discord.ext import commands
 
 from constants import Channels
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger(__name__)
 
 
@@ -23,7 +28,7 @@ class HubCog(commands.Cog):
     hub_channel_attr: str = ""
     hub_marker: str = ""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.setup = False
         self.hub_message = None

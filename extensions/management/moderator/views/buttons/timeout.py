@@ -2,9 +2,14 @@ import discord
 
 from extensions.management.moderator.views.modals.timeout import TimeoutModal
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class TimeoutButton(discord.ui.Button):
-    def __init__(self, bot, member: discord.Member):
+    def __init__(self, bot: "DDNet", member: discord.Member):
         super().__init__(label="Timeout", style=discord.ButtonStyle.primary)  # noqa
         self.bot = bot
         self.db = bot.moddb

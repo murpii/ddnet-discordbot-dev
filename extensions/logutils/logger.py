@@ -6,6 +6,11 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 if not os.path.exists("logs"):
     os.mkdir("logs")
 
@@ -119,7 +124,7 @@ setup_ratelimit_logging()
 
 
 class Logging(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @commands.Cog.listener()
@@ -136,5 +141,5 @@ class Logging(commands.Cog):
             logging.info("%s used /%s in %s", interaction.user, app_command.name, destination)
 
 
-async def setup(bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Logging(bot))

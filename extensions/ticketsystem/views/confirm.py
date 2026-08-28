@@ -1,10 +1,13 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import discord
 
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from utils.checks import is_staff
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 
 class BaseConfirmView(discord.ui.LayoutView):
@@ -56,7 +59,7 @@ class BaseConfirmView(discord.ui.LayoutView):
 
 
 class ConfirmView(BaseConfirmView):
-    def __init__(self, bot, closing: bool = True, message: Optional[str] = None, prompt: Optional[str] = None):
+    def __init__(self, bot: "DDNet", closing: bool = True, message: Optional[str] = None, prompt: Optional[str] = None):
         super().__init__(bot, closing, message, prompt)
 
         confirm_btn = discord.ui.Button(
@@ -84,7 +87,7 @@ class ConfirmViewStaff(BaseConfirmView):
         "Closing for **inactivity** alerts them of that reason."
     )
 
-    def __init__(self, bot, closing: bool = True, message: Optional[str] = None, prompt: Optional[str] = None):
+    def __init__(self, bot: "DDNet", closing: bool = True, message: Optional[str] = None, prompt: Optional[str] = None):
         super().__init__(bot, closing, message, prompt)
 
         confirm_btn = discord.ui.Button(

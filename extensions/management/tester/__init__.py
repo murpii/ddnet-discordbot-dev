@@ -18,8 +18,13 @@ from extensions.management.tester.listeners import TesterListeners
 from extensions.management.tester.views.hub_view import TesterHubView
 from extensions.management.tester.views.promote import PromotionVotes, PromotionVoteView, RoleChoiceView
 
+from typing import TYPE_CHECKING
 
-async def setup(bot):
+if TYPE_CHECKING:
+    from bot import DDNet
+
+
+async def setup(bot: "DDNet"):
     await bot.add_cog(TesterBans(bot))
     await bot.add_cog(TesterHub(bot))
     await bot.add_cog(PromotionVotes(bot))

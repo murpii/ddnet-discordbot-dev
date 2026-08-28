@@ -1,6 +1,6 @@
 import contextlib
 import re
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -9,9 +9,12 @@ from extensions.chat.views.echo_modal import EchoModal
 from extensions.chat.views.edit_modal import EditMsgModal
 from constants import Guilds
 
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class Botscribe(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @app_commands.guilds(discord.Object(Guilds.DDNET))

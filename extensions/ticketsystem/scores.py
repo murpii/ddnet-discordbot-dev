@@ -5,6 +5,11 @@ import logging
 from discord.ext import commands, tasks
 from constants import Channels
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger("tickets")
 scores_lock = asyncio.Lock()
 
@@ -36,7 +41,7 @@ async def increment_score(user_id: int) -> None:
 class TicketScores(commands.Cog):
     """Owns the hourly task that rebuilds the moderator channel score leaderboard"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.update_scores_topic.start()
 

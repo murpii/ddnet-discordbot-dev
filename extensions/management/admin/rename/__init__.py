@@ -6,6 +6,11 @@ import logging
 
 from constants import Guilds
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger("renames")
 
 
@@ -69,7 +74,7 @@ async def process_rename(
 
 
 class Rename(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
 
     @app_commands.guilds(discord.Object(Guilds.DDNET))
@@ -117,7 +122,7 @@ class Rename(commands.Cog):
 
 
 class RenameButtons(discord.ui.View):
-    def __init__(self, bot, old_name: str, new_name: str):
+    def __init__(self, bot: "DDNet", old_name: str, new_name: str):
         super().__init__(timeout=None)
         self.bot = bot
         self.old_name: str = old_name
@@ -133,5 +138,5 @@ class RenameButtons(discord.ui.View):
         await process_rename(self.bot, interaction, self.old_name, self.new_name)
 
 
-async def setup(bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Rename(bot))

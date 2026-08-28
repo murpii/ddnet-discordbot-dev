@@ -2,9 +2,14 @@ import discord
 from datetime import datetime
 from constants import Emojis
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class Easter(discord.Embed):
-    def __new__(cls, bot, sub_end: int, vote_end: int):
+    def __new__(cls, bot: "DDNet", sub_end: int, vote_end: int):
         try:
             v = bot.get_emoji(Emojis.V)
             b = bot.get_emoji(Emojis.B)

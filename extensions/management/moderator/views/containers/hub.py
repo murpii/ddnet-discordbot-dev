@@ -15,13 +15,18 @@ from extensions.management.moderator.views.containers.messaging import EchoPanel
 from extensions.management.moderator.player_finder.controls import playerfinder_action_rows
 from extensions.management.moderator.server_logs import ServerLogsButton
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 PLAYING_OVERVIEW = " overview"
 
 
 class PlayingModal(discord.ui.Modal, title="Who is playing?"):
-    def __init__(self, bot, games: dict):
+    def __init__(self, bot: "DDNet", games: dict):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -85,7 +90,7 @@ class UserLookupModal(discord.ui.Modal, title="User lookup"):
         component=discord.ui.TextInput(max_length=100),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -129,7 +134,7 @@ class BlacklistAddModal(discord.ui.Modal, title="Blacklist a word"):
         ),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -153,7 +158,7 @@ class BlacklistRemoveModal(discord.ui.Modal, title="Remove a blacklisted word"):
         component=discord.ui.TextInput(max_length=100),
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
 
@@ -172,7 +177,7 @@ class BlacklistRemoveModal(discord.ui.Modal, title="Remove a blacklisted word"):
 
 
 class UserLookupButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="User Lookup", custom_id="DiscordHub:user",
             style=discord.ButtonStyle.primary, roles="mods",  # noqa
@@ -183,7 +188,7 @@ class UserLookupButton(HubButton):
 
 
 class SlowmodeButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Slowmode", custom_id="DiscordHub:slowmode", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -191,7 +196,7 @@ class SlowmodeButton(HubButton):
 
 
 class PurgeButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Purge", custom_id="DiscordHub:purge", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -199,7 +204,7 @@ class PurgeButton(HubButton):
 
 
 class LockButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Lock / Unlock", custom_id="DiscordHub:lock", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -207,7 +212,7 @@ class LockButton(HubButton):
 
 
 class EchoButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Echo Message", custom_id="DiscordHub:echo", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -215,7 +220,7 @@ class EchoButton(HubButton):
 
 
 class EditMessageButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Edit Message", custom_id="DiscordHub:msg-edit", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -223,7 +228,7 @@ class EditMessageButton(HubButton):
 
 
 class DeleteMessageButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Delete Message", custom_id="DiscordHub:msg-delete", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -231,7 +236,7 @@ class DeleteMessageButton(HubButton):
 
 
 class BlacklistShowButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Show list", custom_id="DiscordHub:bl-list", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -251,7 +256,7 @@ class BlacklistShowButton(HubButton):
 
 
 class BlacklistAddButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Add word", custom_id="DiscordHub:bl-add", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -259,7 +264,7 @@ class BlacklistAddButton(HubButton):
 
 
 class BlacklistRemoveButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Remove word", custom_id="DiscordHub:bl-remove", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -267,7 +272,7 @@ class BlacklistRemoveButton(HubButton):
 
 
 class RaidActionButton(HubButton):
-    def __init__(self, bot, *, what: str, pause: bool):
+    def __init__(self, bot: "DDNet", *, what: str, pause: bool):
         self.what = what  # "invites" | "dms"
         self.pause = pause
         label = f"Pause {what} (24h)" if pause else f"Resume {what}"
@@ -311,7 +316,7 @@ class RaidActionButton(HubButton):
 
 
 class WhoIsPlayingButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Activity Scan", custom_id="DiscordHub:playing", roles="mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -325,7 +330,7 @@ class WhoIsPlayingButton(HubButton):
 
 
 class RecentJoinsButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Recent joins", custom_id="DiscordHub:joins", roles="discord_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -357,7 +362,7 @@ class ModHubView(discord.ui.LayoutView):
     The Discord-server tools live on a separate message in the same channel (DiscordModHubView, found below)
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(
@@ -395,7 +400,7 @@ class ModHubView(discord.ui.LayoutView):
 class DiscordModHubView(discord.ui.LayoutView):
     """The Discord moderation tools, kept on a separate message in Channels.MOD_HUB"""
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=None)
         self.bot = bot
         self.cooldown = commands.CooldownMapping.from_cooldown(

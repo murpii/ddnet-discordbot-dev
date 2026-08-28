@@ -12,6 +12,11 @@ from extensions.management.admin.templates import (
     send_template,
 )
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 
@@ -106,7 +111,7 @@ class TemplateEditView(discord.ui.LayoutView):
 
 
 class RebuildChannelButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(label="Purge & Rebuild", style=discord.ButtonStyle.danger)  # noqa
         self.bot = bot
 
@@ -128,7 +133,7 @@ class RebuildChannelButton(discord.ui.Button):
 
 
 class TemplateRebuildView(discord.ui.LayoutView):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(timeout=300)
         self.bot = bot
         self.template = None

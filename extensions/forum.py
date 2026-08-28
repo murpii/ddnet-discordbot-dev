@@ -3,9 +3,12 @@ import contextlib
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Union, TYPE_CHECKING
 
 from constants import Guilds, Forums, ForumTags, Channels
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 
 def is_questions_thread():
@@ -40,7 +43,7 @@ class SolvedReactionCheck:
 
 
 class Forum(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.solved_prompts: dict[int, discord.Message] = {}
 
@@ -194,5 +197,5 @@ class Forum(commands.Cog):
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Forum(bot))

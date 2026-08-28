@@ -12,6 +12,11 @@ from utils.text import to_discord_timestamp, inline_code, escape_link_label
 from utils.misc import connect_url, name_filter
 from .layoutview import PlayerfinderView, CustomView
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 BAN_RE = (
@@ -25,7 +30,7 @@ UNBAN_RE = (
 
 
 class Overseer(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
         self.master_url = "https://master1.ddnet.org/ddnet/15/servers.json"

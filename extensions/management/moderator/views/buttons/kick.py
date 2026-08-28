@@ -3,9 +3,14 @@ import discord
 from utils.checks import is_staff
 from extensions.management.moderator.views.modals.kick import KickModal
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class KickButton(discord.ui.Button):
-    def __init__(self, bot, member: discord.Member, *, disabled: bool = False):
+    def __init__(self, bot: "DDNet", member: discord.Member, *, disabled: bool = False):
         super().__init__(label="Kick", style=discord.ButtonStyle.secondary, disabled=disabled)  # noqa
         self.bot = bot
         self.db = bot.moddb

@@ -11,6 +11,11 @@ from utils.containers import ALERT_ACCENT, NoticeView
 from utils.misc import log_to
 from extensions.management.tester import queries
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 # channels considered "testing" by the ban system and the channel tools.
@@ -43,7 +48,7 @@ class TesterBans(commands.Cog):
     Bookkeeping lives in the shared moderation audit log discordbot_mod_actions (see queries.py)
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.active: dict[int, TestingBan] = {}
         self.setup = False

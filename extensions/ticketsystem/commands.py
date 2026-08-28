@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -13,13 +13,16 @@ from .views.containers.MainMenu import MainMenuContainer
 from .views.modals import ban_appeal_m
 from constants import Guilds
 
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 def predicate(interaction: discord.Interaction) -> bool:
     return interaction.channel.id in interaction.client.ticket_manager.tickets
 
 
 class TicketSystem(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
         self.mentions = set()

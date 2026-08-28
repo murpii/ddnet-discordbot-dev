@@ -1,10 +1,13 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 import discord
 
 from constants import Guilds
 from utils.containers import NoticeView, PagedLines
 from utils.text import clip
+
+if TYPE_CHECKING:
+    from bot import DDNet
 
 # Anything this long that is all digits is treated as an application ID
 # instead of a game name (avoids eating game names like "2048").
@@ -20,13 +23,13 @@ def playing_activities(member: discord.Member) -> list:
     ]
 
 
-def scan_guilds(bot) -> list:
+def scan_guilds(bot: "DDNet") -> list:
     """All guilds, DDNet first: a user's presence is identical in every
     shared guild, so guild order decides which copy wins the dedup."""
     return sorted(bot.guilds, key=lambda guild: guild.id != Guilds.DDNET)
 
 
-def iter_unique_members(bot):
+def iter_unique_members(bot: "DDNet"):
     """Every user the bot can see, once, across all guilds."""
     seen: set = set()
     for guild in scan_guilds(bot):
@@ -37,7 +40,7 @@ def iter_unique_members(bot):
             yield member
 
 
-def collect_games(bot) -> dict:
+def collect_games(bot: "DDNet") -> dict:
     """Snapshot of everything currently being played across all guilds.
     Maps (game name, application ID or None) -> list of members."""
     games: dict[Tuple[str, Optional[int]], List[discord.Member]] = {}
@@ -50,7 +53,7 @@ def collect_games(bot) -> dict:
     return games
 
 
-def find_players(bot, query: str) -> List[Tuple[discord.Member, discord.BaseActivity]]:
+def find_players(bot: "DDNet", query: str) -> List[Tuple[discord.Member, discord.BaseActivity]]:
     """Members playing a specific game. A long all-digit query matches the
     application ID (exact, rich presence only); anything else matches the
     activity name case-insensitively as substring."""
@@ -91,7 +94,7 @@ def describe_player(member: discord.Member, activity) -> str:
     return line
 
 
-def build_playing_view(bot, game: str = None) -> discord.ui.LayoutView:
+def build_playing_view(bot: "DDNet", game: str = None) -> discord.ui.LayoutView:
     """The complete "who is playing" response: an overview of all games when
     `game` is None or blank, otherwise the players of that game (name or
     app ID)."""

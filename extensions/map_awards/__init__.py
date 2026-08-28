@@ -2,8 +2,13 @@ import json
 
 from extensions.map_awards.map_awards import CreateSelects, DDNetMapAwards
 
+from typing import TYPE_CHECKING
 
-async def setup(bot):
+if TYPE_CHECKING:
+    from bot import DDNet
+
+
+async def setup(bot: "DDNet"):
     await bot.add_cog(DDNetMapAwards(bot))
 
     servers = ["Novice", "Moderate", "Brutal", "Insane", "Dummy", "Oldschool", "Solo", "Race", "Fun"]

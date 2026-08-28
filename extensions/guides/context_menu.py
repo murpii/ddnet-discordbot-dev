@@ -6,6 +6,11 @@ from utils.containers import INFO_ACCENT, NoticeView
 from .render import render_guide
 from .store import load_guides, normalize_lang
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 
 class GuidePickSelect(discord.ui.Select):
     def __init__(self, message: discord.Message):
@@ -58,7 +63,7 @@ class GuidePickView(discord.ui.LayoutView):
 
 
 class GuideCtxMenu(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: "DDNet") -> None:
         self.bot = bot
 
         self.reply_with_guide = app_commands.ContextMenu(

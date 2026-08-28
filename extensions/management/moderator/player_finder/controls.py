@@ -9,6 +9,11 @@ from utils.text import choice_to_datetime, to_discord_timestamp
 from extensions.management.hub import HubButton
 from .utils import players
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger()
 
 DURATION_OPTIONS = [
@@ -193,7 +198,7 @@ class PfFindModal(discord.ui.Modal, title="Find online player"):
 
 
 class PfAddButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Add", custom_id="ModHub:pf-add",
             style=discord.ButtonStyle.success, roles="game_mods",  # noqa
@@ -204,7 +209,7 @@ class PfAddButton(HubButton):
 
 
 class PfRemoveButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Remove", custom_id="ModHub:pf-remove",
             style=discord.ButtonStyle.danger, roles="game_mods",  # noqa
@@ -215,7 +220,7 @@ class PfRemoveButton(HubButton):
 
 
 class PfEditButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Edit reason", custom_id="ModHub:pf-edit", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -223,7 +228,7 @@ class PfEditButton(HubButton):
 
 
 class PfInfoButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Query Player", custom_id="ModHub:pf-info", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -231,7 +236,7 @@ class PfInfoButton(HubButton):
 
 
 class PfFindButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Find online", custom_id="ModHub:pf-find", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -239,7 +244,7 @@ class PfFindButton(HubButton):
 
 
 class PfListButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Print List", custom_id="ModHub:pf-list", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
@@ -268,7 +273,7 @@ class PfListButton(HubButton):
 
 
 class PfStartButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Start search", custom_id="ModHub:pf-start",
             style=discord.ButtonStyle.success, roles="game_mods",  # noqa
@@ -293,7 +298,7 @@ class PfStartButton(HubButton):
 
 
 class PfStopButton(HubButton):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         super().__init__(
             bot, label="Stop search", custom_id="ModHub:pf-stop",
             style=discord.ButtonStyle.danger, roles="game_mods",  # noqa
@@ -317,7 +322,7 @@ class PfStopButton(HubButton):
         await interaction.followup.send(view=NoticeView("Search stopped."), ephemeral=True)
 
 
-def playerfinder_action_rows(bot) -> list[discord.ui.Item]:
+def playerfinder_action_rows(bot: "DDNet") -> list[discord.ui.Item]:
     """The playerfinder controls for ModHubView"""
     return [
         discord.ui.ActionRow(

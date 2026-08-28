@@ -7,6 +7,11 @@ from constants import Roles, Emojis
 from utils.containers import INFO_ACCENT, NoticeView, separator
 from utils.hub import HubCog
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger("rolehub")
 ROLE_OFFERS = [
     {
@@ -137,7 +142,7 @@ class RoleHub(HubCog):
         return RoleHubView(avatar_url=avatar_url)
 
 
-async def setup(bot):
+async def setup(bot: "DDNet"):
     if any(offer_role_id(offer) for offer in ROLE_OFFERS):
         bot.add_view(RoleHubView())
     await bot.add_cog(RoleHub(bot))

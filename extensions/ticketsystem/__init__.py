@@ -11,8 +11,13 @@ from extensions.ticketsystem.views.containers.ban_appeal.vpn_ban_appeal import V
 from extensions.ticketsystem.views.containers.admin_mail.community_app import CommunityAppContainer
 from extensions.ticketsystem.views.containers.rename.rename import RenameContainer
 
+from typing import TYPE_CHECKING
 
-async def setup(bot):
+if TYPE_CHECKING:
+    from bot import DDNet
+
+
+async def setup(bot: "DDNet"):
     if bot.ticket_manager is None:
         bot.ticket_manager = TicketManager(bot)
     bot.add_view(view=MainMenuContainer(bot))

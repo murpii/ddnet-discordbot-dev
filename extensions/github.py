@@ -9,6 +9,11 @@ from discord.ext import commands
 
 from constants import Channels
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot import DDNet
+
 log = logging.getLogger(__name__)
 
 _ISSUE_RE = r"(?:(?P<owner>\w+)/)?(?P<repo>[\w-]*)#(?P<id>[5-9]\d|\d{3,})\b"
@@ -79,7 +84,7 @@ class Issue(GithubBase):
 
 
 class Github(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.session = None
         self.ratelimit = GithubRatelimit(0)
@@ -122,5 +127,5 @@ class Github(commands.Cog):
             await message.channel.send("\n".join(links))
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "DDNet"):
     await bot.add_cog(Github(bot))
