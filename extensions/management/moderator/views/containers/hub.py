@@ -1,27 +1,41 @@
 import datetime
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 
 from constants import Channels
-from utils.activity import build_playing_view, collect_games
-from utils.misc import log_to
-from utils.text import to_discord_timestamp, clip
-from utils.containers import INFO_ACCENT, separator, NoticeView, paged_pairs_view
 from extensions.management.hub import HubButton, staff_guard
-from extensions.management.moderator.views.containers.channel_tools import SlowmodeView, PurgeView, LockView
-from extensions.management.moderator.views.containers.messaging import EchoPanel, EditMessageModal, DeleteMessageModal
-from extensions.management.moderator.player_finder.controls import playerfinder_action_rows
+from extensions.management.moderator.player_finder.controls import (
+    PfAddButton,
+    PfEditButton,
+    PfInfoButton,
+    PfListButton,
+    PfRemoveButton,
+    PfStartButton,
+    PfStopButton,
+)
 from extensions.management.moderator.server_logs import ServerLogsButton
-
-from typing import TYPE_CHECKING
+from extensions.management.moderator.views.containers.channel_tools import (
+    LockView,
+    PurgeView,
+    SlowmodeView,
+)
+from extensions.management.moderator.views.containers.messaging import (
+    DeleteMessageModal,
+    EchoPanel,
+    EditMessageModal,
+)
+from utils.activity import build_playing_view, collect_games
+from utils.containers import INFO_ACCENT, NoticeView, paged_pairs_view, separator
+from utils.misc import log_to
+from utils.text import clip, to_discord_timestamp
 
 if TYPE_CHECKING:
     from bot import DDNet
 
 log = logging.getLogger()
-
 PLAYING_OVERVIEW = " overview"
 
 
@@ -112,7 +126,10 @@ class UserLookupModal(discord.ui.Modal, title="User lookup"):
 
         info = await self.bot.moddb.fetch_user_info(user)
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.edit_original_response(view=NoUserInfoView())
             return
@@ -128,7 +145,7 @@ class BlacklistAddModal(discord.ui.Modal, title="Blacklist a word"):
     response = discord.ui.Label(
         text="DM sent to the user (empty = default)",
         component=discord.ui.TextInput(
-            style=discord.TextStyle.paragraph,  # noqa
+            style=discord.TextStyle.paragraph,
             required=False,
             max_length=300,
         ),
@@ -315,7 +332,7 @@ class RaidActionButton(HubButton):
         )
 
 
-class WhoIsPlayingButton(HubButton):
+class ActivityScan(HubButton):
     def __init__(self, bot: "DDNet"):
         super().__init__(bot, label="Activity Scan", custom_id="DiscordHub:playing", roles="mods")
 
@@ -375,16 +392,29 @@ class ModHubView(discord.ui.LayoutView):
                 separator(),
                 discord.ui.TextDisplay(
                     "## Playerfinder\n"
-                    "Watchlist for flagged players. Add or remove names, edit a reason, "
-                    "look one up, dump the full list, search who is online right now, or "
-                    "start/stop the live search."
+                    "Watchlist for flagged/banned players. Add or remove names, edit a reason, "
+                    "look one up, dump the full list or start/stop the live search."
                 ),
-                *playerfinder_action_rows(bot),
+                discord.ui.ActionRow(
+                    PfAddButton(bot), 
+                    PfRemoveButton(bot)
+                ),
+                separator(),
+                discord.ui.ActionRow(
+                    PfEditButton(bot), 
+                    PfInfoButton(bot), 
+                    PfListButton(bot),
+                ),
+                separator(),
+                discord.ui.ActionRow(
+                    PfStartButton(bot), 
+                    PfStopButton(bot)
+                ),
                 separator(),
                 discord.ui.TextDisplay(
                     "## Server logs\n"
-                    "Pull the recent log of an official game server: player chat, "
-                    "joins, leaves, votes and kicks. Pick the location and type the port, "
+                    "**Pulls logs of an official game server**:\n"
+                    "Player chat, joins, leaves, votes and kicks. Pick the location and type the port, "
                     "or type the server as you see it, e.g. `GER:8303` for "
                     "DDNet GER - Brutal on port 8303, or the exact `ip:port`."
                 ),
@@ -421,7 +451,7 @@ class DiscordModHubView(discord.ui.LayoutView):
                     "controls are greyed out for Moderators, as are /ban, /unban, /kick and the "
                     "\"Ban user\" context menu."
                 ),
-                discord.ui.ActionRow(UserLookupButton(bot), WhoIsPlayingButton(bot)),
+                discord.ui.ActionRow(UserLookupButton(bot), ActivityScan(bot)),
                 separator(),
                 discord.ui.TextDisplay(
                     "## Channel tools\n"

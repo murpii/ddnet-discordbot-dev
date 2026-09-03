@@ -2,21 +2,28 @@ import asyncio
 import logging
 import os
 import platform
-import time
 import sys
-from configparser import ConfigParser
-from typing import Optional
+import time
 import traceback
+from configparser import ConfigParser
+from typing import TYPE_CHECKING, Optional
 
 import aiohttp
-from requests_cache import CachedSession
 import asyncmy
 import discord
+from colorama import Back, Fore, Style
 from discord import Intents
 from discord.ext import commands
-from colorama import Back, Fore, Style
+from requests_cache import CachedSession
 
 from constants import Guilds
+
+if TYPE_CHECKING:
+    from extensions.management.moderator.manager import ModeratorDB
+    from extensions.management.moderator.player_finder.manager import (
+        PlayerfinderManager,
+    )
+    from extensions.ticketsystem.manager import TicketManager
 
 config = ConfigParser()
 config.read("config.ini")
@@ -98,9 +105,9 @@ class DDNet(commands.Bot):
 
         self.pool = kwargs.pop("pool")
         self.config = kwargs.pop("config")
-        self.ticket_manager = None  # extensions.ticketsystem
-        self.pfm = None  # extensions.management.moderator.player_finder
-        self.moddb = None  # extensions.management.moderator
+        self.ticket_manager: TicketManager = None  # type: ignore[assignment]
+        self.pfm: PlayerfinderManager = None  # type: ignore[assignment]
+        self.moddb: ModeratorDB = None  # type: ignore[assignment]
         os.makedirs("data/cache", exist_ok=True)
         self.request_cache = CachedSession(
             cache_name="data/cache/http_cache", backend="sqlite", expire_after=60 * 60 * 2
@@ -231,14 +238,18 @@ class DDNet(commands.Bot):
             reference.fail_if_not_exists = False
         return await message.channel.send(content, reference=reference, **kwargs)
 
-    async def get_or_fetch_member(self, *, guild: discord.Guild, user_id: int) -> discord.Member | discord.User | None:
-        try:
-            return guild.get_member(user_id) or await guild.fetch_member(user_id)
-        except discord.NotFound:
+    async def get_or_fetch_member(
+        self, *, guild: discord.Guild | None, user_id: int
+    ) -> discord.Member | discord.User | None:
+        if guild is not None:
             try:
-                return await self.fetch_user(user_id)
+                return guild.get_member(user_id) or await guild.fetch_member(user_id)
             except discord.NotFound:
-                return None
+                pass
+        try:
+            return await self.fetch_user(user_id)
+        except discord.NotFound:
+            return None
 
 
 class SessionManager:

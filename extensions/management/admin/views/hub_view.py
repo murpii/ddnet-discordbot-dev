@@ -2,21 +2,23 @@ import contextlib
 import datetime
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import discord
 import psutil
 from discord.ext import commands
 
 from constants import Channels, Guilds, Roles
-from utils.containers import INFO_ACCENT, separator, NoticeView, paged_pairs_view
-from utils.text import to_discord_timestamp
-from extensions.management.hub import HubButton, staff_guard
-from extensions.management.admin.rename import process_rename, RenameButtons
+from extensions.management.admin.rename import RenameButtons, process_rename
 from extensions.management.admin.views.extension_picker import ExtensionSelectView
-from extensions.management.admin.views.templates import TemplateEditView, TemplateRebuildView
 from extensions.management.admin.views.guides import GuidesMenuView
-
-from typing import TYPE_CHECKING
+from extensions.management.admin.views.templates import (
+    TemplateEditView,
+    TemplateRebuildView,
+)
+from extensions.management.hub import HubButton, staff_guard
+from utils.containers import INFO_ACCENT, NoticeView, paged_pairs_view, separator
+from utils.text import to_discord_timestamp
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -541,11 +543,12 @@ class AdminHubView(discord.ui.LayoutView):
                 separator(),
                 discord.ui.TextDisplay(
                     "## Bot management\n"
-                    "Status, presence, cache, and shutdown."
+                    "Status, presence, and cache."
                 ),
                 discord.ui.ActionRow(
-                    BotStatusButton(bot), ActivityButton(bot),
-                    ClearCacheButton(bot), ShutdownButton(bot),
+                    BotStatusButton(bot),
+                    ActivityButton(bot),
+                    ClearCacheButton(bot),
                 ),
                 discord.ui.TextDisplay(
                     "### Extensions\n"
@@ -558,9 +561,12 @@ class AdminHubView(discord.ui.LayoutView):
                 ),
                 discord.ui.TextDisplay(
                     "### Maintenance\n"
-                    "Slash command sync, ban import, blacklist reload, cleaning orphaned "
-                    "ticket rows, and bulk-closing Report tickets that have gone unanswered "
-                    "for a chosen number of hours (closes them with the neglect apology)."
+                    "**Slash command sync**: Syncs all app commands to Discord.\n"
+                    "**Ban Import**: Imports all Discord bans to the DDNet database.\n"
+                    "**Blacklist reload**: reloads the blacklist from the DDNet database.\n"
+                    "**Ticket Cleanup**: Cleans up the ticket database by removing ticket IDs which no longer exist.\n"
+                    "**Close Neglected Reports**: Bulk closes unanswered report tickets"
+                    "for a chosen number of hours."
                 ),
                 discord.ui.ActionRow(
                     SyncCommandsButton(bot), ImportBansButton(bot),
@@ -587,18 +593,23 @@ class AdminHubView(discord.ui.LayoutView):
                 discord.ui.TextDisplay(
                     "## Content\n"
                     "**Channel templates (welcome / testing-info):**\n"
-                    "Edit and preview a section, then rebuild the channel to apply it.\n\n"
-                    "**Guide commands (`$`-prefix commands):**\n"
+                    "Edit and preview a section, then rebuild the channel to apply it."
+                ),
+                discord.ui.ActionRow(
+                    TemplateEditButton(bot), TemplateRebuildButton(bot)
+                ),
+                discord.ui.TextDisplay(
+                    "**Guide commands:**\n"
                     "Add, Edit or Remove guide commands."
                 ),
                 discord.ui.ActionRow(
-                    TemplateEditButton(bot), TemplateRebuildButton(bot), ManageGuidesButton(bot),
+                    ManageGuidesButton(bot)
                 ),
                 separator(),
                 discord.ui.TextDisplay(
                     "## Player rename\n"
                     "Renames a player in the DDNet database.\n"
-                    "-# Also available as /rename (same checks and confirmation), available to admins only."
+                    "-# Also available as /rename, available to admins only."
                 ),
                 discord.ui.ActionRow(RenameButton(bot)),
                 accent_colour=INFO_ACCENT,

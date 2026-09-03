@@ -1,15 +1,15 @@
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import discord
 
-from utils.containers import NoticeView, separator
+from extensions.management.hub import HubButton
+from utils.containers import NoticeView
 from utils.misc import connect_url
 from utils.text import choice_to_datetime, to_discord_timestamp
-from extensions.management.hub import HubButton
-from .utils import players
 
-from typing import TYPE_CHECKING
+from .utils import players
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -320,16 +320,3 @@ class PfStopButton(HubButton):
         cog.overseer.cancel()
         await cog.clean_up()
         await interaction.followup.send(view=NoticeView("Search stopped."), ephemeral=True)
-
-
-def playerfinder_action_rows(bot: "DDNet") -> list[discord.ui.Item]:
-    """The playerfinder controls for ModHubView"""
-    return [
-        discord.ui.ActionRow(
-            PfAddButton(bot), PfRemoveButton(bot)),
-        separator(),
-        discord.ui.ActionRow(
-            PfEditButton(bot), PfInfoButton(bot), PfListButton(bot), PfFindButton(bot)),
-        separator(),
-        discord.ui.ActionRow(PfStartButton(bot), PfStopButton(bot)),
-    ]

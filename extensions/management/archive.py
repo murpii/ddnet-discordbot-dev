@@ -1,7 +1,5 @@
 import contextlib
 import logging
-
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -21,26 +19,6 @@ ZIP_HEADROOM_MB = 1
 
 def plural(number: int, word: str) -> str:
     return f"{number} {word}" if number == 1 else f"{number} {word}s"
-
-
-@dataclass(slots=True)
-class ArchiveResult:
-    transcript: ChannelTranscript
-    directory: Path
-    bundles: list[TranscriptBundle]
-
-    @property
-    def messages(self) -> int:
-        return sum(b.message_count for b in self.bundles)
-
-    @property
-    def files(self) -> int:
-        return sum(1 + len(b.zip_paths) for b in self.bundles)
-
-    def clear(self) -> None:
-        self.transcript.cleanup()
-        with contextlib.suppress(OSError):
-            self.directory.rmdir()
 
 
 class ChannelArchive(commands.Cog):
@@ -87,34 +65,38 @@ class ChannelArchive(commands.Cog):
     ) -> None:
         """Build the transcript, post it into the channel, then clear it off disk."""
         try:
-            result = await self.build_archive(interaction, channel, limit=limit)
+            built = await self.build_archive(interaction, channel, limit=limit)
         except Exception as e:
             log.exception("Archiving %s failed:\n%s", channel.name, e)
             await interaction.edit_original_response(content=f"Archiving failed:\n{e}")
             return
 
-        if result is None:
+        if built is None:
             await interaction.edit_original_response(content="That channel has no messages to archive.")
             return
 
+        transcript, directory, bundles = built
+        messages = sum(b.message_count for b in bundles)
+        files = sum(1 + len(b.zip_paths) for b in bundles)
+
         await interaction.edit_original_response(content=f"Posting the transcript into {channel.mention}...")
         try:
-            await result.transcript.upload(
-                channel, result.bundles, self.header(channel, result, interaction.user)
+            await transcript.upload(
+                channel, bundles, self.header(channel, messages, files, interaction.user)
             )
         except discord.HTTPException as e:
             log.warning("Could not post the archive of %s: %s", channel.name, e)
-            result.clear()
+            self.clear(transcript, directory)
             await interaction.edit_original_response(
                 content=f"Couldn't post the transcript into {channel.mention}:\n{e}"
             )
             return
 
-        result.clear()
+        self.clear(transcript, directory)
 
         summary = (
-            f"Archived {channel.mention}: {plural(result.messages, 'message')} posted as "
-            f"{plural(result.files, 'file')} in the channel itself. Nothing was left on disk."
+            f"Archived {channel.mention}: {plural(messages, 'message')} posted as "
+            f"{plural(files, 'file')} in the channel itself. Nothing was left on disk."
         )
         if lock:
             try:
@@ -130,7 +112,7 @@ class ChannelArchive(commands.Cog):
             channel: discord.TextChannel,
             *,
             limit: Optional[int] = None,
-    ) -> Optional[ArchiveResult]:
+    ) -> Optional[tuple[ChannelTranscript, Path, list[TranscriptBundle]]]:
         base_name = f"{ChannelTranscript.sanitize_name(channel.name)}-{channel.id}"
         directory = STAGING_DIR / base_name
         cap_mb = max(1, channel.guild.filesize_limit // 1024 // 1024 - ZIP_HEADROOM_MB)
@@ -160,13 +142,21 @@ class ChannelArchive(commands.Cog):
             if bundle:
                 bundles.append(bundle)
 
-        return ArchiveResult(transcript=transcript, directory=directory, bundles=bundles)
+        return transcript, directory, bundles
 
     @staticmethod
-    def header(channel: discord.TextChannel, result: ArchiveResult, user: discord.abc.User) -> str:
+    def clear(transcript: ChannelTranscript, directory: Path) -> None:
+        transcript.cleanup()
+        with contextlib.suppress(OSError):
+            directory.rmdir()
+
+    @staticmethod
+    def header(
+            channel: discord.TextChannel, messages: int, files: int, user: discord.abc.User
+    ) -> str:
         return (
             f"**Transcript of #{channel.name}**\n"
-            f"{plural(result.messages, 'message')} in {plural(result.files, 'file')}, "
+            f"{plural(messages, 'message')} in {plural(files, 'file')}, "
             f"requested by <@{user.id}>.\n"
             f"-# Save these before you delete the channel, they are stored in it and go with it."
         )
