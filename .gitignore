@@ -7,6 +7,7 @@ __pycache__/
 
 # IDE / editor
 .idea/
+.vscode/
 
 # Build artifacts
 *.exe
@@ -36,6 +37,7 @@ data/tools/dontuse/
 data/tools/render_map/
 data/mapres
 data/archives-temp/
+data/wiki/
 
 # Player finder
 find_players.json
