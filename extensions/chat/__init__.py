@@ -1,7 +1,7 @@
+from typing import TYPE_CHECKING
+
 from extensions.chat.commands.app_commands import Botscribe
 from extensions.chat.commands.context_menu import ChatCtxMenu
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

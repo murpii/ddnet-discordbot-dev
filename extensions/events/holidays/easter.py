@@ -1,8 +1,9 @@
-import discord
 from datetime import datetime
-from constants import Emojis
-
 from typing import TYPE_CHECKING
+
+import discord
+
+from constants import Emojis
 
 if TYPE_CHECKING:
     from bot import DDNet

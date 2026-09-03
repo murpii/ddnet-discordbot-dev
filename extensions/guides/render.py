@@ -6,6 +6,7 @@ import discord
 
 from utils.containers import INFO_ACCENT, NoticeView, avatar_file
 from utils.text import render_constants
+
 from .store import get_guide, localize, normalize_lang
 
 # markers inside guide text, both rendered as buttons.

@@ -3,9 +3,9 @@ import logging
 import discord
 
 from constants import Channels, Roles
-from utils.containers import ChannelToolView, NoticeView
 from extensions.management.moderator.views.containers.channel_tools import SlowmodeView
 from extensions.management.tester.bans import TESTING_CATEGORIES
+from utils.containers import ChannelToolView, NoticeView
 
 log = logging.getLogger()
 

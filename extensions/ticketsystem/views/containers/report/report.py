@@ -3,9 +3,9 @@ import random
 import discord
 
 from constants import Roles
-from utils.checks import staff_roles
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
+from utils.checks import staff_roles
 
 
 class ReportContainer(discord.ui.LayoutView):

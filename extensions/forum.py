@@ -1,11 +1,12 @@
 import asyncio
 import contextlib
+from typing import TYPE_CHECKING, Optional, Sequence, Union
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional, Sequence, Union, TYPE_CHECKING
 
-from constants import Guilds, Forums, ForumTags, Channels
+from constants import Channels, Forums, ForumTags, Guilds
 
 if TYPE_CHECKING:
     from bot import DDNet

@@ -1,7 +1,10 @@
 import discord
 
+from extensions.management.moderator.views.containers.hub import (
+    DiscordModHubView,
+    ModHubView,
+)
 from utils.hub import HubCog
-from extensions.management.moderator.views.containers.hub import ModHubView, DiscordModHubView
 
 
 class ModHub(HubCog):

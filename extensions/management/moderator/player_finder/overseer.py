@@ -2,17 +2,23 @@ import contextlib
 import logging
 import re
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 import discord
 from discord.ext import commands, tasks
 
-from .manager import Player
 from constants import Channels
-from utils.master_parser import Server, Client, fetch_master_list, find_servers_by_community
-from utils.text import to_discord_timestamp, inline_code, escape_link_label
+from utils.master_parser import (
+    Client,
+    Server,
+    fetch_master_list,
+    find_servers_by_community,
+)
 from utils.misc import connect_url, name_filter
-from .layoutview import PlayerfinderView, CustomView
+from utils.text import escape_link_label, inline_code, to_discord_timestamp
 
-from typing import TYPE_CHECKING
+from .layoutview import CustomView, PlayerfinderView
+from .manager import Player
 
 if TYPE_CHECKING:
     from bot import DDNet

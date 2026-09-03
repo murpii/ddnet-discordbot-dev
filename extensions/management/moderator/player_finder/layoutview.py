@@ -1,5 +1,4 @@
 import discord
-from discord import SeparatorSpacing
 
 
 class PlayerfinderView(discord.ui.LayoutView):

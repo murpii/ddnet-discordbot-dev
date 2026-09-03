@@ -1,19 +1,21 @@
 import asyncio
 import datetime
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from extensions.management.moderator.manager import PendingAction, ModAction
-from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
-from utils.misc import history, DELETE_HISTORY_SECONDS
-from utils.text import choice_to_timedelta
-from utils.checks import staff_only
 from constants import Guilds
-
-from typing import TYPE_CHECKING
+from extensions.management.moderator.manager import ModAction, PendingAction
+from extensions.management.moderator.views.containers.user_info import (
+    NoUserInfoView,
+    UserInfoView,
+)
+from utils.checks import staff_only
+from utils.misc import DELETE_HISTORY_SECONDS, history
+from utils.text import choice_to_timedelta
 
 if TYPE_CHECKING:
     from bot import DDNet

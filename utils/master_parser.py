@@ -1,8 +1,8 @@
-import aiohttp
 import logging
-
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+import aiohttp
 
 log = logging.getLogger()
 

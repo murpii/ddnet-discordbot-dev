@@ -1,7 +1,8 @@
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional, Union
+
 import discord
 
 from constants import Guilds

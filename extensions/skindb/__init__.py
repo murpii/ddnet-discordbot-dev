@@ -1,30 +1,31 @@
 import asyncio
 import contextlib
 import logging
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
-from datetime import datetime, timezone, timedelta
+from typing import TYPE_CHECKING
 
 import discord
 from discord import RawMessageUpdateEvent
 from discord.ext import commands
 from PIL import Image
 
+from constants import Channels, Emojis, Guilds, Roles
+from utils.checks import is_staff
+from utils.image import skin_renderer
+
 from .checks import (
-    check_message_structure,
-    check_license,
-    check_if_has_attachments,
     check_attachment_amount,
-    check_dupl_name, check_name_length, check_latin_letters,
+    check_dupl_name,
+    check_if_has_attachments,
     check_image_format,
     check_image_resolution,
-    has_attachment_dms
+    check_latin_letters,
+    check_license,
+    check_message_structure,
+    check_name_length,
+    has_attachment_dms,
 )
-
-from constants import Guilds, Channels, Roles, Emojis
-from utils.image import skin_renderer
-from utils.checks import is_staff
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

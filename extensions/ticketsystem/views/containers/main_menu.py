@@ -1,18 +1,18 @@
+from typing import TYPE_CHECKING
+
 import discord
 
 from constants import Channels
-from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from extensions.ticketsystem.views.buttons import (
-    ReportButton,
+    AdminMailButton,
     BanAppealButton,
-    VpnBanAppealButton,
+    CommunityAppButton,
     ComplaintButton,
     RenameButton,
-    AdminMailButton,
-    CommunityAppButton
+    ReportButton,
+    VpnBanAppealButton,
 )
-
-from typing import TYPE_CHECKING
+from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 
 if TYPE_CHECKING:
     from bot import DDNet

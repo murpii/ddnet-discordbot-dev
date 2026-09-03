@@ -1,10 +1,9 @@
 import discord
 
-from utils.checks import is_staff
 from extensions.ticketsystem import actions
 from extensions.ticketsystem.ticket import Ticket, TicketCategory
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
-
+from utils.checks import is_staff
 
 CATEGORY_CHOICES = [
     ("Report", TicketCategory.REPORT),

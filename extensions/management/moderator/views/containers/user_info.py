@@ -1,17 +1,19 @@
 import discord
 
-from utils.paginator import Pages, page_nav_row
-from utils.text import to_discord_timestamp
-from utils.checks import is_staff
 from extensions.management.moderator.manager import MemberInfo
-from utils.containers import INFO_ACCENT, ALERT_ACCENT, separator
-from utils.text import clip
-from extensions.management.moderator.views.containers.manage_entries import ManageEntriesButton, entry_menu
 from extensions.management.moderator.views.buttons.ban import BanButton
 from extensions.management.moderator.views.buttons.kick import KickButton
 from extensions.management.moderator.views.buttons.timeout import TimeoutButton
 from extensions.management.moderator.views.buttons.unban import UnbanButton
 from extensions.management.moderator.views.buttons.untimeout import UntimeoutButton
+from extensions.management.moderator.views.containers.manage_entries import (
+    ManageEntriesButton,
+    entry_menu,
+)
+from utils.checks import is_staff
+from utils.containers import ALERT_ACCENT, INFO_ACCENT, separator
+from utils.paginator import Pages, page_nav_row
+from utils.text import clip, to_discord_timestamp
 
 ENTRIES_PER_PAGE = 5
 

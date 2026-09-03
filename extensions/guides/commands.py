@@ -1,4 +1,5 @@
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -8,11 +9,10 @@ from discord.utils import utcnow
 
 from constants import URLs
 from utils.containers import GuideView, NoticeView, avatar_file
+
 from . import rtfm
 from .render import render_guide
 from .store import LANGUAGES, load_guides, normalize_lang
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

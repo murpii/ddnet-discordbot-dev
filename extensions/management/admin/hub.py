@@ -1,7 +1,7 @@
 import discord
 
-from utils.hub import HubCog
 from extensions.management.admin.views.hub_view import AdminHubView
+from utils.hub import HubCog
 
 
 class AdminHub(HubCog):

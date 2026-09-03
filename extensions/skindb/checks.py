@@ -1,12 +1,11 @@
-import re
 import logging
+import re
 from io import BytesIO
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import discord
 import requests
 from PIL import Image
-
 
 REGEX = re.compile(r"^\"(?P<skin_name>.+)\" by (?P<user_name>.+) (\((?P<license>.{3,8})\))$", re.IGNORECASE,)
 NAME_REGEX = re.compile(r"^[a-zA-Z0-9 _-]+$")

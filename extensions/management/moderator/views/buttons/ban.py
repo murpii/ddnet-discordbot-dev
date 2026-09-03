@@ -1,9 +1,9 @@
+from typing import TYPE_CHECKING
+
 import discord
 
-from utils.checks import is_staff
 from extensions.management.moderator.views.modals.ban import BanModal
-
-from typing import TYPE_CHECKING
+from utils.checks import is_staff
 
 if TYPE_CHECKING:
     from bot import DDNet

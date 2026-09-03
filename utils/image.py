@@ -1,17 +1,15 @@
-from typing import Callable, Union
-from io import BytesIO
-from typing import Dict, List, Tuple
-
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
-from colorthief import ColorThief
 import datetime as dtt
-from datetime import datetime
 import re
+from datetime import datetime
+from io import BytesIO
+from typing import Callable, Dict, List, Tuple, Union
 
-from utils.color import clamp_luminance, rgb_to_hsp
-from utils.color import pack_rgb
+from colorthief import ColorThief
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+
+from utils.color import clamp_luminance, pack_rgb, rgb_to_hsp
 from utils.misc import executor
-from utils.text import plural, humanize_points, difficulty_stars
+from utils.text import difficulty_stars, humanize_points, plural
 
 DIR = "data/assets"
 TEXT_LAYOUT = ImageFont.Layout.BASIC
@@ -68,7 +66,7 @@ def auto_font(
 
 
 def wrap_new(
-        canv: ImageDraw.Draw,
+        canv: ImageDraw.ImageDraw,
         box: Tuple[Tuple[int, int], Tuple[int, int]],
         text: str,
         *,
@@ -200,7 +198,7 @@ def skin_renderer(img):
 
 
 @executor
-def generate_points_image(data: Dict[str, List[Tuple[datetime.date, int]]]) -> BytesIO:
+def generate_points_image(data: Dict[str, List[Tuple[dtt.date, int]]]) -> BytesIO:
     font_small = ImageFont.truetype(f"{DIR}/fonts/normal.ttf", 16, layout_engine=TEXT_LAYOUT)
 
     color_light = (100, 100, 100)

@@ -3,15 +3,15 @@
 
 import asyncio
 from io import BytesIO
-from typing import List, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Union
 
 import discord
-from PIL import Image, ImageDraw, ImageFont
 from discord import app_commands
 from discord.ext import commands
+from PIL import Image, ImageDraw, ImageFont
 
-from utils.image import save, wrap_new, TEXT_LAYOUT
-from constants import Emojis, Channels
+from constants import Channels, Emojis
+from utils.image import TEXT_LAYOUT, save, wrap_new
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 DIR = "data/assets"
 
 
-def wrap(font: ImageFont, text: str, line_width: int) -> str:
+def wrap(font: ImageFont.FreeTypeFont, text: str, line_width: int) -> str:
     words = text.split()
 
     lines = []

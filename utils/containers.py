@@ -2,7 +2,8 @@ import re
 from typing import List, Optional
 
 import discord
-from discord.components import Container as ContainerComponent, TextDisplay as TextDisplayComponent
+from discord.components import Container as ContainerComponent
+from discord.components import TextDisplay as TextDisplayComponent
 
 from utils.paginator import Pages, page_nav_row
 from utils.text import clip

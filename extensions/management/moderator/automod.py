@@ -1,27 +1,26 @@
-import re
 import contextlib
+import datetime
 import os
+import re
 import time
-from io import BytesIO
 from collections import defaultdict
+from io import BytesIO
+from typing import TYPE_CHECKING
 
-from requests_cache import CachedSession
 import discord
 from discord.ext import commands
-import datetime
+from requests_cache import CachedSession
 
-from constants import Guilds, Roles, Channels
+from constants import Channels, Guilds, Roles
+from utils.checks import is_staff
 from utils.conn import source
+from utils.deletions import delete_messages
 from utils.master_parser import MASTER_URL, parse_master
 from utils.misc import flag, log_to
-from utils.deletions import delete_messages
+from utils.text import extract_address
+
 from .server_info import ServerInfoEmbed, ServerLinksView
 from .views.containers.notices import GhostPingView, SpamAlertView
-
-from utils.text import extract_address
-from utils.checks import is_staff
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

@@ -1,8 +1,8 @@
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 import discord
 
-from extensions.management.moderator.manager import MemberInfo, PendingAction, ModAction
+from extensions.management.moderator.manager import MemberInfo, ModAction, PendingAction
 from utils.containers import NoticeView
 from utils.misc import DELETE_HISTORY_SECONDS
 from utils.text import clip
@@ -112,7 +112,10 @@ class BanModal(discord.ui.Modal, title="Ban member"):
         notice = f"{self.member.mention} has been banned. Reason: {clip(reason)}"
         info: Optional[MemberInfo] = await self.db.fetch_user_info(self.member)
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.edit_original_response(view=NoUserInfoView(notice=notice))
             return

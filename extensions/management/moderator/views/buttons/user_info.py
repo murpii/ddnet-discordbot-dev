@@ -32,7 +32,10 @@ class UserInfoButton(
         bot = interaction.client
         info = await bot.moddb.fetch_user_info(discord.Object(id=self.user_id))
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.response.send_message(view=NoUserInfoView(), ephemeral=True)
             return

@@ -1,4 +1,5 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
 import discord
 
 from extensions.management.moderator.manager import MemberInfo
@@ -49,7 +50,10 @@ class UntimeoutButton(discord.ui.Button):
         notice = f"Timeout for {member.mention} has been cleared."
         info: Optional[MemberInfo] = await self.db.fetch_user_info(member)
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.response.edit_message(view=NoUserInfoView(notice=notice))
             return

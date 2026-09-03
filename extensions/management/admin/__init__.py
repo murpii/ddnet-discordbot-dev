@@ -1,8 +1,8 @@
+from typing import TYPE_CHECKING
+
 from extensions.management.admin.commands import Admin
 from extensions.management.admin.hub import AdminHub
 from extensions.management.admin.views.hub_view import AdminHubView
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

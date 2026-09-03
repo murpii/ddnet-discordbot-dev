@@ -1,13 +1,14 @@
-import discord
-from discord import app_commands
-from discord.ext import commands
 import ipaddress
 import re
+from typing import Iterable
 from urllib.parse import urlsplit
 
 import aiohttp
-from typing import Iterable
-from constants import Roles, Guilds, WIKI_CURATOR_ROLES
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from constants import WIKI_CURATOR_ROLES, Guilds, Roles
 
 
 def ddnet_only(ctx: commands.Context) -> bool:

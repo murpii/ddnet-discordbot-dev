@@ -1,7 +1,7 @@
 import discord
 
-from utils.text import to_discord_timestamp, clip
 from utils.containers import ALERT_ACCENT
+from utils.text import clip, to_discord_timestamp
 
 
 class BlacklistAlertView(discord.ui.LayoutView):

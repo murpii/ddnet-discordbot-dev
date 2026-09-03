@@ -1,13 +1,13 @@
 import contextlib
-import discord
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+import discord
 
 from extensions.ticketsystem.channel import build_ticket_channel
 from extensions.ticketsystem.queries import check_common_teamranks
-from extensions.ticketsystem.ticket import Ticket, TicketCategory, RenameData
+from extensions.ticketsystem.ticket import RenameData, Ticket, TicketCategory
 from utils.profile import PlayerProfile
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

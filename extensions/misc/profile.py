@@ -1,19 +1,19 @@
 import datetime as dtt
 from datetime import datetime
-from requests import ReadTimeout
+from typing import TYPE_CHECKING
+
 import discord
 from discord import app_commands
 from discord.ext import commands
+from requests import ReadTimeout
 
 from utils.image import (
-    generate_profile_image,
     generate_hours_image,
     generate_map_image,
     generate_points_image,
+    generate_profile_image,
 )
 from utils.text import escape_backticks, human_timedelta
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

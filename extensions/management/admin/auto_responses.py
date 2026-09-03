@@ -1,12 +1,11 @@
 import random
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 
 from constants import Guilds
 from utils.json_helpers import load_map, save_map
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

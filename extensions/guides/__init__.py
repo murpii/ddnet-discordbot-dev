@@ -1,8 +1,8 @@
+from typing import TYPE_CHECKING
+
 from .commands import HelperCommands
 from .context_menu import GuideCtxMenu
 from .render import GuideLinkButton
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

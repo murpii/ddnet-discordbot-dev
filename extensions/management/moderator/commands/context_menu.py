@@ -1,13 +1,16 @@
+from typing import TYPE_CHECKING
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from constants import Guilds
-from utils.checks import staff_roles
+from extensions.management.moderator.views.containers.user_info import (
+    NoUserInfoView,
+    UserInfoView,
+)
 from extensions.management.moderator.views.modals.ban import BanModal
-from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
-
-from typing import TYPE_CHECKING
+from utils.checks import staff_roles
 
 if TYPE_CHECKING:
     from bot import DDNet

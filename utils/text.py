@@ -1,9 +1,9 @@
 import logging
 import re
-import dateparser
-from typing import Optional
 from datetime import datetime, timedelta
+from typing import Optional
 
+import dateparser
 import discord
 
 import constants

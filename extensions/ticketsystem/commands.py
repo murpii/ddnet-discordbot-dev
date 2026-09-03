@@ -1,17 +1,18 @@
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from constants import Guilds
 from utils.checks import check_dm_channel, is_staff, staff_only
+
 from . import actions
 from .ticket import TicketCategory
 from .views import buttons
 from .views.confirm import ConfirmView
-from .views.containers.MainMenu import MainMenuContainer
+from .views.containers.main_menu import MainMenuContainer
 from .views.modals import ban_appeal_m
-from constants import Guilds
 
 if TYPE_CHECKING:
     from bot import DDNet

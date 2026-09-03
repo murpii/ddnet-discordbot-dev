@@ -1,11 +1,13 @@
 import discord
 
-from .ticket import Ticket, TicketCategory
 from .cooldown import global_cooldown
+from .ticket import Ticket, TicketCategory
+from .views.containers.ban_appeal.ban_appeal_change import BanAppealChangeContainer
+from .views.containers.ban_appeal.vpn_ban_appeal_change import (
+    VpnBanAppealChangeContainer,
+)
 from .views.containers.close import CloseContainer
 from .views.containers.rename.rename_change import RenameChangeContainer
-from .views.containers.ban_appeal.ban_appeal_change import BanAppealChangeContainer
-from .views.containers.ban_appeal.vpn_ban_appeal_change import VpnBanAppealChangeContainer
 
 CHANGE_CONTAINERS = {
     TicketCategory.RENAME: RenameChangeContainer,

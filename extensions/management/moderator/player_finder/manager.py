@@ -1,8 +1,7 @@
-import ipaddress
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Union, Optional, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import discord
 

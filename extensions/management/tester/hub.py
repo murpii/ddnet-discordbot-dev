@@ -1,7 +1,7 @@
 import discord
 
-from utils.hub import HubCog
 from extensions.management.tester.views.hub_view import TesterHubView
+from utils.hub import HubCog
 
 
 class TesterHub(HubCog):

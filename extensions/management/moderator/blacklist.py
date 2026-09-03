@@ -1,17 +1,19 @@
 import contextlib
 import logging
 import re
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import discord
 from discord.ext import commands
 
-from constants import Guilds, Roles, Channels
+from constants import Channels, Guilds
+from extensions.management.moderator.views.containers.blacklist import (
+    BlacklistAlertView,
+)
 from utils.checks import is_staff
+from utils.deletions import delete_messages
 from utils.json_helpers import load_map, save_map
 from utils.misc import log_to
-from utils.deletions import delete_messages
-from extensions.management.moderator.views.containers.blacklist import BlacklistAlertView
 
 if TYPE_CHECKING:
     from bot import DDNet

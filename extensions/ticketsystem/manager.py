@@ -3,16 +3,18 @@ import contextlib
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
 import discord
 
 import extensions.ticketsystem.queries as queries
-from constants import Guilds, Channels, Emojis
+from constants import Channels, Emojis, Guilds
 from utils.profile import PlayerProfile
-from .mappings import START_CONTAINERS
-from .ticket import Ticket, AppealData, TicketCategory, TicketState, RenameData
-from .transcript import TicketTranscript
+
 from .cooldown import global_cooldown
+from .mappings import START_CONTAINERS
+from .ticket import AppealData, RenameData, Ticket, TicketCategory, TicketState
+from .transcript import TicketTranscript
 from .views.containers.close import CloseContainer
 
 if TYPE_CHECKING:

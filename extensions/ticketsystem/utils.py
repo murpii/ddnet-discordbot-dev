@@ -1,15 +1,15 @@
-import aiohttp
 import asyncio
 import contextlib
 import logging
-import sqlite3
-import discord
 import re
+import sqlite3
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+import aiohttp
+import discord
 
 from utils.misc import get_filename_from_header, ip_matches
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

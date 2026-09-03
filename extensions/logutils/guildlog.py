@@ -4,17 +4,17 @@ import itertools
 import time
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import List, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple, Union
 
 import discord
 from discord.ext import commands
 
-from utils.text import to_discord_timestamp, clip
-from utils.misc import log_to
+from constants import Channels, Emojis, Guilds
+from extensions.management.moderator.views.buttons.user_info import UserInfoButton
 from utils.containers import separator
 from utils.deletions import bot_deleted
-from extensions.management.moderator.views.buttons.user_info import UserInfoButton
-from constants import Guilds, Channels, Emojis
+from utils.misc import log_to
+from utils.text import clip, to_discord_timestamp
 
 if TYPE_CHECKING:
     from bot import DDNet

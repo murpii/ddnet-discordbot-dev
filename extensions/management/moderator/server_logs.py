@@ -4,6 +4,7 @@ import ipaddress
 import logging
 import re
 import socket
+from typing import TYPE_CHECKING
 
 import discord
 
@@ -19,8 +20,6 @@ from utils.master_parser import (
     parse_address,
 )
 from utils.misc import log_to
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

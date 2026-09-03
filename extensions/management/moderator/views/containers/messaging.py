@@ -1,11 +1,11 @@
 import logging
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import discord
 
-from utils.containers import NoticeView, ChannelToolView
-from utils.text import parse_message_url, resolve_role_mentions, resolve_user_mentions
 from extensions.chat.views.echo_modal import EchoModal
+from utils.containers import ChannelToolView, NoticeView
+from utils.text import parse_message_url, resolve_role_mentions, resolve_user_mentions
 
 if TYPE_CHECKING:
     from bot import DDNet

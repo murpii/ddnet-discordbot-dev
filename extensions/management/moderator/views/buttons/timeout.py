@@ -1,8 +1,8 @@
+from typing import TYPE_CHECKING
+
 import discord
 
 from extensions.management.moderator.views.modals.timeout import TimeoutModal
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

@@ -1,9 +1,9 @@
 from datetime import timedelta
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 import discord
 
-from extensions.management.moderator.manager import MemberInfo, PendingAction, ModAction
+from extensions.management.moderator.manager import MemberInfo, ModAction, PendingAction
 from utils.containers import NoticeView
 from utils.text import clip
 
@@ -102,7 +102,10 @@ class TimeoutModal(discord.ui.Modal, title="Timeout member"):
         )
         info: Optional[MemberInfo] = await self.db.fetch_user_info(self.member)
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.edit_original_response(view=NoUserInfoView(notice=notice))
             return

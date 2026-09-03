@@ -1,13 +1,12 @@
 import contextlib
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from utils.checks import forbidden_report
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

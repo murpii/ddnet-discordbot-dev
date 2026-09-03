@@ -1,5 +1,7 @@
 from extensions.ticketsystem.ticket import TicketCategory
-from extensions.ticketsystem.views.containers.change_category import ChangeCategoryContainer
+from extensions.ticketsystem.views.containers.change_category import (
+    ChangeCategoryContainer,
+)
 from extensions.ticketsystem.views.modals import ban_appeal_m
 
 

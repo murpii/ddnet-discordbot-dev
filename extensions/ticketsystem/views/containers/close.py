@@ -1,16 +1,17 @@
 from typing import Iterable
+
 import discord
 
 from extensions.ticketsystem.ticket import TicketCategory
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from extensions.ticketsystem.views.inner_buttons import (
+    BanAppealFindBanBtn,
     CloseBtn,
     LockBtn,
     OptionsBtn,
-    ReportClaimBtn,
-    RenameRunBtn,
     RenamePrintCMD,
-    BanAppealFindBanBtn,
+    RenameRunBtn,
+    ReportClaimBtn,
 )
 
 

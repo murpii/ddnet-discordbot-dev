@@ -1,11 +1,11 @@
 import asyncio
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from discord.ext import commands, tasks
-from constants import Channels
 
-from typing import TYPE_CHECKING
+from constants import Channels
 
 if TYPE_CHECKING:
     from bot import DDNet

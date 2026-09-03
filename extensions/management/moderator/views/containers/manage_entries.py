@@ -74,7 +74,10 @@ async def reopened_panel(panel, *, notice: str):
     """The user info panel redrawn from fresh data, with the menu closed again"""
     info = await panel.bot.moddb.fetch_user_info(panel.info.member)
 
-    from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+    from extensions.management.moderator.views.containers.user_info import (
+        NoUserInfoView,
+        UserInfoView,
+    )
     if not info:
         return NoUserInfoView(notice=notice)
 

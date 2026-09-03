@@ -5,15 +5,17 @@ from datetime import datetime, timezone
 
 import discord
 
-from constants import Roles, Channels
+from constants import Channels, Roles
+from extensions.ticketsystem.scores import increment_score
 from extensions.ticketsystem.ticket import TicketState
 from extensions.ticketsystem.utils import find_bans_for_ip
-from extensions.ticketsystem.scores import increment_score
-from extensions.ticketsystem.views.containers.ban_appeal.find_ban import FindBanContainer
-from extensions.ticketsystem.views.confirm import ConfirmViewStaff, ConfirmView
+from extensions.ticketsystem.views.confirm import ConfirmView, ConfirmViewStaff
+from extensions.ticketsystem.views.containers.ban_appeal.find_ban import (
+    FindBanContainer,
+)
 from utils.checks import is_staff
 from utils.misc import ip_matches
-from utils.text import to_discord_timestamp, strip_surrounding_quotes
+from utils.text import strip_surrounding_quotes, to_discord_timestamp
 
 log = logging.getLogger("tickets")
 

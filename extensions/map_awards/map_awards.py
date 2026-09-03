@@ -1,24 +1,23 @@
+import asyncio
 import json
 import logging
 import re
-import asyncio
-from math import ceil
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from itertools import groupby
+from math import ceil
+from typing import TYPE_CHECKING
 
 import discord
-from discord import app_commands, PermissionOverwrite
+from discord import PermissionOverwrite, app_commands
 from discord.ext import commands
 
-from constants import Guilds, Emojis
-from utils.checks import staff_only
+from constants import Emojis, Guilds
 from extensions.map_awards import queries
 from extensions.map_awards.container import CategoryResultsView, StatsResultsView
+from utils.checks import staff_only
 from utils.misc import get_mapper_urls
 from utils.text import slugify2
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

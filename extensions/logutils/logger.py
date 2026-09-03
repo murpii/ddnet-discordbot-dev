@@ -2,11 +2,10 @@ import logging
 import os
 import traceback
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

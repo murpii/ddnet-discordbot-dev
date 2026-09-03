@@ -1,7 +1,7 @@
 import discord
 
-from extensions.guides.store import normalize_lang
 from extensions.guides.render import render_guide
+from extensions.guides.store import normalize_lang
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from utils.containers import NoticeView

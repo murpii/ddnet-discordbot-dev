@@ -3,7 +3,8 @@ import re
 
 import discord
 
-from utils.containers import INFO_ACCENT, NoticeView, OptionSelect
+from constants import URLs
+from extensions.guides.render import marker_errors, render_guide
 from extensions.guides.store import (
     DEFAULT_LANG,
     LANGUAGES,
@@ -13,8 +14,7 @@ from extensions.guides.store import (
     load_guides,
     upsert_guide,
 )
-from extensions.guides.render import marker_errors, render_guide
-from constants import URLs
+from utils.containers import INFO_ACCENT, NoticeView, OptionSelect
 
 log = logging.getLogger()
 

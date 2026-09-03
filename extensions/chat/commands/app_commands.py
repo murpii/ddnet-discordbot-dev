@@ -1,12 +1,10 @@
-import contextlib
 import re
-from typing import Optional, TYPE_CHECKING
-import discord
-from discord.ext import commands
-from discord import app_commands
+from typing import TYPE_CHECKING
 
-from extensions.chat.views.echo_modal import EchoModal
-from extensions.chat.views.edit_modal import EditMsgModal
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 from constants import Guilds
 
 if TYPE_CHECKING:

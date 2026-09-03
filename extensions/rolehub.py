@@ -1,13 +1,12 @@
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 
-from constants import Roles, Emojis
+from constants import Emojis, Roles
 from utils.containers import INFO_ACCENT, NoticeView, separator
 from utils.hub import HubCog
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

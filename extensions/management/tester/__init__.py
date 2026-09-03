@@ -12,13 +12,17 @@ This extension covers the community-server side:
                 Trial Tester vote panel
 """
 
+from typing import TYPE_CHECKING
+
 from extensions.management.tester.bans import TesterBans
 from extensions.management.tester.hub import TesterHub
 from extensions.management.tester.listeners import TesterListeners
 from extensions.management.tester.views.hub_view import TesterHubView
-from extensions.management.tester.views.promote import PromotionVotes, PromotionVoteView, RoleChoiceView
-
-from typing import TYPE_CHECKING
+from extensions.management.tester.views.promote import (
+    PromotionVotes,
+    PromotionVoteView,
+    RoleChoiceView,
+)
 
 if TYPE_CHECKING:
     from bot import DDNet

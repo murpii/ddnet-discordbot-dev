@@ -1,9 +1,9 @@
+from typing import TYPE_CHECKING
+
 import discord
 from discord.ext import commands
 
 from bot import extensions
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

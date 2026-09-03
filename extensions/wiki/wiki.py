@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 import aiohttp
@@ -15,8 +16,6 @@ from constants import Channels, URLs
 from utils.containers import NoticeView
 from utils.misc import resolve_active_thread
 from utils.text import clip, to_discord_timestamp
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

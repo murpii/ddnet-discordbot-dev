@@ -1,11 +1,10 @@
 import contextlib
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 
 from constants import Channels, Emojis
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

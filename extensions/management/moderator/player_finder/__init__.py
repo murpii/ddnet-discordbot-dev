@@ -1,7 +1,7 @@
+from typing import TYPE_CHECKING
+
 from .manager import PlayerfinderManager
 from .overseer import Overseer
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

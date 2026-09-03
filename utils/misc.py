@@ -1,16 +1,17 @@
+import asyncio
 import contextlib
+import functools
 import ipaddress
 import logging
-import urllib
-import discord
-import asyncio
-import functools
 import os
+import urllib.parse
 from asyncio.subprocess import PIPE
 from datetime import datetime, timezone
-from typing import Callable, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Tuple
 
-from constants import Emojis, Channels, URLs
+import discord
+
+from constants import Channels, Emojis, URLs
 from utils.countryflags import flag_by_ident
 from utils.text import difficulty_stars, slugify2
 

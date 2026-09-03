@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import contextlib
 import logging
-
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import discord
 
-from .mappings import TRANSCRIPT_THREADS
-from .ticket import Ticket, TicketCategory
-from .views.containers.transcript import TranscriptContainer
 from utils.checks import is_staff
 from utils.misc import resolve_active_thread
 from utils.text import mask_ip
 from utils.transcript import ChannelTranscript, TranscriptBundle
+
+from .mappings import TRANSCRIPT_THREADS
+from .ticket import Ticket, TicketCategory
+from .views.containers.transcript import TranscriptContainer
 
 if TYPE_CHECKING:
     from bot import DDNet

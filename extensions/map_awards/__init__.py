@@ -1,8 +1,7 @@
 import json
+from typing import TYPE_CHECKING
 
 from extensions.map_awards.map_awards import CreateSelects, DDNetMapAwards
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

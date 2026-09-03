@@ -1,8 +1,8 @@
 import discord
 
-from extensions.management.moderator.manager import PendingAction, ModAction
+from extensions.management.moderator.manager import ModAction, PendingAction
 from utils.checks import is_staff
-from utils.containers import NoticeView, ALERT_ACCENT
+from utils.containers import ALERT_ACCENT, NoticeView
 
 BAN_DELETE_SECONDS = 3600
 SPAM_REASON = "Spam/scam across multiple channels"
@@ -187,7 +187,10 @@ class SpamModButton(
         bot = interaction.client
         info = await bot.moddb.fetch_user_info(discord.Object(id=self.user_id))
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.response.send_message(view=NoUserInfoView(), ephemeral=True)
             return

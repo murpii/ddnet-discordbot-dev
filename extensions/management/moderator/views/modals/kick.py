@@ -1,12 +1,12 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import discord
 
-from extensions.management.moderator.manager import MemberInfo, PendingAction, ModAction
+from extensions.management.moderator.manager import MemberInfo, ModAction, PendingAction
+from extensions.management.moderator.views.modals.ban import DELETE_HISTORY_OPTIONS
 from utils.containers import NoticeView
 from utils.misc import DELETE_HISTORY_SECONDS
 from utils.text import clip
-from extensions.management.moderator.views.modals.ban import DELETE_HISTORY_OPTIONS
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -101,7 +101,10 @@ class KickModal(discord.ui.Modal, title="Kick member"):
         notice = f"{member.mention} has been kicked. Reason: {clip(reason)}"
         info: Optional[MemberInfo] = await self.db.fetch_user_info(member)
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.edit_original_response(view=NoUserInfoView(notice=notice))
             return

@@ -1,23 +1,28 @@
 import contextlib
-
-import discord
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from extensions.ticketsystem.channel import build_ticket_channel
+import discord
+
 from constants import URLs
+from extensions.ticketsystem.channel import build_ticket_channel
 from extensions.ticketsystem.lang.ban_appeal_m import (
-    ban_appeal_m,
-    BAN_APPEAL_GATE,
     BAN_APPEAL_CLOUDFLARE,
+    BAN_APPEAL_GATE,
+    ban_appeal_m,
 )
+from extensions.ticketsystem.ticket import AppealData, Ticket, TicketCategory
 from extensions.ticketsystem.utils import find_active_bans
-from extensions.ticketsystem.views.containers.ban_appeal.gate import GateContainer, NoticeContainer
-from extensions.ticketsystem.views.containers.ban_appeal.mod_review import ModReviewContainer
+from extensions.ticketsystem.views.containers.ban_appeal.gate import (
+    GateContainer,
+    NoticeContainer,
+)
+from extensions.ticketsystem.views.containers.ban_appeal.mod_review import (
+    ModReviewContainer,
+)
 from extensions.ticketsystem.views.containers.base import large_seperator
-from extensions.ticketsystem.ticket import Ticket, AppealData, TicketCategory
-from utils.checks import check_public_ip, check_ip
+from utils.checks import check_ip, check_public_ip
 from utils.profile import PlayerProfile
 from utils.text import to_discord_timestamp
 

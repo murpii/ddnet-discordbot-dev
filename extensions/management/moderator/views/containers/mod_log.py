@@ -1,12 +1,12 @@
 import re
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import discord
 from discord.ext import commands
 
-from utils.text import to_discord_timestamp
-from utils.containers import ALERT_ACCENT, separator
 from extensions.management.hub import staff_guard
+from utils.containers import ALERT_ACCENT, separator
+from utils.text import to_discord_timestamp
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -43,7 +43,10 @@ async def open_user_info_panel(bot: "DDNet", interaction: discord.Interaction) -
     target = await bot.get_or_fetch_member(guild=interaction.guild, user_id=user_id)
     info = await bot.moddb.fetch_user_info(target) if target else None
 
-    from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+    from extensions.management.moderator.views.containers.user_info import (
+        NoUserInfoView,
+        UserInfoView,
+    )
     if not info:
         await interaction.response.send_message(view=NoUserInfoView(), ephemeral=True)
         return

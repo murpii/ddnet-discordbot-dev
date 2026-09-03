@@ -1,17 +1,16 @@
 import logging
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 
 from constants import Channels, Guilds, Roles
+from extensions.management.tester import queries
 from utils.checks import is_staff
 from utils.containers import ALERT_ACCENT, NoticeView
 from utils.misc import log_to
-from extensions.management.tester import queries
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

@@ -1,18 +1,24 @@
+from typing import TYPE_CHECKING
+
 from extensions.management.moderator.automod import AutoMod
 from extensions.management.moderator.blacklist import Blacklist
-from extensions.management.moderator.hub import ModHub, DiscordModHub
-from extensions.management.moderator.no_chat import NoChat
 from extensions.management.moderator.commands.app_commands import ModAppCommands
 from extensions.management.moderator.commands.context_menu import ModeratorCtxMenu
-from extensions.management.moderator.views.containers.hub import ModHubView, DiscordModHubView
-from extensions.management.moderator.views.containers.mod_log import ModLogView
-from extensions.management.moderator.views.info import ModeratorInfoButtons
-from extensions.management.moderator.views.buttons.user_info import UserInfoButton
-from extensions.management.moderator.views.spam_actions import SpamModButton, SpamDealtButton
+from extensions.management.moderator.hub import DiscordModHub, ModHub
 from extensions.management.moderator.listeners import ModListeners
 from extensions.management.moderator.manager import ModeratorDB
-
-from typing import TYPE_CHECKING
+from extensions.management.moderator.no_chat import NoChat
+from extensions.management.moderator.views.buttons.user_info import UserInfoButton
+from extensions.management.moderator.views.containers.hub import (
+    DiscordModHubView,
+    ModHubView,
+)
+from extensions.management.moderator.views.containers.mod_log import ModLogView
+from extensions.management.moderator.views.info import ModeratorInfoButtons
+from extensions.management.moderator.views.spam_actions import (
+    SpamDealtButton,
+    SpamModButton,
+)
 
 if TYPE_CHECKING:
     from bot import DDNet

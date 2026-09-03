@@ -1,17 +1,16 @@
 import logging
 import time
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands, tasks
 
-from constants import Channels, Guilds, Roles, Forums
-from utils.containers import INFO_ACCENT, NoticeView, separator
-from utils.text import clip
-from utils.checks import is_staff, staff_roles
+from constants import Channels, Forums, Guilds, Roles
 from extensions.management.hub import staff_guard
 from extensions.management.tester import votes
-
-from typing import TYPE_CHECKING
+from utils.checks import is_staff, staff_roles
+from utils.containers import INFO_ACCENT, NoticeView, separator
+from utils.text import clip
 
 if TYPE_CHECKING:
     from bot import DDNet

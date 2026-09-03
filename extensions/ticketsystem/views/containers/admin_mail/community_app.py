@@ -1,6 +1,6 @@
 import discord
 
-from constants import URLs, Channels
+from constants import URLs
 from extensions.ticketsystem.ticket import Ticket
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 

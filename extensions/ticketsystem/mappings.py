@@ -2,13 +2,23 @@ import discord
 
 from constants import Channels
 from extensions.ticketsystem.ticket import TicketCategory
-from extensions.ticketsystem.views.containers.admin_mail.admin_mail import AdminMailContainer
-from extensions.ticketsystem.views.containers.admin_mail.community_app import CommunityAppContainer
-from extensions.ticketsystem.views.containers.complaint.complaint import ComplaintContainer
-from extensions.ticketsystem.views.containers.report.report import ReportContainer
-from extensions.ticketsystem.views.containers.ban_appeal.ban_appeal import BanAppealContainer
-from extensions.ticketsystem.views.containers.ban_appeal.vpn_ban_appeal import VpnBanAppealContainer
+from extensions.ticketsystem.views.containers.admin_mail.admin_mail import (
+    AdminMailContainer,
+)
+from extensions.ticketsystem.views.containers.admin_mail.community_app import (
+    CommunityAppContainer,
+)
+from extensions.ticketsystem.views.containers.ban_appeal.ban_appeal import (
+    BanAppealContainer,
+)
+from extensions.ticketsystem.views.containers.ban_appeal.vpn_ban_appeal import (
+    VpnBanAppealContainer,
+)
+from extensions.ticketsystem.views.containers.complaint.complaint import (
+    ComplaintContainer,
+)
 from extensions.ticketsystem.views.containers.rename.rename import RenameContainer
+from extensions.ticketsystem.views.containers.report.report import ReportContainer
 
 # category -> the start container shown as the ticket's first message
 START_CONTAINERS: dict[TicketCategory, type[discord.ui.LayoutView]] = {

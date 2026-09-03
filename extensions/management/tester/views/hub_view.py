@@ -1,10 +1,9 @@
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 
-from constants import Channels
-from utils.containers import INFO_ACCENT, NoticeView, separator
 from extensions.management.hub import HubButton, staff_guard
 from extensions.management.tester.views.bans import (
     TestingBanView,
@@ -12,10 +11,12 @@ from extensions.management.tester.views.bans import (
     banned_list_view,
     changelog_view,
 )
-from extensions.management.tester.views.channel_tools import TestingReadOnlyView, TestingSlowmodeView
+from extensions.management.tester.views.channel_tools import (
+    TestingReadOnlyView,
+    TestingSlowmodeView,
+)
 from extensions.management.tester.views.promote import PROMOTION_ROLES, PromoteStartView
-
-from typing import TYPE_CHECKING
+from utils.containers import INFO_ACCENT, NoticeView, separator
 
 if TYPE_CHECKING:
     from bot import DDNet

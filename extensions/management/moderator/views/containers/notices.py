@@ -1,8 +1,11 @@
 import discord
 
-from utils.text import to_discord_timestamp
+from extensions.management.moderator.views.spam_actions import (
+    SpamDealtButton,
+    SpamModButton,
+)
 from utils.containers import ALERT_ACCENT
-from extensions.management.moderator.views.spam_actions import SpamModButton, SpamDealtButton
+from utils.text import to_discord_timestamp
 
 
 class GhostPingView(discord.ui.LayoutView):

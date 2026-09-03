@@ -1,8 +1,9 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
 import discord
 
-from utils.checks import is_staff
 from extensions.management.moderator.manager import MemberInfo, ModAction, PendingAction
+from utils.checks import is_staff
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -56,7 +57,10 @@ class UnbanButton(discord.ui.Button):
         notice = f"{self.member.mention} has been unbanned."
         info: Optional[MemberInfo] = await self.db.fetch_user_info(self.member)
 
-        from extensions.management.moderator.views.containers.user_info import UserInfoView, NoUserInfoView
+        from extensions.management.moderator.views.containers.user_info import (
+            NoUserInfoView,
+            UserInfoView,
+        )
         if not info:
             await interaction.response.edit_message(view=NoUserInfoView(notice=notice))
             return

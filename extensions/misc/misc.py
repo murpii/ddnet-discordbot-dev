@@ -4,6 +4,7 @@ from __future__ import absolute_import
 
 import zipfile
 from io import BytesIO
+from typing import TYPE_CHECKING
 
 import discord
 import psutil
@@ -12,8 +13,6 @@ from discord.ext import commands
 
 from utils.misc import run_process_shell
 from utils.text import human_timedelta
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bot import DDNet

@@ -1,11 +1,13 @@
+from typing import TYPE_CHECKING
+
 import discord
 from discord.ext import commands
 from discord.ui import Button
 
 from extensions.management.hub import staff_guard
-from extensions.management.moderator.views.containers.mod_log import open_user_info_panel
-
-from typing import TYPE_CHECKING
+from extensions.management.moderator.views.containers.mod_log import (
+    open_user_info_panel,
+)
 
 if TYPE_CHECKING:
     from bot import DDNet

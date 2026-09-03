@@ -1,12 +1,17 @@
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 
-from utils.containers import INFO_ACCENT, NoticeView, OptionSelect, PagedLines, separator
-from utils.text import clip
 from extensions.management.tester import queries
-
-from typing import TYPE_CHECKING
+from utils.containers import (
+    INFO_ACCENT,
+    NoticeView,
+    OptionSelect,
+    PagedLines,
+    separator,
+)
+from utils.text import clip
 
 if TYPE_CHECKING:
     from bot import DDNet

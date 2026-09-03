@@ -1,10 +1,10 @@
+from typing import TYPE_CHECKING
+
 import discord
 
 from extensions.ticketsystem.channel import build_ticket_channel
-from extensions.ticketsystem.views.modals import ban_appeal_m, rename_m
 from extensions.ticketsystem.ticket import Ticket, TicketCategory
-
-from typing import TYPE_CHECKING
+from extensions.ticketsystem.views.modals import ban_appeal_m, rename_m
 
 if TYPE_CHECKING:
     from bot import DDNet

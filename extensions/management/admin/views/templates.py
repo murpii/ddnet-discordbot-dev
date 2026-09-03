@@ -1,8 +1,8 @@
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 
-from utils.containers import INFO_ACCENT, NoticeView, OptionSelect, markup_kwargs
 from extensions.management.admin.templates import (
     load_manifest,
     read_section,
@@ -11,8 +11,7 @@ from extensions.management.admin.templates import (
     section_names,
     send_template,
 )
-
-from typing import TYPE_CHECKING
+from utils.containers import INFO_ACCENT, NoticeView, OptionSelect, markup_kwargs
 
 if TYPE_CHECKING:
     from bot import DDNet

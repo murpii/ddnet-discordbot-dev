@@ -1,14 +1,14 @@
 import contextlib
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import discord
 from discord.ext import commands
 
+from constants import Channels, Guilds
 from extensions.management.moderator.manager import ModAction, PendingAction
 from extensions.management.moderator.views.containers.mod_log import ModLogView
-from utils.misc import resolve_display_name, log_to
-from constants import Guilds, Channels
+from utils.misc import log_to, resolve_display_name
 from utils.text import to_discord_timestamp
 
 if TYPE_CHECKING:
@@ -57,8 +57,8 @@ class ModListeners(commands.Cog):
 
     @staticmethod
     async def _resolve_nickname_invoker(
-            before: discord.user,
-            after: discord.user
+            before: discord.Member,
+            after: discord.Member
     ) -> discord.abc.User | discord.Member:
         guild = after.guild
         with contextlib.suppress(discord.Forbidden):
