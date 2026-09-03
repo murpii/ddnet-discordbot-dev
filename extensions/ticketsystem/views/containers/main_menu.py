@@ -43,8 +43,11 @@ class MainMenuContainer(discord.ui.LayoutView):
                 "- The original name should have 3k or more points on it.\n"
                 "- Your last rename should be __at least one year ago__.\n"
                 "- You must be able to provide proof of owning the points being moved.\n"
-                "- The names shouldn't be banned.\n\n"
-                "-# **Note:** If you request a rename and then later change your mind, know that it won't "
+                "- The names shouldn't be banned.\n"
+                "**Note:**\n"
+                "- Requests may also be declined at our discretion if the player has "
+                "an excessive number of bans or bans related to cheating.\n"
+                "- If you request a rename and then later change your mind, know that it won't "
                 "be reverted until at least one year has passed. Think carefully."
             ),
             discord.ui.ActionRow(RenameButton(self.bot, label="Rename Request")),
