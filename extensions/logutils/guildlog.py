@@ -1,6 +1,7 @@
 import asyncio
 import difflib
 import itertools
+import logging
 import time
 from datetime import datetime, timezone
 from io import BytesIO
@@ -18,6 +19,8 @@ from utils.text import clip, to_discord_timestamp
 
 if TYPE_CHECKING:
     from bot import DDNet
+
+log = logging.getLogger()
 
 VALID_IMAGE_FORMATS = (".webp", ".jpeg", ".jpg", ".png", ".gif")
 
@@ -298,11 +301,29 @@ class GuildLog(commands.Cog):
 
     @commands.Cog.listener("on_message")
     async def auto_publish(self, message: discord.Message):
-        if message.channel.id in (Channels.ANNOUNCEMENTS, Channels.MAP_RELEASES):
-            if message.reference:  # Can't publish message replies
-                return
-            else:
-                await message.publish()
+        if message.channel.id not in (Channels.ANNOUNCEMENTS, Channels.MAP_RELEASES):
+            return
+
+        if message.reference:  # Can't publish message replies
+            return
+
+        channel = message.channel
+        if not isinstance(channel, discord.TextChannel) or not channel.is_news():
+            return
+
+        try:
+            await message.publish()
+        except discord.HTTPException as exc:
+            perms = channel.permissions_for(channel.guild.me)
+            log.warning(
+                "Could not publish message %s in #%s (send=%s, manage=%s, own=%s): %s",
+                message.id,
+                channel.name,
+                perms.send_messages,
+                perms.manage_messages,
+                message.author.id == self.bot.user.id,
+                exc,
+            )
 
 
 async def setup(bot: "DDNet"):
