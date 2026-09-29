@@ -6,15 +6,25 @@ from extensions.ticketsystem.views.containers.base import large_seperator
 class FindBanContainer(discord.ui.LayoutView):
     """Ephemeral result of the "Find Ban" button: bans grouped by in-game name."""
 
-    def __init__(self, address: str, grouped_bans: dict[str, list[str]], total_bans: int):
+    def __init__(
+            self,
+            address: str,
+            grouped_bans: dict[str, list[str]],
+            total_bans: int,
+            ban_list_missing: bool = False,
+    ):
         super().__init__(timeout=None)
 
         title = "One ban" if total_bans == 1 else f"{total_bans} bans"
         items = [discord.ui.TextDisplay(f"## {title} found for IP `{address}`")]
+        if ban_list_missing:
+            items.append(
+                discord.ui.TextDisplay("-# Could not reach the website's ban list, only #bans messages are shown.")
+            )
 
         if total_bans == 0:
             items.append(
-                discord.ui.TextDisplay("Could not parse any valid ban messages or database bans.")
+                discord.ui.TextDisplay("Could not find any ban messages or bans in the ban list.")
             )
         else:
             for name, entries in grouped_bans.items():

@@ -38,6 +38,14 @@ class PlayerfinderManager:
     def __init__(self, bot: "DDNet"):
         self.bot = bot
         self.players = []
+        self.banned: list[Player] = []
+
+    def watched(self) -> list[Player]:
+        manual_names = {player.name for player in self.players}
+        return self.players + [player for player in self.banned if player.name not in manual_names]
+
+    def find_banned(self, name) -> Player | None:
+        return next((player for player in self.banned if player.name == name), None)
 
     async def load_players(self):
         query = """

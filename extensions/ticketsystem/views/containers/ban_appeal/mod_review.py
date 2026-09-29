@@ -31,7 +31,7 @@ class ModReviewContainer(discord.ui.LayoutView):
                 + ", ".join(f"`{n}`" for n in unresolved)
             )
         if not resolved and not unresolved:
-            intro.append("No ban issuer could be determined from the synced ban list.")
+            intro.append("No ban issuer could be determined from the ban list.")
         intro.append(
             "Please post **all the proof you have** here (demos, data dumps, screenshots, "
             "chat logs) so another moderator can review the case."
@@ -46,7 +46,7 @@ class ModReviewContainer(discord.ui.LayoutView):
         if bans:
             ban_lines = []
             for ban in bans:
-                expiry = to_discord_timestamp(ban["expires"], style="R") if ban.get("expires") else "unknown"
+                expiry = to_discord_timestamp(ban["expires"], style="R") if ban.get("expires") else "never"
                 ban_lines.append(
                     f"- `{ban.get('name') or 'Unknown'}`: {ban.get('reason') or 'no reason'} (expires {expiry})"
                 )

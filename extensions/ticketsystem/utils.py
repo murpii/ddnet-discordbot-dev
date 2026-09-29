@@ -2,13 +2,13 @@ import asyncio
 import contextlib
 import logging
 import re
-import sqlite3
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import aiohttp
 import discord
 
+from utils.bans import fetch_bans
 from utils.misc import get_filename_from_header, ip_matches
 
 if TYPE_CHECKING:
@@ -16,49 +16,36 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# Synced active-ban list exported from YADDB
-BANS_DB_PATH = "data/ticket-system/db.sqlite"
 category_lock = asyncio.Lock()
 
 
-def ban_to_dict(row) -> dict:
-    """Turn a raw (ip, name, expires, reason, moderator) row into a ban dict.
+async def find_bans_for_ip(bot: "DDNet", address: str) -> list[dict] | None:
+    """Return all bans (expired or not) whose ip or range matches `address`.
 
-    `expires` becomes a timezone-aware datetime (the stored value is naive UTC).
+    Returns None when the website's ban list could not be fetched, so callers can
+    tell an outage apart from "not banned".
     """
-    ip, name, expires, reason, moderator = row
-    expires_dt = datetime.fromisoformat(expires) if isinstance(expires, str) else expires
-    if expires_dt and expires_dt.tzinfo is None:
-        expires_dt = expires_dt.replace(tzinfo=timezone.utc)
-    return {"ip": ip, "name": name, "expires": expires_dt, "reason": reason, "moderator": moderator}
+    bans = await fetch_bans(bot)
+    if bans is None:
+        return None
 
-
-def find_bans_for_ip(address: str, db_path: str = BANS_DB_PATH) -> list[dict]:
-    """Return all ban entries (expired or not) whose ip or range matches address"""
     address = address.strip()
-    conn = sqlite3.connect(db_path)
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT ip, name, expires, reason, moderator FROM bans "  # noqa
-            "WHERE ip = ? OR instr(ip, '-') > 0",
-            (address,),
-        )
-        rows = cursor.fetchall()
-    finally:
-        conn.close()
-
-    return [ban_to_dict(row) for row in rows if ip_matches(address, row[0])]
+    return [ban for ban in bans if ip_matches(address, ban["ip"])]
 
 
-def find_active_bans(address: str, db_path: str = BANS_DB_PATH) -> list[dict]:
-    """Return matching, non-expired bans for `address`, soonest-expiring first."""
+async def find_active_bans(bot: "DDNet", address: str) -> list[dict] | None:
+    """Return matching, non-expired bans for `address`, soonest-expiring first.
+
+    A ban without an expiry date is permanent, so it counts as active and sorts last.
+    Returns None when the ban list could not be fetched.
+    """
+    bans = await find_bans_for_ip(bot, address)
+    if bans is None:
+        return None
+
     now = datetime.now(timezone.utc)
-    active = [
-        ban for ban in find_bans_for_ip(address, db_path)
-        if ban["expires"] and ban["expires"] > now
-    ]
-    active.sort(key=lambda ban: ban["expires"])
+    active = [ban for ban in bans if ban["expires"] is None or ban["expires"] > now]
+    active.sort(key=lambda ban: ban["expires"] or datetime.max.replace(tzinfo=timezone.utc))
     return active
 
 

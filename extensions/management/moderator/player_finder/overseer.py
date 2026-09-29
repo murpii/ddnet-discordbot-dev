@@ -1,13 +1,13 @@
 import contextlib
 import logging
-import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import discord
 from discord.ext import commands, tasks
 
 from constants import Channels
+from utils.bans import MOD_PAGE_URL, fetch_bans
 from utils.master_parser import (
     Client,
     Server,
@@ -24,16 +24,6 @@ if TYPE_CHECKING:
     from bot import DDNet
 
 log = logging.getLogger()
-
-BAN_RE = (
-    r"(?P<author>\w+) banned (?P<banned_user>.+?) `(?P<IP>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})` "
-    r"for `(?P<reason>.+?)` until (?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
-)
-
-UNBAN_RE = (
-    r"^Unbanned (?P<name>.+)$"
-)
-
 
 class Overseer(commands.Cog):
     def __init__(self, bot: "DDNet"):
@@ -63,6 +53,7 @@ class Overseer(commands.Cog):
         self.players_online.clear()
         self.ddnet_servers_addresses.clear()
         self.manager.players.clear()
+        self.manager.banned.clear()
         await self.channel.purge()
 
     async def get_master_data(self) -> list[Server] | None:
@@ -106,8 +97,38 @@ class Overseer(commands.Cog):
         for player in expired:
             await self.manager.del_player(player)
 
+    async def sync_bans(self) -> None:
+        bans = await fetch_bans(self.bot)
+        if bans is None:
+            return
+
+        now = datetime.now(timezone.utc)
+        latest_bans: dict[str, dict] = {}
+        for ban in bans:
+            if not ban["name"] or ban["expires"] is None or ban["expires"] <= now:
+                continue
+            known = latest_bans.get(ban["name"])
+            if known is None or ban["expires"] > known["expires"]:
+                latest_bans[ban["name"]] = ban
+
+        self.manager.banned = [
+            Player(
+                name=name,
+                expiry_date=ban["expires"].astimezone().replace(tzinfo=None),
+                added_by=ban["moderator"] or "ban list",
+                reason=ban["reason"],
+                ban_link=MOD_PAGE_URL,
+            )
+            for name, ban in latest_bans.items()
+        ]
+
     @tasks.loop(seconds=10)
     async def overseer(self):
+        if self.overseer.current_loop % 12 == 0:
+            try:
+                await self.sync_bans()
+            except Exception as e:
+                log.warning("Playerfinder ban sync failed: %r", e)
         await self.del_expired_bans()
         ddnet_servers = await self.get_master_data()
 
@@ -263,7 +284,7 @@ class Overseer(commands.Cog):
         )
 
     def build_pages(self) -> list[str]:
-        tracked = [p for p in self.manager.players if not name_filter(p.name)]
+        tracked = [p for p in self.manager.watched() if not name_filter(p.name)]
         online = [
             (p.name, p, self.players_online[p.name])
             for p in tracked
@@ -295,22 +316,3 @@ class Overseer(commands.Cog):
 
         pages[0] = header + pages[0]  # only the first page gets the title
         return pages
-
-    @commands.Cog.listener('on_message')
-    async def bans_listener(self, message: discord.Message) -> None:
-        if message.channel.id != Channels.BANS:
-            return
-
-        if regex := re.match(BAN_RE, message.content):
-            author = message.guild.get_member_named(regex['author'])
-
-            await self.manager.add_player(
-                name=regex["banned_user"],
-                expiry_date=datetime.strptime(regex["timestamp"], "%Y-%m-%d %H:%M:%S"),
-                added_by=author if author is not None else regex['author'],
-                reason=regex["reason"],
-                link=message.jump_url
-            )
-
-        if regex := re.match(UNBAN_RE, message.content):
-            await self.manager.del_player(regex["name"])

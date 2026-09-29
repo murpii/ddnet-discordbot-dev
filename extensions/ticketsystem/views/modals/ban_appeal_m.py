@@ -174,7 +174,10 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
 
         # regular ban appeals gate on an active manual ban
         # the DNSBL check lives in the VPN ban appeal flow instead
-        active_bans = find_active_bans(data.address)
+        active_bans = await find_active_bans(self.bot, data.address)
+
+        if active_bans is None:
+            return True
 
         # no active ban to appeal (expired bans don't count).
         if not active_bans:
@@ -191,7 +194,11 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         # active ban that's about to expire: ask the user to confirm before proceeding.
         # only for fresh appeals. category changes proceed straight away.
         soonest = active_bans[0]
-        if self.ticket is None and soonest["expires"] - datetime.now(timezone.utc) <= timedelta(hours=2):
+        if (
+                self.ticket is None
+                and soonest["expires"] is not None
+                and soonest["expires"] - datetime.now(timezone.utc) <= timedelta(hours=2)
+        ):
             description = lang["near_expiry"].format(
                 ip=data.address,
                 expires=to_discord_timestamp(soonest["expires"], style="R"),
@@ -242,7 +249,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         Open a __private__, mod only thread inside the ban-appeal ticket.
 
         1. Pings the moderator(s) who issued the matching ban(s)
-        2. the synced sqlite ban list stores the issuer's Discord username, which maps 1:1 to a guild member
+        2. the website's ban list stores the issuer's username, matched to a guild member by name
         3. asks them to drop their proof so another moderator can review the case
 
         The thread is private other moderators reach it via the manage threads permission
@@ -256,7 +263,7 @@ class BanAppealModal(discord.ui.Modal, title="Ban Appeal Ticket"):
         if discord.utils.get(channel.threads, name="Moderator Review") is not None:
             return
 
-        bans = find_active_bans(ticket.appeal_data.address)
+        bans = await find_active_bans(self.bot, ticket.appeal_data.address) or []
         issuer_names = list(dict.fromkeys(b["moderator"] for b in bans if b.get("moderator")))
 
         resolved: list[discord.Member] = []

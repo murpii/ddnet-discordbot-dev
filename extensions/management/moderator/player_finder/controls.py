@@ -29,6 +29,12 @@ DURATION_OPTIONS = [
 ]
 
 
+def not_found_notice(bot: "DDNet", name: str) -> NoticeView:
+    if bot.pfm.find_banned(name):
+        return NoticeView(f"`{name}` comes from the website's ban list. Change the ban there instead.")
+    return NoticeView(f'No player named "{name}" on the watchlist.')
+
+
 class PfAddModal(discord.ui.Modal, title="Add to watchlist"):
     name = discord.ui.Label(
         text="Player name",
@@ -85,9 +91,7 @@ class PfRemoveModal(discord.ui.Modal, title="Remove from watchlist"):
         try:
             await interaction.client.pfm.del_player(name)
         except ValueError:
-            await interaction.response.send_message(
-                view=NoticeView(f'No player named "{name}" on the watchlist.'), ephemeral=True
-            )
+            await interaction.response.send_message(view=not_found_notice(interaction.client, name), ephemeral=True)
             return
         log.info("ModHub: %s removed playerfinder watch %r", interaction.user, name)
         await interaction.response.send_message(
@@ -114,9 +118,7 @@ class PfEditModal(discord.ui.Modal, title="Edit watchlist reason"):
         try:
             old_reason, player = await interaction.client.pfm.edit_reason(name, new_reason)
         except ValueError:
-            await interaction.response.send_message(
-                view=NoticeView(f'No player named "{name}" on the watchlist.'), ephemeral=True
-            )
+            await interaction.response.send_message(view=not_found_notice(interaction.client, name), ephemeral=True)
             return
         log.info("ModHub: %s edited playerfinder reason for %r", interaction.user, player.name)
         await interaction.response.send_message(
@@ -142,7 +144,7 @@ class PfInfoModal(discord.ui.Modal, title="Watchlist info"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         name = self.name.component.value.strip()
-        player = interaction.client.pfm.find_player(name)
+        player = interaction.client.pfm.find_player(name) or interaction.client.pfm.find_banned(name)
         if player is None:
             await interaction.response.send_message(
                 view=NoticeView(f'"{name}" is not on the watchlist.'), ephemeral=True
@@ -248,8 +250,8 @@ class PfListButton(HubButton):
         super().__init__(bot, label="Print List", custom_id="ModHub:pf-list", roles="game_mods")
 
     async def run(self, interaction: discord.Interaction) -> None:
-        manager = interaction.client.pfm
-        if not manager.players:
+        watched = interaction.client.pfm.watched()
+        if not watched:
             await interaction.response.send_message(
                 view=NoticeView("The watchlist is empty."), ephemeral=True
             )
@@ -258,7 +260,7 @@ class PfListButton(HubButton):
         lines = [f"{'Player':<20} {'Added by':<20} {'Expires':<12} Reason", "-" * 80]
         lines.extend(
             f"{player.name:<20} {player.added_by:<20} {str(player.expiry_date):<12} {player.reason}"
-            for player in manager.players
+            for player in watched
         )
 
         path = "data/player_list.txt"

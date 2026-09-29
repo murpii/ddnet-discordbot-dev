@@ -162,7 +162,7 @@ class BanAppealFindBanBtn(discord.ui.Button):
                     results.append(msg)
         return results
 
-    async def format_ban_messages_container(self, messages, address):
+    async def format_ban_messages_container(self, bot, messages, address):
         now = datetime.now(timezone.utc)
         grouped_bans = {}
 
@@ -190,20 +190,23 @@ class BanAppealFindBanBtn(discord.ui.Button):
             entry = f"{ip_display}> **Reason:** {reason}\n> **By:** {author}\n> {expiry_info}\n🔗 [Jump to Message]({url})"
             grouped_bans.setdefault(name, []).append(entry)
 
-        db_bans = find_bans_for_ip(address)
+        website_bans = await find_bans_for_ip(bot, address)
 
-        for ban in db_bans:
-            expiry_info = "**Expired**" if ban['expires'] and now > ban[
-                'expires'] else f"**Expires:** {to_discord_timestamp(ban['expires'], style='R')}" if ban[
-                'expires'] else "ERROR"
+        for ban in website_bans or []:
+            if ban['expires'] is None:
+                expiry_info = "**Expires:** never"
+            elif now > ban['expires']:
+                expiry_info = "**Expired**"
+            else:
+                expiry_info = f"**Expires:** {to_discord_timestamp(ban['expires'], style='R')}"
             is_range = "-" in ban['ip']
             ip_display = f"> :exclamation: **Range Ban:** `{ban['ip']}`\n" if is_range else ""
-            entry = f"{ip_display}> **Reason:** {ban['reason']}\n> **By:** {ban['moderator']}\n> {expiry_info}"
-            grouped_bans.setdefault(ban['name'], []).append(entry)
+            entry = f"{ip_display}> **Reason:** {ban['reason']}\n> **By:** {ban['moderator'] or 'Unknown'}\n> {expiry_info}"
+            grouped_bans.setdefault(ban['name'] or "Unknown", []).append(entry)
 
         total_bans = sum(len(entries) for entries in grouped_bans.values())
 
-        return FindBanContainer(address, grouped_bans, total_bans)
+        return FindBanContainer(address, grouped_bans, total_bans, ban_list_missing=website_bans is None)
 
     async def callback(self, interaction: discord.Interaction):
         if not is_staff(interaction.user, roles="mods"):
@@ -217,7 +220,7 @@ class BanAppealFindBanBtn(discord.ui.Button):
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         messages = await self.search_discord_history(interaction, ticket.appeal_data.address)
-        view = await self.format_ban_messages_container(messages, ticket.appeal_data.address)
+        view = await self.format_ban_messages_container(interaction.client, messages, ticket.appeal_data.address)
         await interaction.edit_original_response(view=view)
 
 
