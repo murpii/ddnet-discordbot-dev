@@ -4,6 +4,7 @@ import ipaddress
 import logging
 import re
 import socket
+import time
 from typing import TYPE_CHECKING
 
 import discord
@@ -36,7 +37,10 @@ SSH_OPTIONS = [
 ]
 
 FILTER_TIMEOUT = 900
+REFRESH_COOLDOWN = 120
 MAX_CONTEXT = 30
+
+fetch_times = {}  # (ssh host, port) to when its log was last fetched, shared by everyone
 
 SHOW_ALL = "all"
 KIND_LABELS = {
@@ -172,51 +176,63 @@ def describe_filter(query: str, names: list[str], kind: str, before: int, after:
     return text
 
 
+def log_file(lines: list[str], filename: str) -> discord.File:
+    return discord.File(io.BytesIO("\n".join(lines).encode("utf-8")), filename=filename)
+
+
+
 class LogFilterModal(discord.ui.Modal, title="Filter the log"):
     def __init__(self, source: "ServerLogView"):
         super().__init__(timeout=300)
         self.source = source
+        last = source.last_filter
 
         self.search = discord.ui.Label(
             text="Search",
             description="Case insensitive. Wrap in slashes for a regex, e.g. /bot|cheat/",
-            component=discord.ui.TextInput(required=False, max_length=200),
+            component=discord.ui.TextInput(required=False, max_length=200, default=last.get("query") or None),
         )
         self.players = discord.ui.Label(
             text="Only these players",
             description="Comma separated, partial names are fine",
-            component=discord.ui.TextInput(required=False, max_length=200),
+            component=discord.ui.TextInput(required=False, max_length=200, default=last.get("players") or None),
         )
         self.before = discord.ui.Label(
             text="Lines before each hit",
-            component=discord.ui.TextInput(required=False, max_length=2, placeholder="0"),
+            component=discord.ui.TextInput(
+                required=False, max_length=2, placeholder="0", default=last.get("before") or None,
+            ),
         )
         self.after = discord.ui.Label(
             text="Lines after each hit",
-            component=discord.ui.TextInput(required=False, max_length=2, placeholder="0"),
+            component=discord.ui.TextInput(
+                required=False, max_length=2, placeholder="0", default=last.get("after") or None,
+            ),
         )
+        picked_kind = last.get("kind", SHOW_ALL)
+        options = [discord.SelectOption(label="Everything", value=SHOW_ALL, default=picked_kind == SHOW_ALL)]
+        for value, text in KIND_LABELS.items():
+            options.append(discord.SelectOption(label=text.capitalize(), value=value, default=picked_kind == value))
         self.kind = discord.ui.Label(
             text="Limit to",
-            component=discord.ui.Select(
-                min_values=1,
-                max_values=1,
-                options=[
-                    discord.SelectOption(label="Everything", value=SHOW_ALL, default=True),
-                    discord.SelectOption(label="Chat only", value="chat"),
-                    discord.SelectOption(label="Joins and leaves only", value="connections"),
-                    discord.SelectOption(label="Votes and kicks only", value="system"),
-                ],
-            ),
+            component=discord.ui.Select(min_values=1, max_values=1, options=options),
         )
         for item in (self.search, self.players, self.before, self.after, self.kind):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         query = self.search.component.value.strip()
-        names = [name.strip() for name in self.players.component.value.split(",") if name.strip()]
+        players = self.players.component.value
+        names = [name.strip() for name in players.split(",") if name.strip()]
         kind = self.kind.component.values[0]
         before = context_count(self.before.component.value)
         after = context_count(self.after.component.value)
+
+        # remembered even when nothing matches, so the next try starts from what was typed
+        self.source.last_filter = {
+            "query": query, "players": players.strip(), "kind": kind,
+            "before": str(before) if before else "", "after": str(after) if after else "",
+        }
 
         if not query and not names and kind == SHOW_ALL:
             await interaction.response.send_message(
@@ -236,16 +252,17 @@ class LogFilterModal(discord.ui.Modal, title="Filter the log"):
             )
             return
 
+        criteria = describe_filter(query, names, kind, before, after)
         if not hits:
-            criteria = describe_filter(query, names, kind, before, after)
             await interaction.response.send_message(
                 view=NoticeView(f"Nothing in this log matches {criteria}."), ephemeral=True,
             )
             return
 
-        body = "\n".join(lines).encode("utf-8")
+        hit_word = "hit" if hits == 1 else "hits"
         await interaction.response.send_message(
-            file=discord.File(io.BytesIO(body), filename=self.source.filtered_name),
+            content=f"-# **{hits} {hit_word}** for {criteria}.",
+            file=log_file(lines, self.source.filtered_name),
             ephemeral=True,
         )
 
@@ -258,16 +275,94 @@ class FilterButton(discord.ui.Button):
         await interaction.response.send_modal(LogFilterModal(self.view))
 
 
+class RefreshButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Refresh", style=discord.ButtonStyle.secondary, emoji="\U0001f504")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view = self.view  # render() swaps the buttons out, so keep hold of the view
+        server = (view.ssh_host, view.port)
+        ready_at = int(fetch_times.get(server, 0) + REFRESH_COOLDOWN)
+        if time.time() < ready_at:
+            await interaction.response.send_message(
+                view=NoticeView(f"This server's log was fetched recently. You can refresh again <t:{ready_at}:R>."),
+                ephemeral=True,
+            )
+            return
+
+        fetch_times[server] = time.time()  # blocks other presses while this fetch runs
+        view.render(refreshing=True)
+        await interaction.response.edit_message(view=view)
+
+        try:
+            raw_log, error = await fetch_log(view.bot, view.ssh_host, view.port)
+        except Exception:
+            log.exception("ServerLogs: refreshing %s:%s failed", view.ssh_host, view.port)
+            raw_log, error = "", "Something went wrong refreshing that log, check the bot log."
+        keys, lines = build_log(raw_log) if raw_log else ([], [])
+
+        if not lines:
+            view.render()
+            await interaction.edit_original_response(view=view)
+            await interaction.followup.send(
+                view=NoticeView(error or "The refreshed log contains no chat, joins or votes."), ephemeral=True,
+            )
+            return
+
+        view.update(keys, lines)
+        await interaction.edit_original_response(view=view)
+        await interaction.followup.send(
+            content=f"-# Refreshed, {len(lines)} lines.",
+            file=log_file(lines, view.filename),
+            ephemeral=True,
+        )
+        log.info("ServerLogs: %s refreshed %s:%s", interaction.user, view.ssh_host, view.port)
+
+
 class ServerLogView(discord.ui.LayoutView):
-    def __init__(self, summary: str, keys: list, lines: list[str], filename: str):
+    def __init__(self, bot: "DDNet", title: str, address: str, ssh_host: str, port: int, filename: str):
         super().__init__(timeout=FILTER_TIMEOUT)
+        self.bot = bot
+        self.title = title
+        self.address = address
+        self.ssh_host = ssh_host
+        self.port = port
+        self.filename = filename
+        self.filtered_name = filename.replace(".diff", "_filtered.diff")
+        self.keys = []
+        self.lines = []
+        self.fetched_at = 0
+        self.last_filter = {}  # what was last typed into the filter modal, to fill it in again
+
+    def update(self, keys: list, lines: list[str]) -> None:
         self.keys = keys
         self.lines = lines
-        self.filtered_name = filename.replace(".diff", "_filtered.diff")
+        self.fetched_at = int(time.time())
+        fetch_times[(self.ssh_host, self.port)] = self.fetched_at
+        self.render()
+
+    def render(self, refreshing: bool = False) -> None:
+        refresh = RefreshButton()
+        if refreshing:
+            refresh.label = "Refreshing..."
+            refresh.disabled = True
+
+        facts = "\n".join([
+            f"## {self.title}",
+            f"> **Address** `{self.address}`",
+            f"> **Host** {self.ssh_host}",
+            f"> **Lines** {len(self.lines)}",
+            f"> **Fetched** <t:{self.fetched_at}:R>",
+        ])
+        self.clear_items()
         self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(summary),
+            discord.ui.TextDisplay(facts),
             separator(),
-            discord.ui.ActionRow(FilterButton()),
+            discord.ui.ActionRow(FilterButton(), refresh),
+            discord.ui.TextDisplay(
+                f"-# Covers the current server session. Refresh works once every {REFRESH_COOLDOWN // 60} "
+                f"minutes, the buttons expire after {FILTER_TIMEOUT // 60} idle minutes."
+            ),
             accent_colour=INFO_ACCENT,
         ))
 
@@ -283,21 +378,21 @@ class ServerLogsModal(discord.ui.Modal, title="Fetch a server log"):
             names = names[:25]
         self.location = discord.ui.Label(
             text="Location",
+            description="Pick one, then fill in the port below",
             component=discord.ui.Select(
                 required=False,
-                placeholder="Pick the server's location",
+                placeholder="Server location",
                 options=[discord.SelectOption(label=name.upper(), value=name) for name in names],
             ),
         )
         self.port = discord.ui.Label(
             text="Port",
-            description="The server's port, e.g. 8303",
-            component=discord.ui.TextInput(required=False, max_length=5),
+            component=discord.ui.TextInput(required=False, max_length=5, placeholder="8303"),
         )
         self.address = discord.ui.Label(
-            text="Or type the server instead",
-            description="ip:port, or the name label and port, e.g. GER:8303 for DDNet GER - Brutal",
-            component=discord.ui.TextInput(required=False, max_length=60),
+            text="Or the full address",
+            description="Instead of location and port. ip:port, or a name label and port like GER:8303",
+            component=discord.ui.TextInput(required=False, max_length=60, placeholder="45.141.57.22:8303"),
         )
         for item in (self.location, self.port, self.address):
             self.add_item(item)
@@ -403,24 +498,14 @@ class ServerLogsModal(discord.ui.Modal, title="Fetch a server log"):
         addresses = [f"[{ip}]:{port}" if ":" in ip else f"{ip}:{port}" for ip in candidate_ips]
         server_name = server_display_name(master, addresses)
 
-        summary = [f"## Server log: `{raw}`"]
-        if server_name:
-            summary.append(f"**Server:** {server_name}")
-        summary.append(f"**Fetched from:** {ssh_host}, current session")
-        summary.append(f"**Lines:** {len(lines)}")
-        summary.append("-# Cleaned to player chat, joins (+) and leaves (-) with address, votes and kicks.")
-        summary.append(
-            f"-# Filter searches this log without re-fetching it. "
-            f"Expires after {FILTER_TIMEOUT // 60} minutes without a press."
-        )
+        title = discord.utils.escape_markdown(server_name) if server_name else "Server log"
 
         safe_host = ssh_host.removesuffix(".ddnet.org").replace(":", "-")
         filename = f"{safe_host}_{port}.diff"
-        logfile = discord.File(io.BytesIO("\n".join(lines).encode("utf-8")), filename=filename)
-        await interaction.edit_original_response(
-            view=ServerLogView("\n".join(summary), keys, lines, filename)
-        )
-        await interaction.followup.send(file=logfile, ephemeral=True)
+        view = ServerLogView(self.bot, title, raw, ssh_host, port, filename)
+        view.update(keys, lines)
+        await interaction.edit_original_response(view=view)
+        await interaction.followup.send(file=log_file(lines, filename), ephemeral=True)
 
         log.info("ServerLogs: %s fetched %s (%s)", interaction.user, raw, ssh_host)
         await log_to(

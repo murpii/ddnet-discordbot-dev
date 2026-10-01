@@ -412,11 +412,9 @@ class ModHubView(discord.ui.LayoutView):
                 ),
                 separator(),
                 discord.ui.TextDisplay(
-                    "## Server logs\n"
-                    "**Pulls logs of an official game server**:\n"
-                    "Player chat, joins, leaves, votes and kicks. Pick the location and type the port, "
-                    "or type the server as you see it, e.g. `GER:8303` for "
-                    "DDNet GER - Brutal on port 8303, or the exact `ip:port`."
+                    "## Server Logs\n"
+                    "Pick the location and type the port, or type the server as you see it, e.g. \"GER:8303\" for "
+                    "DDNet GER - Brutal on port 8303, or the exact \"IP:Port\"."
                 ),
                 discord.ui.ActionRow(ServerLogsButton(bot)),
                 accent_colour=INFO_ACCENT,
