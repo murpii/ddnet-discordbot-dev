@@ -1,7 +1,10 @@
 import asyncio
 import contextlib
 import logging
+import os
 import re
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -9,7 +12,7 @@ import aiohttp
 import discord
 
 from utils.bans import fetch_bans
-from utils.misc import get_filename_from_header, ip_matches
+from utils.misc import ip_matches, run_process_exec
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -92,37 +95,78 @@ async def find_or_create_category(
         return new_category
 
 
-async def fetch_rank_from_demo(bot: "DDNet", message: discord.Message, session: aiohttp.ClientSession):
-    demo_names = []
+FINISH_LINE = re.compile(
+    r"^\[[\d:]+\] chat: \*\*\* (?:\[D\] )?(?P<name>.+) finished in: "
+    r"(?P<minutes>\d+) minute\(s\)\s+(?P<seconds>\d+(?:\.\d+)?) second\(s\)$"
+)
+
+
+async def fetch_rank_from_demo(
+        bot: "DDNet",
+        message: discord.Message,
+        session: aiohttp.ClientSession,
+        names: tuple[str, ...],
+):
+    """Return (demo name, player name, time in seconds, timestamp or None) for finishes of `names`."""
+    data_folder = os.path.join(os.path.dirname(__file__), "..", "..", "data")
+    tool = shutil.which("demo_extract_chat", path=data_folder)
+    if not tool:
+        log.warning(
+            f"demo_extract_chat was not found or is not executable in {os.path.abspath(data_folder)}, "
+            "can't read demo finishes"
+        )
+        return []
+
+    finishes = []
     for attachment in message.attachments:
-        if attachment.filename.endswith(".demo"):
-            filename = await get_filename_from_header(session, url=attachment.url)
-            demo_names.append(filename)
-
-    ranks = []
-
-    for demo in demo_names:
-        match = re.match(r"(.+?)_(\d+\.\d+)_([^.]+(?:\.+)*)\.demo", demo)
-        if not match:
+        if not attachment.filename.endswith(".demo"):
             continue
 
-        map_name, time_str, player_name = match.groups()
+        with tempfile.TemporaryDirectory() as folder:
+            demo_path = os.path.join(folder, "demo.demo")
+            async with session.get(attachment.url) as response:
+                with open(demo_path, "wb") as demo_file:
+                    demo_file.write(await response.read())
+            output, error = await run_process_exec(tool, demo_path)
 
-        if '.' in time_str:
-            time_str = time_str.rstrip('0').rstrip('.')
+        if not output.strip():
+            log.warning(f"demo_extract_chat gave no output for {attachment.filename}: {error.strip()}")
 
-        map_name = f"%{map_name}%"
+        for line in output.splitlines():
+            match = FINISH_LINE.match(line)
+            if match and match["name"] in names:
+                seconds = int(match["minutes"]) * 60 + float(match["seconds"])
+                finishes.append((attachment.filename, match["name"], seconds))
+
+    results = []
+    for demo, name, seconds in finishes:
         query = """
                 SELECT Timestamp
                 FROM record_race
-                WHERE Map LIKE %s
-                  AND Time LIKE %s
-                  AND Name = %s \
+                WHERE Name = %s
+                  AND ABS(Time - %s) < 0.01
+                LIMIT 1 \
                 """
-        result = await bot.fetch(query, map_name, time_str, player_name, fetchall=False)
+        row = await bot.fetch(query, name, seconds, fetchall=False)
+        results.append((demo, name, seconds, row[0] if row else None))
 
-        if result:
-            timestamp = result[0]
-            ranks.append((demo, timestamp))
+    return results
 
-    return ranks
+
+def format_finishes(finishes) -> list[str]:
+    """Return the finish lines split into messages that fit Discord's 2000 character limit."""
+    lines = ["✅ Finishes found in demos:"] + [
+        f"- `{demo}` `{name}` {seconds:.2f}s (Timestamp: `{timestamp or 'not in database'}`)"
+        for demo, name, seconds, timestamp in finishes
+    ]
+
+    messages = []
+    current = ""
+    for line in lines:
+        line = line[:1900]
+        if current and len(current) + len(line) + 1 > 1900:
+            messages.append(current)
+            current = ""
+        current = f"{current}\n{line}" if current else line
+    messages.append(current)
+    return messages

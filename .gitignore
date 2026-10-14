@@ -36,6 +36,7 @@ data/assets/map_backgrounds/*
 data/tools/dontuse/
 data/tools/render_map/
 data/mapres
+data/demo_extract_chat*
 data/archives-temp/
 data/wiki/
 

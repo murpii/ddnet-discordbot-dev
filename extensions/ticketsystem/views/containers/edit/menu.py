@@ -2,6 +2,7 @@ import discord
 
 from extensions.ticketsystem import actions
 from extensions.ticketsystem.ticket import Ticket, TicketCategory
+from extensions.ticketsystem.utils import fetch_rank_from_demo, format_finishes
 from extensions.ticketsystem.views.containers.base import TICKET_ACCENT, large_seperator
 from utils.checks import is_staff
 
@@ -87,10 +88,49 @@ class RenameChannelButton(discord.ui.Button):
         await interaction.response.send_modal(RenameChannelModal(self.ticket))
 
 
+class RescanDemosButton(discord.ui.Button):
+    # temporary, remove once old rename tickets are checked
+    def __init__(self, ticket: Ticket):
+        super().__init__(label="Rescan demos", style=discord.ButtonStyle.secondary)  # noqa
+        self.ticket = ticket
+
+    async def callback(self, interaction: discord.Interaction):
+        if not is_staff(interaction.user, roles="mods"):
+            await interaction.response.send_message("Only staff can use this.", ephemeral=True)
+            return
+        if not self.ticket.rename_data:
+            await interaction.response.send_message("Could not fetch names for rename.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        bot = interaction.client
+        session = await bot.session_manager.get_session("TicketListeners")
+        names = (
+            self.ticket.rename_data.old_profile.name,
+            self.ticket.rename_data.new_profile.name,
+        )
+
+        finishes = []
+        async for message in interaction.channel.history(limit=None, oldest_first=True):
+            if any(attachment.filename.endswith(".demo") for attachment in message.attachments):
+                finishes.extend(await fetch_rank_from_demo(bot, message, session, names))
+
+        if not finishes:
+            await interaction.followup.send("No finishes for the old or new name found in demos.", ephemeral=True)
+            return
+
+        for text in format_finishes(finishes):
+            await interaction.channel.send(text)
+        await interaction.followup.send(f"Found {len(finishes)} finish(es).", ephemeral=True)
+
+
 class TicketEditView(discord.ui.LayoutView):
     def __init__(self, ticket: Ticket):
         super().__init__(timeout=300)
         self.ticket = ticket
+        buttons = [RenameChannelButton(ticket)]
+        if ticket.category == TicketCategory.RENAME:
+            buttons.append(RescanDemosButton(ticket))
         self.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
@@ -101,7 +141,7 @@ class TicketEditView(discord.ui.LayoutView):
                 large_seperator(),
                 discord.ui.ActionRow(CategorySelect(ticket)),
                 discord.ui.ActionRow(InviteSelect()),
-                discord.ui.ActionRow(RenameChannelButton(ticket)),
+                discord.ui.ActionRow(*buttons),
                 accent_colour=TICKET_ACCENT,
             )
         )

@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands
 
 from constants import Guilds
-from extensions.ticketsystem.utils import fetch_rank_from_demo
+from extensions.ticketsystem.utils import fetch_rank_from_demo, format_finishes
 
 if TYPE_CHECKING:
     from bot import DDNet
@@ -109,9 +109,15 @@ class TicketListeners(commands.Cog):
         ):
             return
 
-        ranks = await fetch_rank_from_demo(self.bot, message, self.session)
-        if ranks:
-            response = "✅ Found record for:\n" + "\n".join(
-                f"- `{demo}` (Timestamp: `{timestamp}`)" for demo, timestamp in ranks
-            )
-            await message.channel.send(response)
+        if not any(attachment.filename.endswith(".demo") for attachment in message.attachments):
+            return
+
+        ticket = await self.ticket_manager.get_ticket(message.channel)
+        if not ticket or not ticket.rename_data:
+            return
+
+        names = (ticket.rename_data.old_profile.name, ticket.rename_data.new_profile.name)
+        finishes = await fetch_rank_from_demo(self.bot, message, self.session, names)
+        if finishes:
+            for text in format_finishes(finishes):
+                await message.channel.send(text)

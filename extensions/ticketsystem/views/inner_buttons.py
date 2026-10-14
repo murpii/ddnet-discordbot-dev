@@ -143,6 +143,48 @@ class RenamePrintCMD(discord.ui.Button):
         )
 
 
+class RenameHistoryBtn(discord.ui.Button):
+    def __init__(self, label: str = "Previous Renames"):
+        super().__init__(
+            label=label,
+            style=discord.ButtonStyle.secondary,  # noqa
+            custom_id="Ticket:RenameHistoryBtn",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if not is_staff(interaction.user):
+            await interaction.response.send_message("Only staff can use this button.", ephemeral=True)
+            return
+
+        ticket = await interaction.client.ticket_manager.get_ticket(interaction.channel)
+        if not ticket.rename_data:
+            await interaction.response.send_message("Could not fetch names for rename.", ephemeral=True)
+            return
+
+        old = ticket.rename_data.old_profile.name
+        new = ticket.rename_data.new_profile.name
+        query = """
+                SELECT OldName, Name, RenamedBy, Timestamp
+                FROM record_rename
+                WHERE OldName IN (%s, %s)
+                   OR Name IN (%s, %s)
+                ORDER BY Timestamp \
+                """
+        rows = await interaction.client.fetch(query, old, new, old, new, fetchall=True)
+
+        if not rows:
+            await interaction.response.send_message(
+                f"No previous renames found for `{old}` or `{new}`.", ephemeral=True
+            )
+            return
+
+        lines = [
+            f"- `{old_name}` -> `{new_name}` by `{renamed_by}` on {to_discord_timestamp(timestamp)}"
+            for old_name, new_name, renamed_by, timestamp in rows
+        ]
+        await interaction.response.send_message("\n".join(lines)[:2000], ephemeral=True)
+
+
 class BanAppealFindBanBtn(discord.ui.Button):
     def __init__(self, label: str = "Find Ban"):
         super().__init__(
